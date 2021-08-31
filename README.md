@@ -27,7 +27,7 @@ https://groups.google.com/forum/#!forum/cloud9-sdk
 Follow these steps to install the SDK:
 
     git clone https://github.com/Jook3r/core.git onlineIDE
-    cd c9sdk
+    cd onlineIDE
     scripts/install-sdk.sh
     scripts/makestandalone.sh
     
