@@ -60,6 +60,7 @@ function Terminal(cols, rows, handler) {
 
   // modes
   this.applicationKeypad = false;
+  this.applicationCursorKeys = false;
   this.originMode = false;
   this.insertMode = false;
   this.wraparoundMode = false;
@@ -2491,8 +2492,8 @@ Terminal.prototype.setMode = function(params) {
     }
   } else if (this.prefix === '?') {
     switch (params) {
-      case 1:
-        this.applicationKeypad = true;
+      case 1: // DECCKM - application cursor keys (set by tmux, not the same as DECPAM)
+        this.applicationCursorKeys = true;
         break;
       case 3: // 132 col mode
         this.savedCols = this.cols;
@@ -2697,8 +2698,8 @@ Terminal.prototype.resetMode = function(params) {
     }
   } else if (this.prefix === '?') {
     switch (params) {
-      case 1:
-        this.applicationKeypad = false;
+      case 1: // DECCKM
+        this.applicationCursorKeys = false;
         break;
       case 3:
         if (this.cols === 132 && this.savedCols) {
@@ -2953,6 +2954,7 @@ Terminal.prototype.softReset = function(params) {
   this.originMode = false;
   this.wraparoundMode = false; // autowrap
   this.applicationKeypad = false; // ?
+  this.applicationCursorKeys = false;
   this.scrollTop = 0;
   this.scrollBottom = this.rows - 1;
   this.curAttr = this.defAttr;

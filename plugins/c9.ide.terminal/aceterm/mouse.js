@@ -265,7 +265,7 @@ define(function(require, exports, module) {
         ace.on("mousewheel", function(ev) {
             var term = ace.session.term;
             if (term.mouseEvents) return;
-            if (term.applicationKeypad) {
+            if (term.noScrollBack()) {
                 term.send(ev.wheelY < 0
                     ? '\x1bOA\x1bOA\x1bOA'
                     : '\x1bOB\x1bOB\x1bOB'
