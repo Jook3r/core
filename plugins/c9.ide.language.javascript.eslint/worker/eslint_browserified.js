@@ -827,7 +827,7 @@ Components.prototype.set = function (node, props) {
   if (this._list[id]) {
 	copyUsedPropTypes = this._list[id].usedPropTypes && this._list[id].usedPropTypes.slice();
   }
-  this._list[id] = util._extend(this._list[id], props);
+  this._list[id] = Object.assign(this._list[id], props);
   if (this._list[id] && props.usedPropTypes) {
 	this._list[id].usedPropTypes = mergeUsedPropTypes(copyUsedPropTypes || [], props.usedPropTypes);
   }
@@ -1217,7 +1217,7 @@ function componentRule(rule, context) {
 	}
   };
   var ruleInstructions = rule(context, components, utils);
-  var updatedRuleInstructions = util._extend({}, ruleInstructions);
+  var updatedRuleInstructions = Object.assign({}, ruleInstructions);
   Object.keys(detectionInstructions).forEach(function (instruction) {
 	updatedRuleInstructions[instruction] = function (node) {
 			detectionInstructions[instruction](node);
@@ -75118,7 +75118,7 @@ var Components = __webpack_require__(8);
 function getMethodsOrder(defaultConfig, userConfig) {
   userConfig = userConfig || {};
 
-  var groups = util._extend(defaultConfig.groups, userConfig.groups);
+  var groups = Object.assign(defaultConfig.groups, userConfig.groups);
   var order = userConfig.order || defaultConfig.order;
 
   var config = [];

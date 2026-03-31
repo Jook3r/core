@@ -137,7 +137,7 @@ QueryString.stringify = QueryString.encode = function(obj, sep, eq, name) {
   if (util.isObject(obj)) {
     return Object.keys(obj).map(function(k) {
       var ks = QueryString.escape(stringifyPrimitive(k)) + eq;
-      if (util.isArray(obj[k])) {
+      if (Array.isArray(obj[k])) {
         return obj[k].map(function(v) {
           return ks + QueryString.escape(stringifyPrimitive(v));
         }).join(sep);
@@ -200,7 +200,7 @@ QueryString.parse = QueryString.decode = function(qs, sep, eq, options) {
 
     if (!hasOwnProperty(obj, k)) {
       obj[k] = v;
-    } else if (util.isArray(obj[k])) {
+    } else if (Array.isArray(obj[k])) {
       obj[k].push(v);
     } else {
       obj[k] = [obj[k], v];
