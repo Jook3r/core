@@ -58,7 +58,6 @@ module.exports = function(c9, proc, installPath, shell) {
         var start = typeof options.start == "number" ? options.start : -32768;
         var end = typeof options.end == "number" ? options.end : 1000;
         var paneId = (options.id || this.id) + ":0.0"; // for now let's assume there is only one pane
-        console.log("[getOutputHistory] paneId=" + paneId + " start=" + start + " end=" + end);
 
         if (c9.platform == "win32") return;
         

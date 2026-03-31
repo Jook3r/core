@@ -698,17 +698,13 @@ define(function(require, exports, module) {
                 updateCover(terminal.aceSession, trimmed);
             }
             function loadHistory(session) {
-                console.log("[loadHistory] called, tmuxDotCover=" + session.terminal.tmuxDotCover);
                 if (session.terminal.tmuxDotCover)
                     return;
 
                 session.getOutputHistory({}, function(e, data) {
-                    console.log("[loadHistory] err=" + JSON.stringify(e) + " dataLen=" + (data == null ? "null" : data.length));
                     if (!e && data) {
                         session.terminal.setOutputHistory(data, true);
-                        console.log("[loadHistory] ybase after setOutputHistory=" + session.terminal.ybase);
                         session.getStatus({ clients: true }, function(e, status) {
-                            console.log("[loadHistory] status=" + JSON.stringify(status));
                             if (e || !status) return;
                             if (status.clients && status.clients.length > 0) {
                                 var terminal = session.terminal;
