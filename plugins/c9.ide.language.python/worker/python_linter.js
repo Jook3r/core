@@ -10,7 +10,7 @@ var baseHandler = require("plugins/c9.ide.language/base_handler");
 var workerUtil = require("plugins/c9.ide.language/worker_util");
 
 var handler = module.exports = Object.create(baseHandler);
-var pythonVersion = "python2";
+var pythonVersion = "python3";
 var pythonPath = "";
 var pylintFlags = "";
 var launchCommand;

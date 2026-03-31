@@ -41,7 +41,6 @@ define(function(require, exports, module) {
                             type: "dropdown",
                             path: "project/python/@version",
                             items: [
-                                { caption: "Python 2", value: "python2" },
                                 { caption: "Python 3", value: "python3" },
                             ]
                         },
@@ -74,9 +73,9 @@ define(function(require, exports, module) {
             
             settings.on("read", function(e) {
                 settings.setDefaults("project/python", [
-                    ["version", "python2"],
+                    ["version", "python3"],
                     ["completion", true],
-                    ["path", options.pythonPath || "/usr/local/lib/python2.7/dist-packages:/usr/local/lib/python3.4/dist-packages"]
+                    ["path", options.pythonPath || "/usr/local/lib/python3/dist-packages:/usr/lib/python3/dist-packages"]
                 ]);
             }, plugin);
             

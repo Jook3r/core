@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Helper script to launch jedi/pylint in a python2/3 virtualenv
+# Helper script to launch jedi/pylint in a python3 virtualenv
 set -e
 
 PYTHON=$1
@@ -15,11 +15,7 @@ if [[ -d $SHAREDENV ]]; then
 elif which virtualenv &>/dev/null; then
     ENV=$FALLBACKENV
     if ! [[ -d $ENV ]]; then
-        VERSION=
-        if [ "$PYTHON" = "python3" ]; then
-            VERSION=--python=python3
-        fi
-        virtualenv $VERSION $ENV
+        virtualenv --python=python3 $ENV
     fi
 
     source $ENV/bin/activate

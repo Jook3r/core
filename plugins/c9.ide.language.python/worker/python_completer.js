@@ -19,7 +19,7 @@ var ERROR_PORT_IN_USE = 98;
 var ERROR_NO_SERVER = 7;
 
 var handler = module.exports = Object.create(baseHandler);
-var pythonVersion = "python2";
+var pythonVersion = "python3";
 var enabled;
 var pythonPath = "";
 var jediServer;
@@ -87,8 +87,6 @@ handler.complete = function(doc, fullAst, pos, options, callback) {
             r.noDoc = options.noDoc;
             if (!r.doc)
                 return;
-            if (r.replaceText === "print(^^)" && pythonVersion === "python2" && !/\.[^ ]*$/.test(options.line.substr(pos.column)))
-                r.replaceText = "print";
             var docLines = r.doc.split(/\r\n|\n|\r/);
             var docBody = docLines.slice(2).join("\n");
             r.docHeadHtml = workerUtil.filterDocumentation(docLines[0]).replace(/^([A-Za-z0-9$_]+\()self, /, "$1");
