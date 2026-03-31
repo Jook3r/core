@@ -25,6 +25,7 @@
         "mime": "~1.2.9",
         "msgpack-js-browser": "~0.1.4",
         "nak": "git+https://github.com/Jook3r/nak.git",
+        "node-pty": "^1.0.0",
         "netutil": "~0.0.2",
         "qs": "^6.12.0",
         "rusha": "0.8.5",
