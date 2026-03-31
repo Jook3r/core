@@ -62,7 +62,7 @@ module.exports = function(c9, proc, installPath, shell) {
 
         if (c9.platform == "win32") return;
         
-        proc.tmux("", { 
+        proc.tmux("", {
             capturePane: {
                 start: start,
                 end: end,
@@ -70,28 +70,21 @@ module.exports = function(c9, proc, installPath, shell) {
                 joinLines: options.joinLines
             }
         }, function(err, _1, _2, meta) {
-            if (err || !meta.process) return cb(err);
-            var buffer = "", errBuffer = "";
-            meta.process.stdout.on("data", function(data) {
-                buffer += data.toString();
-            });
-            meta.process.stderr.on("data", function(data) {
-                errBuffer += data.toString();
-            });
-            meta.process.on("close", function() {
-                if (!buffer && !errBuffer && options.retries < 4) {
-                    // tmux doesn't produce any output if two instances are invoked at the same time
-                    return setTimeout(function() {
-                        getOutputHistory(options, cb);
-                    }, options.retries * 100 + 300);
-                }
-                if (buffer) {
-                    var i = buffer.search(/\x1b\[1mPane is dead\x1b\[0m\s*$/);
-                    if (i != -1)
-                        buffer = buffer.slice(0, i).replace(/\s*$/, "\n");
-                }
-                cb(errBuffer, buffer);
-            });
+            if (err) return cb(err);
+            var buffer = (meta && meta.output) || "";
+            var errBuffer = (meta && meta.outputErr) || "";
+            if (!buffer && !errBuffer && options.retries < 4) {
+                // tmux doesn't produce any output if two instances are invoked at the same time
+                return setTimeout(function() {
+                    getOutputHistory(options, cb);
+                }, options.retries * 100 + 300);
+            }
+            if (buffer) {
+                var i = buffer.search(/\x1b\[1mPane is dead\x1b\[0m\s*$/);
+                if (i != -1)
+                    buffer = buffer.slice(0, i).replace(/\s*$/, "\n");
+            }
+            cb(errBuffer, buffer);
         });
     }
     
