@@ -29,7 +29,7 @@ Follow these steps to install the SDK:
     git clone https://github.com/Jook3r/core.git onlineIDE
     cd onlineIDE
     scripts/install-sdk.sh
-    scripts/makestandalone.sh
+    sudo scripts/makestandalone.sh
     
 To update the SDK to the latest version run:
 

@@ -199,7 +199,7 @@ Terminal.prototype.setOutputHistory = function(data, trim) {
   this.lines = tmp.lines.slice(0, tmp.ybase)
     .concat(this.lines.slice(this.ybase));
   this.ybase = tmp.ybase;
-  // this.refresh(0, this.rows);
+  this.refresh(0, this.rows);
 };
 
 /**
