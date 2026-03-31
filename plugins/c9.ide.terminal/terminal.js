@@ -703,7 +703,7 @@ define(function(require, exports, module) {
                     return;
 
                 session.getOutputHistory({}, function(e, data) {
-                    console.log("[loadHistory] err=" + e + " dataLen=" + (data && data.length));
+                    console.log("[loadHistory] err=" + JSON.stringify(e) + " dataLen=" + (data == null ? "null" : data.length));
                     if (!e && data) {
                         session.terminal.setOutputHistory(data, true);
                         console.log("[loadHistory] ybase after setOutputHistory=" + session.terminal.ybase);
