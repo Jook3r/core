@@ -1384,7 +1384,7 @@ Terminal.prototype.isSmallScreen = function() {
 };
 
 Terminal.prototype.noScrollBack = function() {
-  return (this.applicationKeypad || this.mouseEvents || this.tmuxDotCover);
+  return (this.mouseEvents || this.tmuxDotCover);
 };
 
 Terminal.prototype.setSize = function(x, y, local) {
