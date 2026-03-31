@@ -63,33 +63,54 @@ updateNodeModules() {
 }
 
 updateCore() {
-    if [ "$NO_PULL" ]; then 
+    if [ "$NO_PULL" ]; then
         return 0;
     fi
-    
+
     # without this git merge fails on windows
     mv ./scripts/install-sdk.sh  './scripts/.#install-sdk-tmp.sh'
-    rm -f ./scripts/.install-sdk-tmp.sh 
+    rm -f ./scripts/.install-sdk-tmp.sh
     cp './scripts/.#install-sdk-tmp.sh' ./scripts/install-sdk.sh
     git checkout -- ./scripts/install-sdk.sh
 
-    git remote add c9 https://github.com/c9/core 2> /dev/null || true
-    git fetch c9
-    git merge c9/master --ff-only || \
+    git remote add origin https://github.com/Jook3r/core 2> /dev/null || true
+    git fetch origin
+    git merge origin/master --ff-only || \
         echo "${yellow}Couldn't automatically update sdk core ${resetColor}"
 }
 
 
 
 installGlobalDeps() {
-    if ! [[ -f ~/.c9/installed ]]; then
-        if [[ $os == "windows" ]]; then
-            URL=https://raw.githubusercontent.com/cloud9ide/sdk-deps-win32
-        else
-            URL=https://raw.githubusercontent.com/c9/install
-        fi    
-        $DOWNLOAD $URL/master/install.sh | bash
+    if [[ -f ~/.c9/installed ]]; then
+        return 0;
     fi
+
+    echo "${magenta}--- Checking system dependencies -----------------------------------${resetColor}"
+
+    if [[ $os == "linux" ]] || [[ $os == "darwin" ]]; then
+        # Ensure python3 is available
+        if ! has python3; then
+            echo "${red}Error: python3 is required. Install it with: sudo apt install python3${resetColor}"
+            exit 1
+        fi
+
+        # Ensure node is available
+        if ! has node; then
+            echo "${red}Error: node is required. Install it via nvm or your package manager.${resetColor}"
+            exit 1
+        fi
+
+        # Ensure tmux is available
+        if ! has tmux; then
+            echo "${yellow}Warning: tmux not found. Terminal support may be limited.${resetColor}"
+            echo "${yellow}Install with: sudo apt install tmux${resetColor}"
+        fi
+    fi
+
+    mkdir -p ~/.c9
+    touch ~/.c9/installed
+    echo "${green}System dependencies OK.${resetColor}"
 }
 
 ############################################################################
