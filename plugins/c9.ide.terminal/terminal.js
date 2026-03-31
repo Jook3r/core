@@ -700,11 +700,14 @@ define(function(require, exports, module) {
             function loadHistory(session) {
                 if (session.terminal.tmuxDotCover)
                     return;
-                    
+
                 session.getOutputHistory({}, function(e, data) {
+                    console.log("[loadHistory] err=" + e + " dataLen=" + (data && data.length));
                     if (!e && data) {
                         session.terminal.setOutputHistory(data, true);
+                        console.log("[loadHistory] ybase after setOutputHistory=" + session.terminal.ybase);
                         session.getStatus({ clients: true }, function(e, status) {
+                            console.log("[loadHistory] status=" + JSON.stringify(status));
                             if (e || !status) return;
                             if (status.clients && status.clients.length > 0) {
                                 var terminal = session.terminal;
