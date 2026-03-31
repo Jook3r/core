@@ -6,7 +6,9 @@ var net = require("net");
 var Stream = require("stream").Stream;
 var crypto = require('crypto');
 var events = require("events");
-var exists = Fs.exists || Path.exists;
+var exists = Fs.existsSync
+    ? function(p, cb) { cb(Fs.existsSync(p)); }
+    : Fs.exists;
 
 var localfsAPI; // Set on VFS register
 var DEFAULT_NL_CHAR_FILE = "\n";
@@ -805,7 +807,7 @@ var Store = (function () {
         var contents = tmpl.contents || "";
         var fsHash = tmpl.fsHash || hashString(contents);
         wrapSeq(Document.create({
-            contents: new Buffer(contents),
+            contents: Buffer.from(contents),
             path: tmpl.path,
             fsHash: fsHash,
             authAttribs: contents.length ? JSON.stringify([contents.length, null]) : "[]",
@@ -817,7 +819,7 @@ var Store = (function () {
                 return callback(err);
             wrapSeq(Revision.create({
                 document_id: doc.id,
-                operation: new Buffer("[]"),
+                operation: Buffer.from("[]"),
                 revNum: 0
             }), function (err, rev) {
                 if (err)
@@ -923,7 +925,7 @@ var Store = (function () {
         var starRevNums = doc.starRevNums;
         doc.authAttribs = JSON.stringify(authAttribs);
         doc.starRevNums = JSON.stringify(starRevNums);
-        doc.contents = new Buffer(doc.contents);
+        doc.contents = Buffer.from(doc.contents);
         doc.updated_at = new Date();
         doc.lastUpdate = doc.updated_at.getTime();
         logVerbose("Saving document to db with lastUpdate: " + doc.lastUpdate);
@@ -1328,7 +1330,7 @@ function applyOperation(userIds, docId, doc, op, callback) {
             applyAuthorAttributes(doc.authAttribs || [], op, ws.authorPoolParsed[userId]);
 
             wrapSeq(Revision.create({
-                operation: new Buffer(JSON.stringify(op)),
+                operation: Buffer.from(JSON.stringify(op)),
                 author: userId,
                 revNum: doc.revNum + 1,
                 document_id: doc.id
@@ -3210,7 +3212,7 @@ function isBinaryFile(file, callback) {
         Fs.open(file, 'r', function(err, descriptor) {
             if (err)
                 return callback(err);
-            var bytes = new Buffer(max_bytes);
+            var bytes = Buffer.alloc(max_bytes);
             // Read the file with no encoding for raw buffer access.
             Fs.read(descriptor, bytes, 0, bytes.length, 0, function(err, size, bytes) {
                 Fs.close(descriptor, function(err2) {

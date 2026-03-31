@@ -111,7 +111,6 @@ function plugin(options, imports, register) {
             var user = req.user;
             
             trackActivity(user, req);
-            
             if (version != kaefer.version.protocol) {
                 var err = new error.PreconditionFailed("Wrong VFS protocol version. Expected version '" + kaefer.version.protocol + "' but found '" + version + "'");
                 err.subtype = "protocol_mismatch";
@@ -134,12 +133,17 @@ function plugin(options, imports, register) {
                 }, null, 201);
             });
 
-            // if the clients aborts the request we have to kill the ssh process
+            // if the client aborts the request we have to kill the ssh process
+            // Node.js 14+ emits "close" on req when the body stream is consumed naturally,
+            // not only on client disconnect — so check the socket is actually gone.
             req.on("close", function() {
-                done = true;
-                cancel();
-                if(!res.headersSent)
-                    res.json({}, 0, 500);
+                var socketGone = !req.socket || req.socket.destroyed || !req.socket.writable;
+                if (socketGone) {
+                    done = true;
+                    cancel();
+                    if (!res.headersSent)
+                        res.json({}, 0, 500);
+                }
             });
         }
     ]);

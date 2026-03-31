@@ -11,8 +11,6 @@ function plugin(options, imports, register) {
     var spawn = require("child_process").spawn;
     var join = require("path").join;
     var uglify = require.resolve("uglify-js/bin/uglifyjs");
-    var mkdirp = require("mkdirp");
-    
     function execFile(cmd, args, callback) {
         var child = spawn(cmd, args);
         child.stderr.pipe(process.stderr);

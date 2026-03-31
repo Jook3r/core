@@ -583,7 +583,7 @@ module.exports = function(options) {
         {
             packagePath: "plugins/c9.ide.installer/installer",
             homeDir: options.homeDir,
-            installSelfCheck: true,
+            installSelfCheck: false,
             installPath: options.installPath
         },
         

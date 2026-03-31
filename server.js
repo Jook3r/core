@@ -14,10 +14,6 @@ var hostname = require("c9/hostname");
 var child_process = require("child_process");
 require("c9/setup_paths.js");
 
-if (process.version.match(/^v0/) && parseFloat(process.version.substr(3)) < 10) {
-    console.warn("You're using Node.js version " + process.version 
-        + ". Version 0.10 or higher is recommended. Some features will not work.");
-}
 
 var DEFAULT_CONFIG = "s";
 var DEFAULT_SETTINGS = getDefaultSettings();
@@ -71,10 +67,9 @@ module.exports.getDefaultSettings = getDefaultSettings;
 
 function main(argv, config, onLoaded) {
     var inContainer = os.hostname().match(/^\w+-\w+-\d+$/);
-    var optimist = require("optimist");
-    var async = require("async");
+    var yargs = require("yargs/yargs");
 
-    var options = optimist(argv)
+    var options = yargs(argv)
         .usage("Usage: $0 [CONFIG_NAME] [--help]")
         .alias("s", "settings")
         .default("settings", DEFAULT_SETTINGS)
@@ -121,14 +116,16 @@ function main(argv, config, onLoaded) {
     });
     
     function startConfigs(configs, done) {
-        async.each(configs, function(config, next) {
-            if (exclude && exclude.indexOf(config) > -1)
-                return next();
-            start(config, options, function(err, result, path) {
-                onLoaded && onLoaded(err, result, path);
-                next(err);
+        Promise.all(configs.map(function(config) {
+            return new Promise(function(resolve, reject) {
+                if (exclude && exclude.indexOf(config) > -1)
+                    return resolve();
+                start(config, options, function(err, result, path) {
+                    onLoaded && onLoaded(err, result, path);
+                    err ? reject(err) : resolve();
+                });
             });
-        }, done);
+        })).then(function() { done(); }, done);
     }
 }
      

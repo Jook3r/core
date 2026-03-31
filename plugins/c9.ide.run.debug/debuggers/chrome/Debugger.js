@@ -120,9 +120,9 @@ function Debugger(options) {
         connection.send = function(msg) {
             if (msg.arguments && !msg.arguments.maxStringLength)
                 msg.arguments.maxStringLength = 10000;
-            var data = new Buffer(JSON.stringify(msg));
-            
-            connection.write(new Buffer("Content-Length:" + data.length + "\r\n\r\n"));
+            var data = Buffer.from(JSON.stringify(msg));
+
+            connection.write(Buffer.from("Content-Length:" + data.length + "\r\n\r\n"));
             connection.write(data);
         };
         this.v8Socket = connection;

@@ -42,6 +42,9 @@ node_modules/kaefer/node_modules/
 !node_modules/treehugger
 !node_modules/logicblox
 !node_modules/connect-architect
+!node_modules/send
+!node_modules/tern
+!node_modules/connect
 !node_modules/ui
 !node_modules/react-bootstrap
 !node_modules/oldclient

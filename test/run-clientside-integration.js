@@ -5,7 +5,7 @@ var path = require("path");
 var spawn = require("child_process").spawn;
 var phantomjs = require("phantomjs-prebuilt");
 var binPath = phantomjs.path;
-var argv = require("optimist").usage("Usage: $0 ", {
+var argv = require("yargs/yargs")(process.argv).usage("Usage: $0 ", {
   "help": {alias: "h", description: "Display the usage", required: false},
   "branch": {description: "github branch for stacktrace", required: false},
   "filter": {description: "test pattern", required: false},

@@ -42,7 +42,7 @@ define(function(require, exports, module) {
                 }
             }
             
-            var optimist = require('optimist');
+            var yargs = require("yargs/yargs");
             
             var def = commands[module];
             
@@ -55,9 +55,9 @@ define(function(require, exports, module) {
                 if (module && !def)
                     console.error(module + " is not a c9 command\n");
                 
-                optimist
+                yargs(process.argv)
                     .usage("The Cloud9 CLI.\nUsage: c9 [--verbose] <command> [<args>]\n\n"
-                            + "The most commonly used c9 commands are:\n" 
+                            + "The most commonly used c9 commands are:\n"
                             + Object.keys(commands).map(function(name) {
                                 var cmd = commands[name];
                                 return "    " + cmd.name + "   " + cmd.info;
@@ -79,7 +79,7 @@ define(function(require, exports, module) {
                 description: "Output help information"
             };
 
-            argv = optimist
+            argv = yargs(process.argv)
                 .usage("The Cloud9 CLI.\nUsage: c9 " + module + " [--help] " + def.usage)
                 .options(def.options);
             

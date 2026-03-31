@@ -332,7 +332,7 @@ define(function(require, exports, module) {
                                 });
                             }
                         }
-                        data = new Buffer(buffer);
+                        data = Buffer.from(buffer);
                         res.writeHead(200, {
                             "content-length": data.length + inject.length,
                             "content-type": request.headers["content-type"],

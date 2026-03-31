@@ -1,6 +1,7 @@
 module.exports = function(config, optimist) {
-    
-    var path = require("path");
+
+    var path   = require("path");
+    var crypto = require("crypto");
     
     if (!optimist.local) {
         optimist
@@ -114,6 +115,17 @@ module.exports = function(config, optimist) {
         console.log("or use -a username:password to setup HTTP authentication\n");
     }
 
+    // Hash the password at startup using PBKDF2-SHA512 so it is never stored
+    // or transmitted in plaintext.  Format stored in memory: "iters:saltHex:hashHex"
+    var authUsername    = auth[0] || "";
+    var authPasswordHash = "";
+    if (auth[1]) {
+        var PBKDF2_ITERS = 600000;
+        var salt = crypto.randomBytes(32);
+        var hash = crypto.pbkdf2Sync(auth[1], salt, PBKDF2_ITERS, 64, "sha512");
+        authPasswordHash = PBKDF2_ITERS + ":" + salt.toString("hex") + ":" + hash.toString("hex");
+    }
+
     var plugins = [
         {
             packagePath: "connect-architect/connect",
@@ -124,9 +136,14 @@ module.exports = function(config, optimist) {
             secure: config.secure,
         },
         {
-            packagePath: "connect-architect/connect.basicauth",
-            username: auth[0],
-            password: auth[1]
+            packagePath: "connect-architect/connect.formauth",
+            username: authUsername,
+            passwordHash: authPasswordHash,
+            secure: !!config.secure
+        },
+        {
+            packagePath: "connect-architect/connect.security-headers",
+            secure: !!config.secure
         },
         {
             packagePath: "connect-architect/connect.static",

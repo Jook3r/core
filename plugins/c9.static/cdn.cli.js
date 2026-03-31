@@ -9,7 +9,6 @@ define(function(require, exports, module) {
         
         var fs = require("fs");
         var path = require("path");
-        var mkdirp = require("mkdirp");
         var async = require("async");
         
         var moduleDeps = require("architect-build/module-deps");
@@ -163,7 +162,7 @@ define(function(require, exports, module) {
             function writeFile(filename, code, cb) {
                 if (typeof filename != "string")
                     filename = path.join.apply(path, filename);
-                mkdirp(path.dirname(filename), function(err) {
+                fs.mkdir(path.dirname(filename), { recursive: true }, function(err) {
                     if (err) return cb(err);
                     fs.writeFile(filename, code, "utf8", function(err) {
                         if (err) return cb(err);

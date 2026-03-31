@@ -42,7 +42,7 @@ function charCode(c) {
 
 // a safe fast alternative to decodeURIComponent
 QueryString.unescapeBuffer = function(s, decodeSpaces) {
-  var out = new Buffer(s.length);
+  var out = Buffer.alloc(s.length);
   var state = 'CHAR'; // states: CHAR, HEX0, HEX1
   var n, m, hexchar;
 

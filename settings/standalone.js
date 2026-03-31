@@ -20,6 +20,21 @@ module.exports = function(manifest, installPath) {
     var workspaceDir = path.resolve(__dirname + "/../");
     var sdk = !manifest.sdk;
     var win32 = process.platform == "win32";
+    var fs = require("fs");
+
+    function findTmux() {
+        var candidates = [
+            path.join(home, ".c9/bin/tmux"),
+            "/opt/homebrew/bin/tmux",
+            "/usr/local/bin/tmux",
+            "/usr/bin/tmux",
+            "/bin/tmux"
+        ];
+        for (var i = 0; i < candidates.length; i++) {
+            try { if (fs.statSync(candidates[i]).isFile()) return candidates[i]; } catch(e) {}
+        }
+        return "tmux";
+    }
     
     if (win32)
         readWin32Settings();
@@ -55,10 +70,10 @@ module.exports = function(manifest, installPath) {
         testing: false,
         platform: process.platform,
         arch: process.arch,
-        tmux: path.join(installPath, "bin/tmux"),
+        tmux: findTmux(),
         nakBin: path.join(__dirname, "../node_modules/nak/bin/nak"),
         bashBin: "bash",
-        nodeBin: [path.join(installPath, win32 ? "node.exe" : "node/bin/node"), process.execPath],
+        nodeBin: [process.execPath, path.join(installPath, win32 ? "node.exe" : "node/bin/node")],
         installPath: installPath,
         correctedInstallPath: correctedInstallPath,
         staticPrefix: "/static",

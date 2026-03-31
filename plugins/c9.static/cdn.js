@@ -18,7 +18,6 @@ function main(options, imports, register) {
     var fs = require("fs");
     var path = require("path");
     var send = require("send");
-    var mkdirp = require("mkdirp");
     var atomic = require("c9/atomic");
     var error = require("http-error");
     var frontdoor = require("frontdoor");
@@ -236,7 +235,7 @@ function main(options, imports, register) {
                 
                 if (!cacheFiles) return;
                 
-                mkdirp(path.dirname(filename), function(err) {
+                fs.mkdir(path.dirname(filename), { recursive: true }, function(err) {
                     if (err)
                         console.error("Error caching file", filename, err);
                     

@@ -38,11 +38,12 @@ define(function(require, exports, module) {
                 return { abort: function() { plugin.off("login", onLogin); } };
             }
             
-            options.query = options.query || {};
-            
-            // TODO try also using the Authorization header
-            if (accessToken)
-                options.query.access_token = accessToken;
+            // Send token in Authorization header, not as a query param, so it
+            // does not end up in server logs, browser history, or Referer headers.
+            if (accessToken) {
+                options.headers = options.headers || {};
+                options.headers["Authorization"] = "Bearer " + accessToken;
+            }
                 
             return http.request(url, options, function(err, data, res) {
                 // If we get a 'forbidden' status code login again and retry

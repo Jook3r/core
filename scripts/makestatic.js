@@ -5,12 +5,12 @@ require("amd-loader");
 require("c9/setup_paths.js");
 var path = require("path");
 var architect = require("architect");
-var optimist = require("optimist");
+var yargs = require("yargs/yargs");
 
 module.exports = main;
 
 if (!module.parent) {
-    var options = optimist(process.argv)
+    var options = yargs(process.argv)
         .usage("Usage: $0 [--help]")
         .alias("s", "settings")
         .default("settings", "local")
@@ -55,7 +55,7 @@ function main(config, settings, options, callback) {
     settings = require(path.join(__dirname, "/../settings", settings))();
     settings.pricing = {};
     
-    var plugins = require(config)(settings, optimist(process.argv))
+    var plugins = require(config)(settings, yargs(process.argv))
         .map(function(plugin) {
             if (typeof plugin == "string")
                 plugin = { packagePath: plugin };
