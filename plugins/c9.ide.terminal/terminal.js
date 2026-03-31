@@ -698,6 +698,7 @@ define(function(require, exports, module) {
                 updateCover(terminal.aceSession, trimmed);
             }
             function loadHistory(session) {
+                console.log("[loadHistory] called, tmuxDotCover=" + session.terminal.tmuxDotCover);
                 if (session.terminal.tmuxDotCover)
                     return;
 
