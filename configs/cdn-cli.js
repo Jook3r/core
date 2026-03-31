@@ -1,5 +1,6 @@
 module.exports = function(config, optimist) {
     optimist
+        .version(false)
         .describe("config", "name of the client config to compile")
         .describe("server-config", "name of the client server config to take the statics from")
         .default("server-config", "ide")
@@ -8,32 +9,39 @@ module.exports = function(config, optimist) {
         .describe("skin", "name of the skin to compile")
         .describe("module", "name of the module to compile")
         .describe("worker", "name of the worker to compile")
-        .describe("compress", "whether to uglify the output", config.cdn.compress)
+        .describe("compress", "whether to uglify the output")
+        .default("compress", config.cdn.compress)
         .boolean("compress")
-        .describe("obfuscate", "whether to obfuscate variable names in the output", config.cdn.obfuscate)
+        .describe("obfuscate", "whether to obfuscate variable names in the output")
+        .default("obfuscate", config.cdn.obfuscate)
         .boolean("obfuscate")
-        .describe("local", "whether to compile for the local version", false)
+        .describe("local", "whether to compile for the local version")
+        .default("local", false)
         .boolean("local")
-        .describe("keep-less", "whether to keep less/css in the compiled config", false)
+        .describe("keep-less", "whether to keep less/css in the compiled config")
+        .default("keep-less", false)
         .boolean("keep-less")
         .describe("compress-output-dir-prefix", "folder prefix to add compressed files in addition to uncompressed files")
         .boolean("link-cdn-files")
         .default("link-cdn-files", false)
         .boolean("skip-duplicates")
-        .describe("skip-duplicates", "whether to build files for identical configs", false)
+        .describe("skip-duplicates", "whether to build files for identical configs")
+        .default("skip-duplicates", false)
         .boolean("copy-static-resources")
-        .describe("cache", "cache directory", config.cdn.cacheDir)
-        .describe("version", "overrride version", config.cdn.version);
+        .describe("cache", "cache directory")
+        .default("cache", config.cdn.cacheDir)
+        .describe("cdn-version", "override version")
+        .default("cdn-version", config.cdn.version);
 
     var argv = optimist.argv;
     if (argv.help)
         return null;
-        
+
     return [
         "./c9.static/connect-static",
         {
             packagePath: "./c9.static/build",
-            version: argv.version,
+            version: argv["cdn-version"],
             cache: argv.cache,
             compress: argv.compress,
             obfuscate: argv.obfuscate,
