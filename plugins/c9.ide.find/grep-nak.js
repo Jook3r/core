@@ -5,6 +5,10 @@
  */
 "use strict";
 
+// Ignore EPIPE — happens when the consumer closes the pipe early (e.g. kill/limit)
+process.stdout.on("error", function(err) { if (err.code === "EPIPE") process.exit(0); });
+process.stderr.on("error", function(err) { if (err.code === "EPIPE") process.exit(0); });
+
 var childProcess = require("child_process");
 var fs = require("fs");
 var path = require("path");
