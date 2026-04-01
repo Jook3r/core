@@ -33,7 +33,6 @@ define(function(require, exports, module) {
         var TEMPLATE = require("text!./nakignore-template")
             + "\n" + (options.ignore || "");
         var NAK = options.nak || "~/.c9/node_modules/nak/bin/nak";
-        var GREPNAK = require("path").join(__dirname, "grep-nak.js");
         var NODE = options.node;
         
         if (NODE && Array.isArray(NODE)) 
@@ -290,9 +289,9 @@ define(function(require, exports, module) {
         }
         
         function execute(args, callback) {
-            // Use grep-nak.js (grep-based replacement for nak which is broken on Node.js v25)
-            proc.spawn(NODE || process.execPath, {
-                args: [GREPNAK].concat(args)
+            if (NODE) args.unshift(NAK);
+            proc.spawn(NODE || NAK, {
+                args: args
             }, function(err, process) {
                 if (err)
                     return callback(err);
