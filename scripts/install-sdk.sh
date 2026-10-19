@@ -78,7 +78,6 @@ rm -rf ./build/standalone
 
 updateNodeModules
 
-echo -e "c9.*\n.gitignore" >  plugins/.gitignore
 echo -e "nak\n.gitignore" >  node_modules/.gitignore
 
 echo "${green}Success!${resetColor} Start Cloud9 with:"
