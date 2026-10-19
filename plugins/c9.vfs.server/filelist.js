@@ -16,7 +16,7 @@ define(function(require, exports, module) {
         
         var plugin = new Plugin("Ajax.org", main.consumes);
 
-        var compress = imports.connect.getModule().compress();
+        var compress = require("compression")();
         
         cache.registerExtension(function(vfs, callback) {
             var restful = vfs.restful.home;

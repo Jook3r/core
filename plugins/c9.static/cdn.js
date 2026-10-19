@@ -152,7 +152,7 @@ function main(options, imports, register) {
     
     // section.use(foreverCache());
     section.use(imports["connect.cors"].cors("*"));
-    section.use(connect.getModule().compress());
+    section.use(require("compression")());
     
     section.get("/~/:transform/:path*", [prepare, function(req, res, next) {
         transform.sendFile(req, res, next);
@@ -199,8 +199,9 @@ function main(options, imports, register) {
     }]);
     
     section.get("/:hash/static/:path*", [prepare, function(req, res, next) {
-        send(req, req.params.path.replace(/^\//, ""))
-            .root(path.join(build.cacheDir, req.params.hash, "static"))
+        send(req, req.params.path.replace(/^\//, ""), {
+            root: path.join(build.cacheDir, req.params.hash, "static")
+        })
             .on('error', onSendError(next))
             .pipe(res);
     }]);
@@ -212,9 +213,7 @@ function main(options, imports, register) {
         fs.exists(filename, function(exists) {
             if (exists && cacheFiles) {
                 console.log("cache hit", filename);
-                var transfer = send(req, filename);
-                if (path.sep === "/")
-                    transfer.root("/");
+                var transfer = send(req, filename, path.sep === "/" ? { root: "/" } : {});
                 transfer
                     .on("error", onSendError(next))
                     .pipe(res);

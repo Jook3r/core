@@ -135,11 +135,12 @@ function plugin(options, imports, register) {
             });
 
             // if the clients aborts the request we have to kill the ssh process
-            req.on("close", function() {
+            // (req "close" fires as soon as the body is read on node >= 16, so
+            // listen on the response and ignore closes after it finished)
+            res.on("close", function() {
+                if (res.writableFinished) return;
                 done = true;
                 cancel();
-                if(!res.headersSent)
-                    res.json({}, 0, 500);
             });
         }
     ]);
@@ -185,7 +186,7 @@ function plugin(options, imports, register) {
         }
     }, [
         requestTimeout(15 * 60 * 1000),
-        connect.getModule().compress(),
+        require("compression")(),
         function(req, res, next) {
             req.query = {
                 access_token: req.params["access_token"]
@@ -220,7 +221,7 @@ function plugin(options, imports, register) {
         }
     }, [
         requestTimeout(15 * 60 * 1000),
-        connect.getModule().compress(),
+        require("compression")(),
         function(req, res, next) {
             passport.authenticate("bearer", { session: false }, function(err, user) {
                 if (err) return next(err);

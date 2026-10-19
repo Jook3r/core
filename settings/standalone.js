@@ -58,7 +58,7 @@ module.exports = function(manifest, installPath) {
         tmux: path.join(installPath, "bin/tmux"),
         nakBin: path.join(__dirname, "../node_modules/nak/bin/nak"),
         bashBin: "bash",
-        nodeBin: [path.join(installPath, win32 ? "node.exe" : "node/bin/node"), process.execPath],
+        nodeBin: [process.execPath],
         installPath: installPath,
         correctedInstallPath: correctedInstallPath,
         staticPrefix: "/static",

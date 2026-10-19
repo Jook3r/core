@@ -583,7 +583,10 @@ module.exports = function(options) {
         {
             packagePath: "plugins/c9.ide.installer/installer",
             homeDir: options.homeDir,
-            installSelfCheck: true,
+            // standalone installs provision tmux/node-pty/python3 up front
+            // (scripts/install-sdk.sh), so don't gate the vfs connection on
+            // the in-browser installer
+            installSelfCheck: !options.standalone,
             installPath: options.installPath
         },
         
