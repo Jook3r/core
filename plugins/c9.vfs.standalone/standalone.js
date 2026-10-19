@@ -27,6 +27,23 @@ function plugin(options, imports, register) {
     assert(options.workspaceDir, "Option 'workspaceDir' is required");
     assert(options.options, "Option 'options' is required");
     
+    // browsers attach the cached basic auth credentials to cross-site
+    // requests and websockets, so only accept requests from our own origin
+    // (behind a reverse proxy the public host is in X-Forwarded-Host)
+    imports.connect.useStart(function(req, res, next) {
+        var origin = req.headers.origin;
+        if (!origin) return next();
+        
+        var host = origin.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+        var forwardedHost = (req.headers["x-forwarded-host"] || "").split(",").pop().trim();
+        if (host == req.headers.host || host == forwardedHost)
+            return next();
+        
+        res.statusCode = 403;
+        res.setHeader("Content-Type", "text/plain");
+        res.end("Cross-origin request refused");
+    });
+    
 
     // serve index.html
     statics.addStatics([{

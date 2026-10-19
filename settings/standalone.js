@@ -34,7 +34,6 @@ module.exports = function(manifest, installPath) {
     var correctedInstallPath = installPath.substr(0, home.length) == home
         ? "~" + installPath.substr(home.length)
         : installPath;
-    var inContainer = os.hostname().match(/-\d+$/);
     
     var config = {
         standalone: true,
@@ -52,7 +51,7 @@ module.exports = function(manifest, installPath) {
         sdk: sdk,
         pid: process.pid,
         port: process.env.PORT || 8181,
-        host: process.env.IP || (inContainer ? "0.0.0.0" : "127.0.0.1"),
+        host: process.env.IP || "127.0.0.1",
         testing: false,
         platform: process.platform,
         arch: process.arch,

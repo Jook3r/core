@@ -32,7 +32,7 @@ module.exports = function(config, optimist) {
             .boolean("hosted")
             .describe("hosted", "Use default config of the hosted version")
             .default("hosted", false)
-            .describe("auth", "Basic Auth username:password")
+            .describe("auth", "Basic Auth username:password (or set C9_AUTH); use -a : to run without login on localhost")
             .describe("collab", "Whether to enable collab.")
             .default("collab", config.collab)
             .describe("cache", "use cached version of cdn files")
@@ -97,21 +97,34 @@ module.exports = function(config, optimist) {
     if (testing && argv.k)
         require("child_process").exec("tmux -L cloud91.9 kill-server", function() {});
 
-    var isLocalhost = host == "localhost" || host == "127.0.0.1";
-    if (!/:/.test(argv.auth) && !isLocalhost) {
-        console.log("Authentication is required when not running on localhost.");
-        console.log("If you would like to expose this service to other hosts or the Internet");
-        console.log("at large, please specify -a user:pass to set a username and password");
-        console.log("(or use -a : to force no login).");
-        console.log("Use --listen localhost to only listen on the localhost interface and");
-        console.log("and suppress this message.\n");
-        host = config.host = "127.0.0.1";
+    // credentials come from -a user:password or C9_AUTH (keeps the password
+    // out of `ps`); the password may contain ":"
+    var authString = argv.auth != null ? argv.auth + "" : process.env.C9_AUTH;
+    // don't pass the credentials on to terminals and runners
+    delete process.env.C9_AUTH;
+    var auth = ["", ""];
+    if (authString) {
+        var i = authString.indexOf(":");
+        auth = i == -1 ? [authString, ""] : [authString.slice(0, i), authString.slice(i + 1)];
     }
-    var auth = (argv.auth + "").split(":");
-    if (!auth[1] && !isLocalhost && !process.env.C9_HOSTNAME) {
-        console.log("Warning: running Cloud9 without using HTTP authentication.");
-        console.log("Run using --listen localhost instead to only expose Cloud9 to localhost,");
-        console.log("or use -a username:password to setup HTTP authentication\n");
+
+    var isLocalhost = /^(localhost|127(\.\d+){3}|::1|\[::1\])$/.test(host);
+    if (authString == ":") {
+        if (!isLocalhost) {
+            console.error("Refusing to listen on " + host + " without a login.");
+            console.error("Use -a username:password (or C9_AUTH), or --listen 127.0.0.1.");
+            process.exit(1);
+        }
+        console.log("Warning: running Cloud9 without a login. Anything that can reach");
+        console.log(host + ":" + config.port + " (e.g. a reverse proxy on this machine) gets full access.\n");
+    }
+    else if (!auth[0] || !auth[1]) {
+        if (!testing) {
+            console.error("Cloud9 needs a username and password: set C9_AUTH=username:password");
+            console.error("or pass -a username:password. Use -a : to run without a login on localhost.");
+            process.exit(1);
+        }
+        auth = ["", ""];
     }
 
     var plugins = [
