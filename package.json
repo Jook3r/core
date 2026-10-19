@@ -51,5 +51,8 @@
         "start": "node server.js"
     },
     "devDependencies": {},
-    "licenses": []
+    "licenses": [],
+    "allowScripts": {
+        "node-pty": true
+    }
 }
