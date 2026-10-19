@@ -127,6 +127,7 @@ define(function(require, exports, module) {
             if (term.sgrMouse) {
                 pos.x -= 32;
                 pos.y -= 32;
+                button -= 32;
                 term.send('\x1b[<' + ((button & 3) === 3 ? button & ~3 : button) + ';' + pos.x + ';' + pos.y + ((button & 3) === 3 ? 'm' : 'M'));
                 return;
             }

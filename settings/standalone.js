@@ -14,6 +14,7 @@ module.exports = function(manifest, installPath) {
     
     var path = require("path");
     var os = require("os");
+    var fs = require("fs");
     var runners = require("../plugins/c9.ide.run/runners_list").local;
     var builders = require("../plugins/c9.ide.run.build/builders_list");
     
@@ -55,7 +56,9 @@ module.exports = function(manifest, installPath) {
         testing: false,
         platform: process.platform,
         arch: process.arch,
-        tmux: path.join(installPath, "bin/tmux"),
+        tmux: fs.existsSync(path.join(installPath, "bin/tmux"))
+            ? path.join(installPath, "bin/tmux")
+            : "tmux",
         nakBin: path.join(__dirname, "../node_modules/nak/bin/nak"),
         bashBin: "bash",
         nodeBin: [process.execPath],

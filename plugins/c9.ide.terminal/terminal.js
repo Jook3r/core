@@ -145,16 +145,20 @@ define(function(require, exports, module) {
                         return (type == "terminal" || type == "output") && e.source == "click";
                     },
                     exec: function (editor) {
+                        var keys = iter[2];
                         if (iter[0] == "toggle_term_status") {
                             var session = editor.activeDocument.getSession();
                             session.status = !(session.status || 0);
-                            editor.write(String.fromCharCode(2) 
-                                + iter[2].replace(/on\r/, 
-                                    session.status ? "on\r" : "off\r"));
+                            keys = keys.replace(/on\r/, session.status ? "on\r" : "off\r");
                         }
-                        else {
-                            editor.write(String.fromCharCode(2) + iter[2]);
-                        }
+                        if (keys[0] != ":")
+                            return editor.write(String.fromCharCode(2) + keys);
+                        // tmux >= 3 discards keys that arrive in the same
+                        // read as the ":" that opens the command prompt
+                        editor.write(String.fromCharCode(2) + ":");
+                        setTimeout(function() {
+                            editor.write(keys.substr(1));
+                        }, 50);
                     }
                 }, handle);
             });
@@ -593,6 +597,7 @@ define(function(require, exports, module) {
                 aceSession.c9session.getStatus({ clients: true }, function(e, s) {
                     aceSession.updatingStatus = false;
                     if (e) return console.warn(e);
+                    if (!s) return;
                     
                     var term = aceSession.term;
                     add = term.rows > s.height || term.cols > s.width;

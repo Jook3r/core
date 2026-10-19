@@ -931,7 +931,7 @@ define(function(require, exports, module) {
                         } else {
                             data = data
                               .replace(/\s*Pane is dead([\s\S]*)13H/g, "") // "$117H")
-                              .replace(/\s*Pane is dead/g, "");
+                              .replace(/\s*Pane is dead[^\r\n]*/g, "");
                         }
                         data = data.replace(/\s+$/, "");
 

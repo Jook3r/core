@@ -85,7 +85,7 @@ module.exports = function(c9, proc, installPath, shell) {
                     }, options.retries * 100 + 300);
                 }
                 if (buffer) {
-                    var i = buffer.search(/\x1b\[1mPane is dead\x1b\[0m\s*$/);
+                    var i = buffer.search(/(\x1b\[[\d;]*m)*Pane is dead[^\n]*\s*$/);
                     if (i != -1)
                         buffer = buffer.slice(0, i).replace(/\s*$/, "\n");
                 }
@@ -108,7 +108,12 @@ module.exports = function(c9, proc, installPath, shell) {
         if (c9.platform == "win32") return;
         if (!terminal || !terminal.send)
             terminal = this.terminal;
-        terminal.send("\u0002:" + command + (!exec ? "\r\u001b" : exec == 1 ? "\r" : ""));
+        // tmux >= 3 discards keys that arrive in the same read as the ":"
+        // that opens the command prompt
+        terminal.send("\u0002:");
+        setTimeout(function() {
+            terminal.send(command + (!exec ? "\r\u001b" : exec == 1 ? "\r" : ""));
+        }, 50);
     }
     
     function clearHistory() {
