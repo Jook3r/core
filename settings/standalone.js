@@ -52,6 +52,7 @@ module.exports = function(manifest, installPath) {
         pid: process.pid,
         port: process.env.PORT || 8181,
         host: process.env.IP || "127.0.0.1",
+        appHostname: process.env.C9_HOSTNAME,
         testing: false,
         platform: process.platform,
         arch: process.arch,

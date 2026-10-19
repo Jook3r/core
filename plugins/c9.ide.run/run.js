@@ -453,7 +453,7 @@ define(function(require, module, exports) {
                 if (name == "port")
                     return c9.port || "8080";
                 if (name == "ip")
-                    return "0.0.0.0";
+                    return c9.hosted ? "0.0.0.0" : "127.0.0.1";
                 if (name == "home")
                     return c9.home;
                 if (name == "python")
