@@ -33,8 +33,6 @@ module.exports = function(config, optimist) {
             .describe("hosted", "Use default config of the hosted version")
             .default("hosted", false)
             .describe("auth", "Basic Auth username:password (or set C9_AUTH); use -a : to run without login on localhost")
-            .describe("collab", "Whether to enable collab.")
-            .default("collab", config.collab)
             .describe("cache", "use cached version of cdn files")
             .default("cache", true)
             .describe("setting-path", "The path to store the settings.")
@@ -73,9 +71,6 @@ module.exports = function(config, optimist) {
     
     config.port = port || argv.port;
     config.host = host || argv.listen;
-    
-    if (argv.collab != null)
-        config.collab = argv.collab;
     
     var workspaceType = argv.workspacetype || null;
     
@@ -251,15 +246,6 @@ module.exports = function(config, optimist) {
         /* ### END #*/
         }
     ];
-    
-    if (config.collab && !config.mode && !config.local) {
-        try {
-            var addApi = require("./api.standalone").addApi;
-        } catch(e) {}
-        if (addApi) {
-            plugins = addApi(plugins, config);
-        }
-    }
     
     return plugins;
 };
