@@ -114,7 +114,7 @@ module.exports = function(config, optimist) {
         console.log(host + ":" + config.port + " (e.g. a reverse proxy on this machine) gets full access.\n");
     }
     else if (!auth[0] || !auth[1]) {
-        if (!testing) {
+        if (!testing && !config.packaging) {
             console.error("Cloud9 needs a username and password: set C9_AUTH=username:password");
             console.error("or pass -a username:password. Use -a : to run without a login on localhost.");
             process.exit(1);

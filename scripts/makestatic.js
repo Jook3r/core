@@ -54,6 +54,8 @@ function main(config, settings, options, callback) {
    
     settings = require(path.join(__dirname, "/../settings", settings))();
     settings.pricing = {};
+    // only the plugin list is needed, no server is started
+    settings.packaging = true;
     
     var plugins = require(config)(settings, optimist(process.argv))
         .map(function(plugin) {

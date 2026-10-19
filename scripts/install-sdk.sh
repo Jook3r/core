@@ -80,5 +80,10 @@ updateNodeModules
 
 echo -e "nak\n.gitignore" >  node_modules/.gitignore
 
+# prebuild the client for `server.js --packed` (fewer requests, less RAM);
+# rerun after changing client code
+echo "${magenta}--- Building the packed client ----------------------------------------${resetColor}"
+./scripts/makestandalone.sh > /dev/null
+
 echo "${green}Success!${resetColor} Start Cloud9 with:"
-echo "  node server.js -p 8181 -l 127.0.0.1 -a user:password -w ~/workspace"
+echo "  C9_AUTH=user:password node server.js -p 8181 -l 127.0.0.1 --packed -w ~/workspace"
