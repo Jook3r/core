@@ -718,7 +718,8 @@ module.exports = function(options) {
             ideBaseUrl: options.ideBaseUrl,
             dashboardUrl: options.dashboardUrl,
             accountUrl: options.accountUrl,
-            local: options.local
+            local: options.local,
+            standalone: options.standalone
         },
         {
             packagePath: "plugins/c9.ide.pubsub/pubsub-client",

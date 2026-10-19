@@ -41,7 +41,7 @@ define(function(require, exports, module) {
 
             auth.on("relogin", onReLogin);
 
-            if (!c9.local) {
+            if (!c9.local && !options.standalone) {
                 menus.addItemByPath("Cloud9/~", new apf.divider(), 2000000, plugin);
                 menus.addItemByPath("Cloud9/Quit Cloud9", new apf.item({
                     onclick: function() {
@@ -66,6 +66,11 @@ define(function(require, exports, module) {
         }
 
         function createButton(user) {
+            // standalone has a single local user and no c9.io account to
+            // link to (and the avatar would come from gravatar.com)
+            if (options.standalone)
+                return;
+            
             var name = "user_" + user.id;
             
             // todo cleanup seems to not work well
