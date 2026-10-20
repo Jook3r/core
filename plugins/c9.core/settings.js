@@ -207,7 +207,7 @@ define(function(require, exports, module) {
                     var standalone = !options.hosted;
                     
                     if (standalone || type == "project" || skipCloud[type]) {
-                        fs.writeFile(PATH[type], json, forceSync, function(err) {});
+                        fs.writeFile(PATH[type], json, forceSync, onWrite(type, json));
                         
                         if (standalone && !saveToCloud[type] || skipCloud[type])
                             return; // We're done
@@ -228,7 +228,44 @@ define(function(require, exports, module) {
             dirty = false;
             return written;
         }
-    
+
+        // Settings are written in the background every second, so a write
+        // can easily hit a moment without network (a Wi-Fi hiccup, waking
+        // from sleep) that the websocket doesn't notice. Write those again
+        // on the next tick instead of showing an error; only show one when
+        // writing keeps failing for longer than the websocket takes to
+        // notice a dead connection (25s ping interval + 60s timeout).
+        var QUIET_FAILURES = 90;
+        var failures = {};
+
+        function onWrite(type, json) {
+            return function(err) {
+                if (!err) {
+                    failures[type] = 0;
+                    return;
+                }
+                if (!isTransient(err))
+                    return; // show the error
+
+                // Unless newer settings were sent since
+                if (cache[type] == json) {
+                    delete cache[type];
+                    dirty = true;
+                }
+                failures[type] = (failures[type] || 0) + 1;
+                if (failures[type] % QUIET_FAILURES)
+                    return false; // don't show an error
+            };
+        }
+
+        function isTransient(err) {
+            // 0: no response at all; 502-504: a proxy in front of Cloud9
+            // couldn't reach it
+            return err.code === 0 || err.code == "ETIMEOUT"
+                || err.code == "ENOTCONNECTED"
+                || err.status >= 502 && err.status <= 504;
+        }
+
         // On a reload the server can inline the settings files in the new
         // page before it has written what this page sent on exit. So also
         // hand those settings to the next page in this browser tab. Only the
