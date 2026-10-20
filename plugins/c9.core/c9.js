@@ -92,8 +92,8 @@ define(function(require, module, exports) {
             // Before unload
             window.addEventListener("beforeunload", beforequit);
             
-            // Unload
-            window.addEventListener("unload", quit);
+            // Unload (pagehide, as browsers are phasing out the unload event)
+            window.addEventListener("pagehide", quit);
         }
         
         /***** Methods *****/
@@ -116,7 +116,9 @@ define(function(require, module, exports) {
             emit("beforequit");
         }
         
-        function quit() {
+        function quit(e) {
+            // A page that is kept in the back/forward cache can come back
+            if (e && e.persisted) return;
             emit("quit");
         }
         

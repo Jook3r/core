@@ -72,6 +72,7 @@ define(function(require, exports, module) {
                 // Load from parsed settings in the index file
                 else if (options.settings) {
                     json = options.settings;
+                    useExitCopy(json);
                     
                     if (debugMode)
                         json.state = localStorage["debugState" + c9.projectName];
@@ -220,6 +221,40 @@ define(function(require, exports, module) {
             dirty = false;
         }
     
+        // On a reload the server can inline the settings files in the new
+        // page before it has written what this page sent on exit. So also
+        // hand the settings to the next page in this browser tab.
+        var EXIT_COPY = "c9.settings.exit";
+        
+        function keepExitCopy() {
+            if (c9.readonly || !model.loaded || testing) return;
+            
+            var copy = { time: Date.now(), paths: PATH, settings: {}};
+            KEYS.forEach(function(type) {
+                if (model[type])
+                    copy.settings[type] = JSON.stringify(model[type]);
+            });
+            try {
+                sessionStorage.setItem(EXIT_COPY, JSON.stringify(copy));
+            } catch (e) {}
+        }
+        
+        function useExitCopy(json) {
+            try {
+                var copy = JSON.parse(sessionStorage.getItem(EXIT_COPY));
+                sessionStorage.removeItem(EXIT_COPY);
+            } catch (e) {}
+            
+            // Only use a copy made just before this page was requested
+            if (!copy || !(copy.time > performance.timeOrigin - 60000))
+                return;
+            
+            KEYS.forEach(function(type) {
+                if (copy.settings[type] && copy.paths[type] == PATH[type])
+                    json[type] = copy.settings[type];
+            });
+        }
+        
         function read(json, isReset, resetAll) {
             if (testing || resetAll)
                 json = util.cloneObject(TEMPLATE);
@@ -288,13 +323,26 @@ define(function(require, exports, module) {
 
             c9.on("beforequit", function() {
                 emit("write", { model: model, unload: true });
-                saveModel(true); //Forcing sync xhr works in chrome 
+                saveModel(true); // Sent with keepalive, see http-xhr.js
+                keepExitCopy();
             }, plugin);
+
+            // A hidden page can be discarded or closed by the browser without
+            // any further events, so save everything (metadata too) right away
+            document.addEventListener("visibilitychange", onVisibilityChange);
+            plugin.addOther(function() {
+                document.removeEventListener("visibilitychange", onVisibilityChange);
+            });
 
             c9.on("stateChange", function(e) {
                 if (e.state | c9.NETWORK && e.last | c9.NETWORK)
                     saveToFile(); //Save to file
             }, plugin);
+        }
+        
+        function onVisibilityChange() {
+            if (document.visibilityState == "hidden")
+                saveToFile(true);
         }
         
         function migrate(pathFrom, pathTo) {

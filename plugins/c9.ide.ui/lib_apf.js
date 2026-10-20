@@ -11242,8 +11242,9 @@ apf.window = function(){
     });
 
     //@todo apf3.x why is this loaded twice
-    apf.addListener(window, "unload", function(){
-        if (!apf)
+    // pagehide, as browsers are phasing out the unload event
+    apf.addListener(window, "pagehide", function(e){
+        if (!apf || e.persisted)
             return;
         
         apf.window.isExiting = true;

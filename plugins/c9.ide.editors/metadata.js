@@ -30,9 +30,12 @@ define(function(require, exports, module) {
         var jobs = {};
         var changed = {};
         var cached = {};
-        var worker, timer;
+        var worker, timer, largeTimer;
         
         var CHANGE_CHECK_INTERVAL = options.changeCheckInterval || 30000;
+        // Browsers allow 64KB for keepalive requests, see http-xhr.js
+        var KEEPALIVE_MAX = 60 * 1024;
+        var LARGE_CHECK_INTERVAL = 5000;
         
         var loaded = false;
         function load() {
@@ -101,6 +104,10 @@ define(function(require, exports, module) {
             timer = setInterval(function() {
                 checkChangedTabs();
             }, CHANGE_CHECK_INTERVAL);
+            
+            // Changes to documents too large to be sent on exit (see check)
+            // are saved within seconds instead
+            largeTimer = setInterval(checkLargeTabs, LARGE_CHECK_INTERVAL);
             
             // Delete metadata when file is renamed
             save.on("saveAs", function(e) {
@@ -224,7 +231,9 @@ define(function(require, exports, module) {
             }
             
             if (docChanged || typeof state.value == "undefined" || forceSync) {
-                if (forceSync && !docChanged && state.undoManager.stack.length)
+                // An unchanged file is on disk; don't spend the little room
+                // there is on exit on its value
+                if (forceSync && !docChanged && (tab.path || state.undoManager.stack.length))
                     delete state.value;
                 
                 write(forceSync);
@@ -266,6 +275,19 @@ define(function(require, exports, module) {
                     state = {};
                 }
                 
+                // On exit this is sent as a keepalive request, which is
+                // limited in size. If the value fits, drop the oldest undo
+                // history to fit as well, but keep the last edit; without any
+                // the document would look saved.
+                var fits = forceSync && undo && (state.value || "").length < KEEPALIVE_MAX;
+                while (fits && undo.position > 0 && sstate.length > KEEPALIVE_MAX) {
+                    var drop = Math.ceil(undo.position / 2);
+                    undo.stack.splice(0, drop);
+                    undo.position -= drop;
+                    undo.mark -= drop;
+                    sstate = JSON.stringify(state);
+                }
+                
                 if (cached[tab.name] != sstate) {
                     cached[tab.name] = sstate;
                     
@@ -286,6 +308,15 @@ define(function(require, exports, module) {
             }
             
             return true;
+        }
+        
+        function checkLargeTabs() {
+            tabs.getPanes().forEach(function(pane) {
+                var tab = pane.getTab();
+                var value = tab && tab.document.changed && tab.document.value;
+                if (value && value.length > KEEPALIVE_MAX)
+                    check(tab);
+            });
         }
         
         function merge(from, to) {
@@ -556,6 +587,7 @@ define(function(require, exports, module) {
         plugin.on("unload", function() {
             loaded = false;
             clearInterval(timer);
+            clearInterval(largeTimer);
         });
         
         /***** Register and define API *****/

@@ -52,10 +52,7 @@ define(function(require, module, exports) {
                 };
             }
             
-            xhr.open(method, URL.format(parsedUrl), async);
             headers["Content-Type"] = contentType;
-            for (var header in headers)
-                xhr.setRequestHeader(header, headers[header]);
             
             // encode body
             if (typeof body == "object") {
@@ -77,6 +74,23 @@ define(function(require, module, exports) {
                     body = body.toString();
                 }
             }
+            
+            // Sync requests save state while the page is being closed, but
+            // browsers no longer allow a synchronous XHR then. A keepalive
+            // fetch is allowed, and the browser completes it after the page
+            // is gone.
+            if (!async && canKeepalive) {
+                var size = new Blob([body || ""]).size;
+                if (keepaliveBytes + size <= KEEPALIVE_QUOTA)
+                    return keepalive(size);
+                
+                // Too large for keepalive; a normal request may still get out
+                async = true;
+            }
+            
+            xhr.open(method, URL.format(parsedUrl), async);
+            for (var header in headers)
+                xhr.setRequestHeader(header, headers[header]);
             
             if (options.withCredentials) {
                 xhr.withCredentials = true;
@@ -102,14 +116,18 @@ define(function(require, module, exports) {
             };
             
             xhr.onload = function(e) {
+                onLoad(xhr.status, xhr.responseText, parseHeaders(xhr.getAllResponseHeaders()));
+            };
+            
+            function onLoad(status, responseText, resHeaders) {
                 var res = {
-                    body: xhr.responseText,
-                    status: xhr.status,
-                    headers: parseHeaders(xhr.getAllResponseHeaders()),
+                    body: responseText,
+                    status: status,
+                    headers: resHeaders,
                     $reqHeaders: headers // TODO remove when bug in readFileWithMetadata is fixed 
                 };
                 
-                var data = xhr.responseText;
+                var data = responseText;
                 var contentType = options.overrideMimeType || res.headers["content-type"] || "";
                 if (contentType.indexOf("application/json") === 0) {
                     try {
@@ -119,16 +137,16 @@ define(function(require, module, exports) {
                     }
                 }
                 
-                if (xhr.status > 299 || res.headers["content-type"] == "text/x-error") {
-                    var err = new Error(xhr.responseText);
-                    err.code = xhr.status;
-                    if (debug && xhr.status > 299)
-                        console.error("HTTP error " + xhr.status + ": " + xhr.responseText);
+                if (status > 299 || res.headers["content-type"] == "text/x-error") {
+                    var err = new Error(responseText);
+                    err.code = status;
+                    if (debug && status > 299)
+                        console.error("HTTP error " + status + ": " + responseText);
                     return done(err, data, res);
                 }
                 
                 done(null, data, res);
-            };
+            }
             
             xhr.onerror = function(e) {
                 // No useful information in this object. Possibly CORS error if code was 0.
@@ -138,6 +156,41 @@ define(function(require, module, exports) {
                 err.code = code;
                 return done(err);
             };
+            
+            function keepalive(size) {
+                var controller = new AbortController();
+                var response;
+                
+                keepaliveBytes += size;
+                fetch(URL.format(parsedUrl), {
+                    method: method,
+                    headers: headers,
+                    body: body || undefined,
+                    credentials: options.withCredentials ? "include" : "same-origin",
+                    signal: controller.signal,
+                    keepalive: true
+                }).then(function(res) {
+                    response = res;
+                    return res.text();
+                }).then(function(text) {
+                    keepaliveBytes -= size;
+                    var resHeaders = {};
+                    response.headers.forEach(function(value, key) {
+                        resHeaders[key] = value;
+                    });
+                    onLoad(response.status, text, resHeaders);
+                }, function(e) {
+                    keepaliveBytes -= size;
+                    var err = new Error("Failed to retrieve resource from " + parsedUrl.href);
+                    err.cause = e;
+                    err.code = 0;
+                    done(err);
+                });
+                
+                return {
+                    abort: function() { controller.abort(); }
+                };
+            }
 
             var called = false;
             function done(err, data, res) {
@@ -149,6 +202,13 @@ define(function(require, module, exports) {
             
             return xhr;
         }
+        
+        // Browsers allow 64KB for the bodies of all keepalive requests of a
+        // page that are in flight at the same time
+        var KEEPALIVE_QUOTA = 64 * 1024;
+        var keepaliveBytes = 0;
+        var canKeepalive = typeof fetch == "function" && typeof AbortController == "function"
+            && typeof Request == "function" && "keepalive" in Request.prototype;
         
         var callbackId = 1;
         function jsonP(url, options, callback) {
