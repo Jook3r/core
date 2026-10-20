@@ -376,10 +376,7 @@ module.exports = function(options) {
         "plugins/c9.ide.language.javascript.tern/ui",
         "plugins/c9.ide.language.javascript.tern/architect_resolver",
         "plugins/c9.ide.language.javascript.eslint/eslint",
-        {
-            packagePath: "plugins/c9.ide.language.python/python",
-            pythonPath:  "/usr/local/lib/python2.7/dist-packages:/usr/local/lib/python3.4/dist-packages:/usr/local/lib/python3.5/dist-packages",
-        },
+        "plugins/c9.ide.language.python/python",
         "plugins/c9.ide.language.go/go",
         {
             packagePath: "plugins/c9.ide.language.jsonalyzer/jsonalyzer",
@@ -624,6 +621,7 @@ module.exports = function(options) {
         // Formatters
         "plugins/c9.ide.format/format",
         "plugins/c9.ide.format/formatters/jsbeautify",
+        "plugins/c9.ide.format/formatters/stdin",
         
         // Other
         "plugins/c9.ide.download/download",

@@ -1,14 +1,11 @@
 import argparse
+import inspect
 import jedi
 import json
 import sys
 import os
-try: # python 2
-    import urlparse
-    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-except: # python 3
-    import urllib.parse as urlparse
-    from http.server import BaseHTTPRequestHandler, HTTPServer
+import urllib.parse as urlparse
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 def main(args):
     if args.mode != "daemon":
@@ -25,12 +22,25 @@ def main(args):
     server.serve_forever()
 
 def run(source, args):
-    script = jedi.Script(source, int(args.get("row")), int(args.get("column")), args.get("path"))
+    if isinstance(source, bytes):
+        source = source.decode("utf8", "replace")
+    mode = args.get("mode")
+    row = int(args.get("row"))
+    column = int(args.get("column"))
+    # paths are relative to the workspace (our cwd) or start with ~
+    path = args.get("path") and os.path.expanduser(args.get("path"))
     try:
-        result = getattr(script, args.get("mode"))()
-    except:
+        # jedi >= 0.18 takes the position in the methods, not in Script()
+        script = jedi.Script(source, path=path)
+        if mode == "completions":
+            result = script.complete(row, column)
+        elif mode == "goto_definitions":
+            result = script.goto(row, column, follow_imports=True) or script.infer(row, column)
+        else:
+            result = script.goto(row, column)
+    except Exception:
         result = []
-    return json.dumps(result, default=to_json(args.get("mode"), args.get("nodoc")))
+    return json.dumps(result, default=to_json(mode, args.get("nodoc")))
 
 class Daemon(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -47,21 +57,27 @@ class Daemon(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return # log silently
 
+STARS = {
+    inspect.Parameter.VAR_POSITIONAL: "*",
+    inspect.Parameter.VAR_KEYWORD: "**",
+}
+
 def to_json(mode, nodoc):
     include_pos = mode == "goto_definitions"
     def to_json(c):
         if c.type == "function":
             try:
-                paramList = { p.description for p in c.params }
-                params = ", ".join([p for p in paramList if p != None and p != "self"])
-            except:
+                signatures = c.get_signatures()
+                paramList = [STARS.get(p.kind, "") + p.name for p in signatures[0].params] if signatures else []
+                params = ", ".join([p for p in paramList if p != "self"])
+            except Exception:
                 params = ""
         return remove_nulls({
             "name": c.name + ("(" + params + ")" if c.type == "function" else ""),
             "replaceText": c.name + "(^^)" if c.type == "function" else None,
-            "row": c.line if c.line and include_pos else None,
+            "row": c.line - 1 if c.line and include_pos else None, # jedi counts lines from 1
             "column": c.column if c.column and include_pos else None,
-            "path": "/" + c.module_path if c.module_path and include_pos else None,
+            "path": "/" + str(c.module_path) if c.module_path and include_pos else None,
             "doc": abbrev(c.docstring()) if c.type != "module" # module docs dont work
                                          and c.name[-2:] != "__" # skim on bandwidth
                                          and not nodoc

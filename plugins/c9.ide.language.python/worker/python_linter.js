@@ -10,7 +10,7 @@ var baseHandler = require("plugins/c9.ide.language/base_handler");
 var workerUtil = require("plugins/c9.ide.language/worker_util");
 
 var handler = module.exports = Object.create(baseHandler);
-var pythonVersion = "python2";
+var pythonVersion = "python3";
 var pythonPath = "";
 var pylintFlags = "";
 var launchCommand;
@@ -28,7 +28,7 @@ var PYLINT_DEFAULTS = [
 var PYLINT_CONFIG = [
     "-r", "n", 
     "--msg-template={line}:{column}:\\ [{msg_id}]\\ {msg}",
-    "--load-plugins", "pylint_flask,pylint_django",
+    "--load-plugins", "pylint_django",
 ];
 
 handler.handlesLanguage = function(language) {
@@ -114,6 +114,9 @@ function parseLine(line, hasStarImports) {
     if (/E0401/.test(code))
         return;
     if (/Django is not available on/.test(message))
+        return;
+    // Ignore --load-plugins plugins that aren't installed
+    if (/E0013/.test(code))
         return;
         
     return {

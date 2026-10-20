@@ -41,7 +41,6 @@ define(function(require, exports, module) {
                             type: "dropdown",
                             path: "project/python/@version",
                             items: [
-                                { caption: "Python 2", value: "python2" },
                                 { caption: "Python 3", value: "python3" },
                             ]
                         },
@@ -74,10 +73,15 @@ define(function(require, exports, module) {
             
             settings.on("read", function(e) {
                 settings.setDefaults("project/python", [
-                    ["version", "python2"],
+                    ["version", "python3"],
                     ["completion", true],
-                    ["path", options.pythonPath || "/usr/local/lib/python2.7/dist-packages:/usr/local/lib/python3.4/dist-packages"]
+                    ["path", options.pythonPath || ""],
+                    // ruff from the venv that server/launch_command.sh sets up
+                    ["formatter", '~/.c9/python3/bin/ruff format --stdin-filename "$file" -']
                 ]);
+                // Python 2 is gone; don't let an old setting pick it
+                if (settings.get("project/python/@version") === "python2")
+                    settings.set("project/python/@version", "python3");
             }, plugin);
             
             language.registerLanguageHandler("plugins/c9.ide.language.python/worker/python_linter", function(err, handler) {

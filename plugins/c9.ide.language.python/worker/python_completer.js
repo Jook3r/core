@@ -19,7 +19,7 @@ var ERROR_PORT_IN_USE = 98;
 var ERROR_NO_SERVER = 7;
 
 var handler = module.exports = Object.create(baseHandler);
-var pythonVersion = "python2";
+var pythonVersion = "python3";
 var enabled;
 var pythonPath = "";
 var jediServer;
@@ -236,8 +236,10 @@ function ensureDaemon(callback) {
     );
     
     function done(err, dontRetry) {
-        if (err && /No module named jedi/.test(err.message) && !showedJediError) {
-            workerUtil.showError("Jedi not found. Please run 'pip install jedi' or 'sudo pip install jedi' to enable Python code completion.");
+        // launch_command.sh couldn't set up its virtualenv with jedi
+        var fatal = err && /Python support fatal error: (.*)\n?(try .*)?/.exec(err.message);
+        if (fatal && !showedJediError) {
+            workerUtil.showError("Python code completion is not available: " + fatal[1] + (fatal[2] ? "; " + fatal[2] : ""));
             showedJediError = true;
         }
         callback && callback(err, dontRetry);

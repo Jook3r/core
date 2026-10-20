@@ -4,8 +4,9 @@
 #
 # Requirements (Ubuntu 24.04 / 26.04):
 #   - Node.js 24 LTS (22 also works), from nodejs.org or NodeSource
-#   - sudo apt-get install -y git tmux python3 build-essential
-#     (build-essential and python3 are needed to compile node-pty)
+#   - sudo apt-get install -y git tmux python3 python3-venv build-essential
+#     (build-essential and python3 are needed to compile node-pty,
+#     python3-venv for the Python linter, completion and formatter)
 #
 # Run it again after pulling new changes.
 
@@ -27,6 +28,8 @@ checkDeps() {
     has git || missing="$missing git"
     has tmux || missing="$missing tmux"
     has python3 || missing="$missing python3"
+    # "python3 -m venv" (Python support) needs ensurepip, which Ubuntu ships separately
+    ! has python3 || python3 -c "import ensurepip" 2>/dev/null || missing="$missing python3-venv"
     has make || missing="$missing build-essential"
     has g++ || [[ $missing == *build-essential* ]] || missing="$missing build-essential"
     if [ "$missing" ]; then
@@ -79,6 +82,20 @@ rm -rf ./build/standalone
 updateNodeModules
 
 echo -e "nak\n.gitignore" >  node_modules/.gitignore
+
+# Python support: pylint, jedi and ruff in ~/.c9/python3 (the IDE would
+# otherwise install them the first time a .py file is opened), and the
+# debugger used by the "Python 3" runner
+setupPython() {
+    echo "${magenta}--- Setting up Python support ---------------------------------------${resetColor}"
+    if ! bash plugins/c9.ide.language.python/server/launch_command.sh python3 true; then
+        echo "${red}Could not set up Python support (linting, completion, formatting).${resetColor}" >&2
+        exit 1
+    fi
+    mkdir -p ~/.c9/ikp3db
+    ln -sf "$PWD/plugins/c9.ide.run.debug.ikpdb/python/ikp3db.py" ~/.c9/ikp3db/ikp3db.py
+}
+setupPython
 
 # prebuild the client for `server.js --packed` (fewer requests, less RAM);
 # rerun after changing client code
