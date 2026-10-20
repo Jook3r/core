@@ -119,6 +119,9 @@ module.exports = function(config, optimist) {
             console.error("or pass -a username:password. Use -a : to run without a login on localhost.");
             process.exit(1);
         }
+        // tests run without a login, so only on localhost
+        if (!isLocalhost)
+            host = config.host = "127.0.0.1";
         auth = ["", ""];
     }
 
@@ -183,6 +186,7 @@ module.exports = function(config, optimist) {
         "./c9.nodeapi/nodeapi",
         {
             packagePath: "./c9.vfs.standalone/standalone",
+            noLogin: !auth[1],
             sdk: config.sdk,
             local: config.local,
             packed: argv.packed,

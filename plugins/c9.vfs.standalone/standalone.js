@@ -31,6 +31,11 @@ function plugin(options, imports, register) {
     // requests and websockets, so only accept requests from our own origin
     // (behind a reverse proxy the public host is in X-Forwarded-Host)
     imports.connect.useStart(function(req, res, next) {
+        // Without a login, only answer to localhost: a site that points its
+        // own name at 127.0.0.1 (DNS rebinding) is the same origin as itself
+        if (options.noLogin && !/^(localhost|127(\.\d+){3}|\[::1\])(:\d+)?$/.test(req.headers.host))
+            return refuse("Host not allowed without a login");
+        
         var origin = req.headers.origin;
         if (!origin) return next();
         
@@ -39,9 +44,13 @@ function plugin(options, imports, register) {
         if (host == req.headers.host || host == forwardedHost)
             return next();
         
-        res.statusCode = 403;
-        res.setHeader("Content-Type", "text/plain");
-        res.end("Cross-origin request refused");
+        refuse("Cross-origin request refused");
+        
+        function refuse(message) {
+            res.statusCode = 403;
+            res.setHeader("Content-Type", "text/plain");
+            res.end(message);
+        }
     });
     
 
