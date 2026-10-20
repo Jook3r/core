@@ -276,10 +276,12 @@ define(function(require, exports, module) {
                 }
                 
                 // On exit this is sent as a keepalive request, which is
-                // limited in size. If the value fits, drop the oldest undo
-                // history to fit as well, but keep the last edit; without any
-                // the document would look saved.
-                var fits = forceSync && undo && (state.value || "").length < KEEPALIVE_MAX;
+                // limited in size. If the unsaved value fits, drop the oldest
+                // undo history to fit as well, but keep the last edit; without
+                // any the document would look saved. Saved documents keep the
+                // full history written earlier.
+                var fits = forceSync && docChanged && undo && cached[tab.name] != sstate
+                    && (state.value || "").length < KEEPALIVE_MAX;
                 while (fits && undo.position > 0 && sstate.length > KEEPALIVE_MAX) {
                     var drop = Math.ceil(undo.position / 2);
                     undo.stack.splice(0, drop);
