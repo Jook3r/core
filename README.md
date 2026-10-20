@@ -24,26 +24,32 @@ https://groups.google.com/forum/#!forum/cloud9-sdk
 
 #### Installation ####
 
-Follow these steps to install the SDK:
+This fork runs on Ubuntu 24.04/26.04 with Node.js 24 LTS (22 also works),
+tmux 3.x and Python 3. Install the system packages, then the SDK:
 
+    sudo apt-get install -y git tmux python3 python3-venv build-essential
     git clone https://github.com/Jook3r/core.git onlineIDE
     cd onlineIDE
     scripts/install-sdk.sh
-    scripts/makestandalone.sh
-    
+
 To update the SDK to the latest version run:
 
-    git pull origin master
+    git pull
     scripts/install-sdk.sh
-    
-Please note that if you are using npm version >=3 and run npm install manually, you need to run `git checkout HEAD -- node_modules` to restore the files deleted by npm.
-Cloud9 is known to work with node versions 0.10 to 8, but Newer versions should work too.
+
+`npm install` deletes the modules that are vendored in `node_modules`;
+`scripts/install-sdk.sh` checks them out again. If you run npm yourself, run
+`git checkout HEAD -- node_modules` afterwards.
+
+To run Cloud9 on a server behind Apache with HTTPS, see
+[deploy/README.md](deploy/README.md).
 
 #### Starting Cloud9 ####
 
-Start the Cloud9 as follows:
+Cloud9 needs a username and password, given with `-a` or the `C9_AUTH`
+environment variable (which keeps the password out of `ps`):
 
-    node server.js
+    C9_AUTH=user:password node server.js -w ~/workspace --packed
 
 The following options can be used:
 
@@ -53,13 +59,12 @@ The following options can be used:
     -k               Kill tmux server in test mode
     -b               Start the bridge server - to receive commands from the cli  [default: false]
     -w               Workspace directory
-    --port           Port
+    --port           Port                                       [default: 8181]
     --debug          Turn debugging on
-    --listen         IP address of the server
+    --listen         IP address of the server                   [default: 127.0.0.1]
     --readonly       Run in read only mode
-    --packed         Whether to use the packed version.
-    --auth           Basic Auth username:password
-    --collab         Whether to enable collab.
+    --packed         Use the prebuilt client (built by scripts/makestandalone.sh)
+    --auth, -a       Basic Auth username:password; -a : runs without a login (localhost only)
     --no-cache       Don't use the cached version of CSS
 
 Now visit [http://localhost:8181/ide.html](http://localhost:8181/ide.html) to load Cloud9.

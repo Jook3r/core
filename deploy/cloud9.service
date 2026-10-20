@@ -1,0 +1,34 @@
+# systemd unit for Cloud9 on a single-user VPS.
+#
+# Replace dev with the user that owns the checkout (Cloud9 writes its
+# build cache there) and adjust the paths. Then:
+#   sudo cp deploy/cloud9.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cloud9
+# Logs: journalctl -u cloud9 -f
+
+[Unit]
+Description=Cloud9 IDE
+After=network.target
+
+[Service]
+Type=simple
+User=dev
+Group=dev
+WorkingDirectory=/home/dev/c9
+# C9_AUTH (login) and C9_HOSTNAME (app hostname), see cloud9.env.example
+EnvironmentFile=/etc/cloud9/cloud9.env
+# terminals inherit this; tmux needs a UTF-8 locale
+Environment=LANG=C.UTF-8
+# Don't set PORT, IP or NODE_OPTIONS here: everything started from the
+# IDE's terminals and runners inherits the service environment.
+ExecStart=/usr/bin/node --max-old-space-size=512 server.js -p 8181 -l 127.0.0.1 --packed -w /home/dev/workspace
+Restart=always
+RestartSec=2
+# Only stop the server itself on restart: tmux, and everything running in
+# the IDE's terminals, keeps running and the IDE reattaches to it.
+KillMode=process
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
