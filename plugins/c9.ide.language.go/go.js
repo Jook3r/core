@@ -45,7 +45,8 @@ define(function(require, exports, module) {
             }, plugin);
             settings.on("read", function(e) {
                 settings.setDefaults("project/golang", [
-                    ["completion", true],
+                    // gocode is unmaintained and `go get` can't install it on Go 1.18+
+                    ["completion", false],
                     ["formatOnSave", true],
                     ["formatter", 'gofmt -w "$file"'],
                 ]);

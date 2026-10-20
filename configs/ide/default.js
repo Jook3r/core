@@ -848,15 +848,8 @@ module.exports = function(options) {
         "plugins/c9.ide.format/formatters/custom");
     }
     
-    if (options.platform !== "win32") {
-        plugins.push({
-            packagePath: "plugins/c9.ide.language.codeintel/codeintel",
-            preinstalled: hosted && !options.ssh,
-            paths: {
-                php: ".:./vendor",
-            },
-        });
-    }
+    // plugins/c9.ide.language.codeintel (PHP, Ruby and CSS completion) is not
+    // loaded: its daemon and the codeintel2 package only run on Python 2
 
     return plugins;
 };

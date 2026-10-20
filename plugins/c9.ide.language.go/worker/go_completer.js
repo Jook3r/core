@@ -11,7 +11,7 @@ var workerUtil = require("plugins/c9.ide.language/worker_util");
 
 var handler = module.exports = Object.create(baseHandler);
 var daemon;
-var enabled = true;
+var enabled = false;
 
 handler.handlesLanguage = function(language) {
     return language === "golang";
@@ -26,6 +26,8 @@ handler.init = function(callback) {
 };
 
 handler.onDocumentOpen = function(path, doc, oldPath, callback) {
+    // don't install gocode unless completion is enabled
+    if (!enabled) return callback();
     ensureDaemon(callback);
 };
 
