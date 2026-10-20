@@ -38,7 +38,7 @@ var defaultParserOptions = {
         jsx: true, // enable JSX
         experimentalObjectRestSpread: true
     },
-    ecmaVersion: 8,
+    ecmaVersion: 2018, // the newest the bundled parser accepts
     // sourceType: "module"
 };
 var defaultGlobals = require("plugins/c9.ide.language.javascript/scope_analyzer").GLOBALS;
@@ -164,8 +164,10 @@ handler.analyzeSync = function(value, ast, path) {
     config.env = config.env || defaultEnv;
     config.globals = config.globals || defaultGlobals;
     config.parserOptions = config.parserOptions || defaultParserOptions;
-    if (config.parserOptions.ecmaVersion == null)
-        config.parserOptions.ecmaVersion = 8;
+    // The bundled parser rejects any ecmaVersion newer than 2018
+    var ecmaVersion = config.parserOptions.ecmaVersion;
+    if (typeof ecmaVersion != "number" || ecmaVersion > 2018 || ecmaVersion > 9 && ecmaVersion < 2015)
+        config.parserOptions.ecmaVersion = 2018;
     if (config.parserOptions.ecmaFeatures == null)
         config.parserOptions.ecmaFeatures = defaultParserOptions.ecmaFeatures;
     if (config.parserOptions.ecmaFeatures.experimentalObjectRestSpread == null)
@@ -219,6 +221,9 @@ handler.analyzeSync = function(value, ast, path) {
         m.endLine--;
         m.endColumn--;
         
+        if (m.fatal && !isJson && isNewerSyntax(m, doc))
+            return;
+        
         if (m.message.match(/but never used/)) {
             var line = doc.getLine(m.line);
             var target = line.slice(m.column, m.endColumn)
@@ -269,5 +274,47 @@ handler.analyzeSync = function(value, ast, path) {
     });
     return markers;
 };
+
+// The bundled ESLint 4 parser (espree 3.5 on acorn 5.2) does not know the
+// syntax added after ES2017, so it fails to parse valid modern code. Tell the
+// parse errors caused by such syntax from real ones by the code around them,
+// so that they are not shown as errors. ESLint has no results for such files.
+function isNewerSyntax(m, doc) {
+    var line = doc.getLine(m.line) || "";
+    var before = line.slice(0, m.column);
+    var after = line.slice(m.column);
+    if (!before.trim() && m.line > 0)
+        before = doc.getLine(m.line - 1) + "\n" + before;
+
+    switch (m.message.replace(/^Parsing error: /, "")) {
+        case "Unexpected token .": // a?.b
+        case "Unexpected token ?": // a ?? b, a ??= b
+            return /\?$/.test(before);
+        case "Unexpected token =": // a ||= b, a &&= b
+            return /(\|\||&&)$/.test(before);
+        case "Unexpected token {": // catch {}, static {}
+            return /\b(catch|static)\s*$/.test(before);
+        case "Unexpected token *": // async function*, async *method()
+            return /\basync(\s+function)?\s*$/.test(before);
+        case "Unexpected token await": // for await
+            return /\bfor\s*$/.test(before);
+        case "Unexpected token import": // import(), import.meta
+            return /^import\s*[(.]/.test(after);
+        case "Unexpected token as": // export * as ns
+            return /\bexport\s*\*\s*$/.test(before);
+        case "Unexpected token with": // import ... with { type: "json" }
+            return /\bfrom\s*(["'])[^"']*\1\s*$/.test(before);
+        case "Unexpected character '#'": // #private
+            return /^#[A-Za-z_$]/.test(after);
+        case "Identifier directly after number": // 10n, 1_000
+            return /^[n_]/.test(after);
+        case "Invalid regular expression flag": // /a/s, /a/d, /a/v
+            return /^(?:[^\\\/\[]|\\.|\[(?:[^\]\\]|\\.)*\])*\/[dgimsuvy]+(?![\w$])/.test(after);
+    }
+    // await at the top level of a module
+    return /^Parsing error: Unexpected token /.test(m.message)
+        && /^(?:(?:const|let|var)\s[^=]*=\s*)?await\s+$/.test(before)
+        && /^\s*(?:import|export)\b/m.test(doc.getValue());
+}
     
 });
