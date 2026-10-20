@@ -126,7 +126,7 @@ define(function(require, exports, module) {
             KEYS.forEach(function(type) {
                 var node = model[type];
                 if (node)
-                    cache[type] = JSON.stringify(node);
+                    cache[type] = stringify(node, type);
             });
             
             model.loaded = true;
@@ -175,8 +175,14 @@ define(function(require, exports, module) {
             saveModel(sync);
         }
         
+        function stringify(node, type) {
+            return util.stableStringify(node, null, type == "state" ? "" : 4);
+        }
+        
+        // Returns the settings it wrote, by type
         function saveModel(forceSync) {
-            if (c9.readonly || !c9.has(c9.NETWORK)) return;
+            var written = {};
+            if (c9.readonly || !c9.has(c9.NETWORK)) return written;
             
             if (model.loaded && !testing) {
                 KEYS.forEach(function(type) {
@@ -184,11 +190,12 @@ define(function(require, exports, module) {
                     if (!node) return;
                     
                     // Get XML string
-                    var json = util.stableStringify(node, null, type == "state" ? "" : 4);
+                    var json = stringify(node, type);
                     if (cache[type] == json) return; // Ignore if same as cache
                     
                     // Set Cache
                     cache[type] = json;
+                    written[type] = json;
                     
                     // Debug mode
                     if (debugMode && type == "state") {
@@ -219,21 +226,20 @@ define(function(require, exports, module) {
             }
             
             dirty = false;
+            return written;
         }
     
         // On a reload the server can inline the settings files in the new
         // page before it has written what this page sent on exit. So also
-        // hand the settings to the next page in this browser tab.
+        // hand those settings to the next page in this browser tab. Only the
+        // ones sent on exit: others may have been changed since, e.g. by
+        // another tab, and the file on disk has the latest.
         var EXIT_COPY = "c9.settings.exit";
         
-        function keepExitCopy() {
+        function keepExitCopy(written) {
             if (c9.readonly || !model.loaded || testing) return;
             
-            var copy = { time: Date.now(), paths: PATH, settings: {}};
-            KEYS.forEach(function(type) {
-                if (model[type])
-                    copy.settings[type] = JSON.stringify(model[type]);
-            });
+            var copy = { time: Date.now(), paths: PATH, settings: written };
             try {
                 sessionStorage.setItem(EXIT_COPY, JSON.stringify(copy));
             } catch (e) {}
@@ -323,8 +329,8 @@ define(function(require, exports, module) {
 
             c9.on("beforequit", function() {
                 emit("write", { model: model, unload: true });
-                saveModel(true); // Sent with keepalive, see http-xhr.js
-                keepExitCopy();
+                // Sent with keepalive, see http-xhr.js
+                keepExitCopy(saveModel(true));
             }, plugin);
 
             // A hidden page can be discarded or closed by the browser without
