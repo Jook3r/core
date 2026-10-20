@@ -266,6 +266,9 @@ define(function(require, exports, module) {
 
         function getLocalScriptPath(script) {
             var scriptName = script.url || ("-anonymous-" + script.scriptId);
+            // node reports files by file:// URL
+            if (/^file:\/\//.test(scriptName))
+                scriptName = decodeURIComponent(scriptName.slice(7));
             scriptName = c9.toExternalPath(scriptName);
             scriptName = strip(scriptName);
             return scriptName;

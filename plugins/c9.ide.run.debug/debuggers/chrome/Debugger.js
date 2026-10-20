@@ -1,5 +1,5 @@
 var net = require("net");
-var WebSocket = require("ws/index");
+var WebSocket = require("ws");
 var MessageReader = require("./MessageReader");
 var EventEmitter = require("events").EventEmitter;
 
@@ -78,6 +78,8 @@ function Debugger(options) {
             self.disconnect();
         });
         ws.on("message", function incoming(data) {
+            // newer versions of ws pass a Buffer
+            data = data.toString();
             try {
                 var parsed = JSON.parse(data);
             } catch (e) {

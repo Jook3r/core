@@ -3,7 +3,7 @@
     "info" : "Meteor",
     "working_dir": "$project_path",
     "env" : {
-        "NODE_OPTIONS": "${debug?--debug-brk=5757}"
+        "NODE_OPTIONS": "${debug?--inspect=5757}"
     },
     "pathMap": [
         {

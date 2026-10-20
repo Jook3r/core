@@ -174,7 +174,7 @@ define(function(require, exports, module) {
                 // "${debug?`node --version | grep -vqE \"v0\\..\\.\" && echo --nodead_code_elimination`}",
                 // "${debug?--debug-brk=15454}",
                 
-                args.push("--debug", "--debug-brk"); // TODO extra node options
+                args.push("--inspect-brk=5858"); // TODO extra node options
                 
                 debugging = true;
                 debug.debug({

@@ -8,8 +8,15 @@ var EventEmitter = require("ace/lib/event_emitter").EventEmitter;
 var DevtoolsProtocol = module.exports = function(socket) {
     this.callbacks = {};
     this.$scripts = {};
+    this.$breakpointIds = {};
     this.socket = socket;
 };
+
+// Node reports the scripts it loads by file:// URL, encoded like
+// url.pathToFileURL() does
+function toFileUrl(path) {
+    return "file://" + path.replace(/[\ud800-\udbff][\udc00-\udfff]|[\x00-\x20"#%<>?`{}\x7f-\uffff]/g, encodeURIComponent);
+}
 
 (function() {
     
@@ -198,25 +205,39 @@ var DevtoolsProtocol = module.exports = function(socket) {
         // lineNumber| columnNumber
         // url | urlRegex | scriptHash
         // condition
-        var breakpointId = target + ":" + line + ":" + column;
-        this.$send("Debugger.removeBreakpoint", {
-            breakpointId: breakpointId
-        }, function() {
-            if (!enabled) callback(null, {});
-        });
+        var key = target + ":" + line + ":" + column;
+        // remove the breakpoint set here before by the id V8 gave it
+        var breakpointId = this.$breakpointIds[key];
+        delete this.$breakpointIds[key];
+        if (breakpointId || !enabled) {
+            this.$send("Debugger.removeBreakpoint", {
+                breakpointId: breakpointId || key
+            }, function() {
+                if (!enabled) callback(null, {});
+            });
+        }
         
         if (!enabled) return;
 
+        var breakpointIds = this.$breakpointIds;
         this.$send("Debugger.setBreakpointByUrl", {
             lineNumber: line,
-            url: target,
+            url: target[0] == "/" ? toFileUrl(target) : target,
             // TODO add support for urlRegex:
             columnNumber: column || 0,
             condition: condition
-        }, callback);
+        }, function(result, error) {
+            if (result && result.breakpointId)
+                breakpointIds[key] = result.breakpointId;
+            callback(result, error);
+        });
     };
     
     this.clearbreakpoint = function(breakpointId, callback) {
+        for (var key in this.$breakpointIds) {
+            if (this.$breakpointIds[key] == breakpointId)
+                delete this.$breakpointIds[key];
+        }
         this.$send("Debugger.removeBreakpoint", {
             breakpointId: breakpointId
         }, callback);
@@ -250,7 +271,9 @@ var DevtoolsProtocol = module.exports = function(socket) {
     
     this.restartframe = function(frameId, callback) {
         this.$send("Debugger.restartFrame", {
-            callFrameId: frameId
+            callFrameId: frameId,
+            // required by current V8; pauses at the start of the frame
+            mode: "StepInto"
         }, callback);
     };
     

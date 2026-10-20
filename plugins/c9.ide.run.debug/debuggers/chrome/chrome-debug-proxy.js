@@ -154,6 +154,10 @@ function createServer() {
     });
 
     removeStaleSocket();
+    if (!IS_WINDOWS) {
+        // ~/.c9 may not exist yet
+        try { fs.mkdirSync(require("path").dirname(socketPath), { recursive: true }); } catch (e) {}
+    }
     server.listen(socketPath, function() {
         console.log("server listening on ", socketPath);
         checkServer(process.pid);

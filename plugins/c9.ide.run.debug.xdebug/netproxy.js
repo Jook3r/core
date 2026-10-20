@@ -67,6 +67,8 @@ if (process.platform !== "win32") {
         if (e.code != "ENOENT")
             console.log(e);
     }
+    // ~/.c9 may not exist yet
+    try { fs.mkdirSync(require("path").dirname(socketPath), { recursive: true }); } catch (e) {}
 }
 browserServer.listen(socketPath, function() {
     debug("netproxy listening for " + socketPath);

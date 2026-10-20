@@ -1,7 +1,7 @@
 {
     "cmd" : [
         "mocha", 
-        "${debug?--debug-brk}",
+        "${debug?--inspect-brk=$debugport}",
         "$file", 
         "$args"],
     "info" : "Mocha-testing $project_path$file_name",
