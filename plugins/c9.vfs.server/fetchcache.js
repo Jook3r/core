@@ -29,7 +29,7 @@ define(function(require, exports, module) {
                     compress(req, res, function(err) {
                         if (err) return next(err);
                         
-                        fetchcache(vfs.vfs, vfs.vfs.env.HOME, vfs.vfsOptions, req, res, next);
+                        fetchcache(vfs.vfs, vfs.homeDir, vfs.vfsOptions, req, res, next);
                     });
                 }
                 else
