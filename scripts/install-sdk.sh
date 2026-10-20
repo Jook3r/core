@@ -97,10 +97,10 @@ setupPython() {
 }
 setupPython
 
-# prebuild the client for `server.js --packed` (fewer requests, less RAM);
-# rerun after changing client code
+# prebuild the packed and minified client for `server.js --packed` (fewer
+# requests, smaller downloads, less RAM); rerun after changing client code
 echo "${magenta}--- Building the packed client ----------------------------------------${resetColor}"
-./scripts/makestandalone.sh > /dev/null
+./scripts/makestandalone.sh --compress > /dev/null
 
 echo "${green}Success!${resetColor} Start Cloud9 with:"
 echo "  C9_AUTH=user:password node server.js -p 8181 -l 127.0.0.1 --packed -w ~/workspace"

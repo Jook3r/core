@@ -95,9 +95,10 @@ browser asks for the app login once.
     scripts/install-sdk.sh
     sudo systemctl restart cloud9
 
-If you change the IDE's client code, run `scripts/makestandalone.sh` (part
-of `install-sdk.sh`) or start the server without `--packed` while working
-on it.
+`--packed` serves a prebuilt, minified copy of the IDE's client code. If you
+change the client code, rebuild it with `scripts/makestandalone.sh --compress`
+(part of `install-sdk.sh`), or start the server without `--packed` while
+working on it.
 
 ## Memory
 

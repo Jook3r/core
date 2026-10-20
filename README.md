@@ -63,7 +63,7 @@ The following options can be used:
     --debug          Turn debugging on
     --listen         IP address of the server                   [default: 127.0.0.1]
     --readonly       Run in read only mode
-    --packed         Use the prebuilt client (built by scripts/makestandalone.sh)
+    --packed         Use the prebuilt client (built by scripts/install-sdk.sh, or scripts/makestandalone.sh --compress)
     --auth, -a       Basic Auth username:password; -a : runs without a login (localhost only)
     --no-cache       Don't use the cached version of CSS
 
