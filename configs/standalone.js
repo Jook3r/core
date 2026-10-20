@@ -229,7 +229,9 @@ module.exports = function(config, optimist) {
             nodeBin: config.nodeBin,
             tmuxBin: config.tmux,
             vfs: {
-                defaultEnv: { CUSTOM: 43 },
+                // apps started from the IDE listen on $IP:$PORT, which the
+                // app's reverse proxy (deploy/apache2/cloud9-app.conf) forwards to
+                defaultEnv: { CUSTOM: 43, IP: "127.0.0.1", PORT: "8080" },
                 local: config.local,
                 debug: debug,
                 inProcess: argv.inProcessLocalFs
