@@ -7,7 +7,7 @@
 define(function(require, exports, module) {
     "use strict";
     
-    var MessageReader = module.exports = function(socket, callback) {
+    var MessageReader = module.exports = function(socket, callback, onPing) {
         this.IKPDB_MAGIC_CODE = "LLADpcdtbdpac";
         this.IKPDB_LENGTH_PREFIX = "length=";
         
@@ -17,6 +17,7 @@ define(function(require, exports, module) {
 
         this._socket = socket;
         this._callback = callback;
+        this._onPing = onPing;
     
         this._receivedData = "";
         
@@ -35,6 +36,8 @@ define(function(require, exports, module) {
             while (fullResponse = this._checkForWholeMessage()) {
                 if (fullResponse != this.C9_PING_MESSAGE) {
                     this._callback(fullResponse);
+                } else if (this._onPing) {
+                    this._onPing();
                 } else {
                     console.log("Received \"ping\" message from Cloud9 (" + this.C9_PING_MESSAGE + ")");
                 }

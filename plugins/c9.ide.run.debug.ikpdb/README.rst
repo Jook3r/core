@@ -32,8 +32,8 @@ You can copy / paste this snippet.
 .. code-block:: python
 
    #coding: utf-8
-   print "I want to try Python debugging with IKPdb in Cloud9."
-   print "I step over onto this line."
+   print("I want to try Python debugging with IKPdb in Cloud9.")
+   print("I step over onto this line.")
 
 3. Set a breakpoint on the first line by clicking in the left margin until a 
 red circle appears.
@@ -65,7 +65,11 @@ https://ikpdb.readthedocs.io/
 Requirements
 ------------
 
-CPython 2.7
+CPython 3 (3.12 or newer to set breakpoints while the program runs).
+
+The "Python 3" runner debugs with ``python/ikp3db.py``, a copy of
+`ikp3db 1.4.2 <https://pypi.org/project/ikp3db/>`_ that needs no C
+extension. ``scripts/install-sdk.sh`` links it to ``~/.c9/ikp3db/``.
 
 
 License

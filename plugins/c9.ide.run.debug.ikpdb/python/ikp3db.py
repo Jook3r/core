@@ -6,6 +6,11 @@
 # Copyright (c) 2016-2018 by Cyril MORISSE, Audaxis
 # Licence: MIT. See LICENCE at repository root
 #
+# Cloud9 copy of ikp3db 1.4.2 (https://pypi.org/project/ikp3db/), changed to
+# run on Python 3.12+ without building anything: the iksettrace3 C extension
+# is replaced by the pure Python one below, cgi.escape by html.escape, and
+# frame locals are copied to a dict before they are listed.
+#
 import socket
 import sys
 import os
@@ -23,9 +28,33 @@ import argparse
 import datetime
 import io
 import ctypes
-import cgi
+import html
 
-import iksettrace3
+
+class iksettrace3(object):
+    """ Pure Python replacement for the iksettrace3 C extension, which
+    doesn't build on Python 3.11+.
+    """
+    @staticmethod
+    def _set_trace_on(tracer, debugger_thread_ident):
+        """ Trace all threads, existing ones included, but the debugger's.
+        """
+        def trace_dispatch(frame, event, arg):
+            if threading.get_ident() == debugger_thread_ident:
+                return None
+            return tracer(frame, event, arg)
+        if hasattr(threading, "settrace_all_threads"):  # Python 3.12+
+            threading.settrace_all_threads(trace_dispatch)
+        elif threading.get_ident() != debugger_thread_ident:
+            # Older Pythons can only trace the calling thread
+            sys.settrace(trace_dispatch)
+
+    @staticmethod
+    def _set_trace_off():
+        if hasattr(threading, "settrace_all_threads"):
+            threading.settrace_all_threads(None)
+        else:
+            sys.settrace(None)
 
 
 # For now ikpdb is a singleton
@@ -895,7 +924,8 @@ class IKPdb(object):
             # At root frame, globals == locals so we dump only globals
             if hasattr(frame_browser.f_back, 'f_back')\
                     and frame_browser.f_back.f_back != self.frame_beginning:
-                locals_vars_list = self.extract_object_properties(frame_browser.f_locals,
+                # dict(): f_locals is a FrameLocalsProxy on Python 3.13+
+                locals_vars_list = self.extract_object_properties(dict(frame_browser.f_locals),
                                                                   limit_size=True)
             else:
                 locals_vars_list = []
@@ -973,7 +1003,7 @@ class IKPdb(object):
                         result_type, 
                         result)
         if self.CGI_ESCAPE_EVALUATE_OUTPUT:
-            result_value = cgi.escape(result_value)
+            result_value = html.escape(result_value, quote=False)
         
         # We must check that result is json.dump compatible so that it can be sent back to client.
         try:

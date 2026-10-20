@@ -326,8 +326,8 @@ define(function(require, exports, module) {
             // TODO: Check with c9 how we can prevent user to set breakpoint
             breakpointManagementWarning("Breakpoint removal request will be send to debugger at next programm break !.");
 
-            bp.data.breakpoint_number = bp.id;
-            sendCommand("clearBreakpoint", bp.data, function(err) {
+            // bp can be a breakpoint listed by IKPdb, which has no data (sync)
+            sendCommand("clearBreakpoint", { breakpoint_number: bp.id }, function(err) {
                 callback && callback(err, bp);
             });
         }
@@ -423,8 +423,12 @@ define(function(require, exports, module) {
 
                         if (begin)
                             runScript(callback);
-                        else
-                            sendCommand("getStatus", {}, callback);
+                        else // ikp3db ignores getStatus; reconnect replies with the status
+                            sendCommand("reconnect", {}, function(err, reply) {
+                                // the debugger ignored it while we weren't attached
+                                emit("stateChange", { state: state });
+                                callback && callback(err, reply);
+                            });
                     });
                 });
             });

@@ -38,11 +38,14 @@ define(function(require, exports, module) {
                 throw new Error("IKPdbService already attached!");
 
             var self = this;
-            this._reader = new MessageReader(this._socket, function() {
+            function onConnect() {
                 self._reader.destroy();
                 self._reader = new MessageReader(self._socket, self._receiveMessage.bind(self));
                 callback();
-            });
+            }
+            // IKPdb greets the first connection only; when we reconnect
+            // (e.g. after a reload) the socket sends Cloud9's ping instead
+            this._reader = new MessageReader(this._socket, onConnect, onConnect);
 
             this._socket.on("connect", function() {
                 // console.debug("IKPdb socket connection succeeded!");

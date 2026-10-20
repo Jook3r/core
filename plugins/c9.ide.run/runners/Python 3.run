@@ -1,0 +1,20 @@
+{
+    "script": [
+        "if [ \"$debug\" == true ]; then ",
+        "    if ! [ -f ~/.c9/ikp3db/ikp3db.py ]; then",
+        "        echo 'The Python debugger is not set up: run scripts/install-sdk.sh in the Cloud9 directory' >&2",
+        "        exit 1",
+        "    fi",
+        "    python3 ~/.c9/ikp3db/ikp3db.py --ikpdb-port=15471 --ikpdb-working-directory=\"$project_path\" \"$file\" $args",
+        "else",
+        "    python3 \"$file\" $args",
+        "fi"
+    ],
+    "debugport": 15471,
+    "$debugDefaultState": false,
+    "debugger": "pythondebug",
+    "selector": "^.*\\.(python|py)$",
+    "env": {
+        "PYTHONPATH": "$python_path"
+    }
+}
