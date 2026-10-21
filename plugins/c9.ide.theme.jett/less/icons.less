@@ -1,0 +1,415 @@
+/*
+ * Jett icon font: shared by the jett-dark and code-server-* skins.
+ *
+ * Holds the "c9" icon font, the glyph mapping for file types (file tree,
+ * tabs, navigate), the tree toggler arrows and the panel button icons.
+ * Moved here from overrides.less (MIT, Copyright (c) 2018 Michael Jett) without
+ * changing the compiled jett-dark CSS. The icon-font base rule only lists the
+ * elements styled here (overrides.less keeps the Jett-only ones), and the
+ * file-type colours became the @jett-icon-* variables below. A skin may
+ * redefine them in any LESS library that comes after this file.
+ *
+ * Needs @keyframes flash (jett: overrides.less, code-server: animations.less).
+ */
+
+/* File-type icon colours */
+
+@jett-icon-css: #71A3B7;
+@jett-icon-html: #D28445;
+@jett-icon-scala: #DE3423;
+@jett-icon-swift: #F05138;
+@jett-icon-groovy: #6398AA;
+@jett-icon-sh: #BABFC7;
+@jett-icon-xml: #D77676;
+@jett-icon-php: #8892BF;
+@jett-icon-js: #F6C076;
+@jett-icon-hs: #999999;
+@jett-icon-json: #F6C076;
+@jett-icon-py: #F4BF75;
+@jett-icon-dockerfile: #3498db;
+@jett-icon-pl: #4E5D84;
+@jett-icon-clj: #43D06B;
+@jett-icon-rb: #D14748;
+@jett-icon-coffee: #AB7558;
+@jett-icon-java: #EA8222;
+@jett-icon-md: #A8BB80;
+
+@font-face {
+    font-family: 'c9';
+    src: url('plugins/c9.ide.theme.jett/fonts/c9.eot?zd96sh');
+    src: url('plugins/c9.ide.theme.jett/fonts/c9.eot?zd96sh#iefix') format('embedded-opentype'), url('plugins/c9.ide.theme.jett/fonts/c9.ttf?zd96sh') format('truetype'), url('plugins/c9.ide.theme.jett/fonts/c9.woff?zd96sh') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+
+/* Icons */
+
+.filetree .tree-row .toggler,
+.filetree-icon.folder,
+.filetree-icon:before,
+.frame .buttons div.min,
+.ace_tree .toggler {
+    background: none !important;
+    /* use !important to prevent issues with browser extensions that change fonts */
+    font-family: 'c9' !important;
+    speak: none;
+    font-style: normal;
+    font-weight: normal;
+    font-variant: normal;
+    text-transform: none;
+    /* Better Font Rendering =========== */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* Tree min arrows */
+
+.frame .buttons div.min:before,
+.ace_tree .toggler:before {
+    /* Arrow open */
+    content: '\f05b';
+    font-size: 9px;
+    line-height: 12px;
+    position: relative;
+}
+
+.frame .buttons div.min:before,
+.memberstree.ace_tree .toggler.open:before {
+    top: -2px;
+}
+
+.memberstree.ace_tree .toggler:before,
+.outline.ace_tree .toggler:before {
+    top: -1px;
+}
+
+.frame .buttons div.min,
+.ace_tree .toggler {
+    text-align: center;
+    cursor: pointer;
+}
+
+.ace_tree .toggler {
+    line-height: 7px;
+}
+
+.frame.frameMin .buttons div.min:before,
+.ace_tree .toggler.closed:before {
+    /* Arrow closed */
+    content: '\f05a';
+}
+
+.ace_tree .toggler.empty:before {
+    content: '';
+}
+
+
+/* Tabs icon */
+
+.sessiontab_title .filetree-icon:before {
+    position: relative;
+    top: 3px;
+    padding-right: 3px;
+}
+
+
+/* File icons begin */
+
+.filetree-icon {
+    background-image: none !important;
+}
+
+.filetree-icon:before {
+    content: "\e907";
+}
+
+.filetree-icon.preferences:before {
+    content: "\f07c";
+}
+
+.filetree-icon.searchresults:before {
+    content: "\e901";
+}
+
+.filetree-icon.terminal:before {
+    content: "\e6a2";
+}
+
+.filetree-icon.css:before,
+.filetree-icon.scss:before,
+.filetree-icon.sass:before,
+.filetree-icon.less:before {
+    color: @jett-icon-css;
+    content: "\e64a";
+}
+
+.filetree-icon.html:before,
+.filetree-icon.htm:before {
+    color: @jett-icon-html;
+    content: "\e636";
+}
+
+.filetree-icon.scala:before {
+    content: "\e637";
+    color: @jett-icon-scala;
+}
+
+.filetree-icon.composer:before {
+    content: "\e683";
+}
+
+.filetree-icon.bower:before {
+    content: "\e64d";
+}
+
+.filetree-icon.gulp:before {
+    content: "\e663";
+}
+
+.filetree-icon.grunt:before {
+    content: "\e64c";
+}
+
+.filetree-icon.npm:before {
+    content: "\e61e";
+}
+
+.filetree-icon.go:before {
+    content: "\e624";
+}
+
+.filetree-icon.swift:before {
+    content: "\e655";
+    color: @jett-icon-swift;
+}
+
+.filetree-icon.groovy:before {
+    color: @jett-icon-groovy;
+    content: "\e675";
+}
+
+.filetree-icon.sh:before,
+.filetree-icon.makefile:before,
+.filetree-icon.bat:before,
+.filetree-icon.bash:before {
+    color: @jett-icon-sh;
+    content: "\f0c8";
+}
+
+.filetree-icon.xml:before,
+.filetree-icon.cfm:before,
+.filetree-icon.rhtml:before,
+.filetree-icon.smarty:before,
+.filetree-icon.jsp:before,
+.filetree-icon.twig:before {
+    color: @jett-icon-xml;
+    content: "\f010";
+}
+
+.filetree-icon.php:before,
+.filetree-icon.inc:before,
+.filetree-icon.php5:before {
+    color: @jett-icon-php;
+    content: "\e63d";
+}
+
+.filetree-icon.ejs:before,
+.filetree-icon.sjs:before,
+.filetree-icon.js:before {
+    content: "\e64e";
+}
+
+.filetree-icon.js:before {
+    color: @jett-icon-js;
+}
+
+
+/* Microsoft */
+
+.filetree-icon.vbs:before,
+.filetree-icon.cs:before {
+    content: "\e60c";
+}
+
+.filetree-icon.hs:before {
+    content: "\e677";
+    color: @jett-icon-hs;
+}
+
+.filetree-icon.json:before {
+    color: @jett-icon-json;
+    content: "{}";
+}
+
+.filetree-icon.py:before {
+    color: @jett-icon-py;
+    content: "\e63c";
+}
+
+.filetree-icon.sql:before,
+.filetree-icon.sqlserver:before,
+.filetree-icon.pgsql:before {
+    content: "\f096";
+}
+
+.filetree-icon.pdf:before {
+    content: "\e908";
+}
+
+.filetree-icon.eot:before,
+.filetree-icon.ttf:before,
+.filetree-icon.woff:before {
+    content: "\e915";
+}
+
+.filetree-icon.dockerfile:before {
+    content: "\e6b0";
+    color: @jett-icon-dockerfile;
+}
+
+.filetree-icon.pl:before {
+    content: "\e669";
+    color: @jett-icon-pl;
+}
+
+.filetree-icon.zip:before,
+.filetree-icon.tar:before,
+.filetree-icon.gz:before {
+    content: "\f013";
+}
+
+.filetree-icon.clj:before {
+    color: @jett-icon-clj;
+    content: "\e66a";
+}
+
+.filetree-icon.ru:before,
+.filetree-icon.erb:before,
+.filetree-icon.rb:before {
+    color: @jett-icon-rb;
+    content: "\e691";
+}
+
+.filetree-icon.coffee:before {
+    color: @jett-icon-coffee;
+    content: "\e651";
+}
+
+.filetree-icon.java:before {
+    color: @jett-icon-java;
+    content: "\e638";
+}
+
+.filetree-icon.md:before {
+    color: @jett-icon-md;
+    content: "\e63e";
+}
+
+.filetree-icon.mysql:before {
+    content: "\e604";
+}
+
+.filetree-icon.jpg:before,
+.filetree-icon.svg:before,
+.filetree-icon.jpeg:before,
+.filetree-icon.png:before,
+.filetree-icon.gif:before,
+.filetree-icon.bmp:before {
+    content: "\f012";
+}
+
+.filetree .tree-row .toggler.open:before {
+    content: "\e90c";
+    font-size: 0.8rem;
+}
+
+.filetree .tree-row .toggler.closed:before {
+    content: "\e90a";
+    font-size: 0.8rem;
+}
+
+.filetree-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 18px !important;
+}
+
+.filetree-icon.folder:before {
+    content: "\e90e";
+    opacity: 0.3;
+}
+
+
+.filetree .loading .filetree-icon:before {
+    content: "\e913";
+    animation: flash 2s ease infinite;
+}
+
+div.navigate-list span.filetree-icon:before {
+    padding-right: 5px;
+}
+
+
+/* Panel Icons */
+
+.panelsbutton.workspace,
+.panelsbutton.navigate,
+.panelsbutton.commands,
+.panelsbutton.changes,
+.panelsbutton.outline,
+.panelsbutton.debugger,
+.panelsbutton.collab {
+    font-size: 0px !important;
+    transform: rotate(-90deg);
+    font-family: 'c9' !important;
+    speak: none;
+    font-style: normal;
+    font-weight: normal;
+    font-variant: normal;
+    font-smoothing: false;
+    border-radius: 50%;
+    width: 15px;
+    text-align: center;
+}
+
+.panelsbutton.workspace:after,
+.panelsbutton.navigate:after,
+.panelsbutton.commands:after,
+.panelsbutton.changes:after,
+.panelsbutton.outline:after,
+.panelsbutton.debugger:after,
+.panelsbutton.collab:after {
+    font-size: 15px;
+}
+
+.panelsbutton.workspace:after {
+    content: "\f017";
+}
+
+.panelsbutton.navigate:after {
+    content: "\f02e";
+}
+
+.panelsbutton.commands:after {
+    content: "\e909";
+}
+
+.panelsbutton.changes:after {
+    content: "\e602";
+}
+
+.panelsbutton.outline:after {
+    content: "\e90f";
+}
+
+.panelsbutton.debugger:after {
+    content: "\e910";
+}
+
+.panelsbutton.collab:after {
+    content: "\f04f";
+}
+

@@ -1,0 +1,52 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/statusbar.less */
+/*
+ * code-server skins: editor status bar
+ *
+ * ace.statusbar is already a floating box (skin.xml); align it with the cards.
+ *
+ * It floats at the editor's bottom right; statusbar.js paints its background
+ * inline with the editor theme's background, so it stays readable on any
+ * editor theme. Here it becomes a pill: control radius, card border, sm
+ * shadow, 12px regular labels in the muted colour, a glyph gear.
+ */
+
+.bar-status {
+    box-sizing: border-box;
+    padding: 0 2px 0 6px;
+    border: 1px solid @cs-card-border;
+    border-radius: @cs-radius-control + 2px;
+    box-shadow: @cs-shadow-sm;
+}
+.bar-status .label,
+.bar-status.ace_dark .label {
+    padding: 2px 4px 0;
+    font-family: @cs-font-family;
+    font-size: @cs-font-size-label;
+    font-weight: @cs-font-weight;
+    text-shadow: none;
+    color: @cs-fg-muted;
+}
+.bar-status .label:hover,
+.bar-status.ace_dark .label:hover {
+    color: @cs-fg;
+}
+.bar-status .lbl_row_col,
+.bar-status.ace_dark .lbl_row_col {
+    color: @cs-fg-muted;
+}
+.bar-status .label.labelDown {
+    color: @cs-link;
+}
+.btn-statusbar-icon,
+.ace_dark .btn-statusbar-icon {
+    border-radius: @cs-radius-control;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-gear, 14px);
+    background-image: none !important; /* base sprite: !important */
+}
+.btn-statusbar-iconOver,
+.btn-statusbar-iconDown,
+.ace_dark .btn-statusbar-iconOver,
+.ace_dark .btn-statusbar-iconDown {
+    color: @cs-fg;
+}

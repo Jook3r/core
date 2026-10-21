@@ -100,6 +100,8 @@
         var skin = settings.get("user/general/@skin");
         var defaultThemes = {
             "jett-dark": "plugins/c9.ide.theme.jett/ace.themes/jett",
+            "code-server-dark": "plugins/c9.ide.theme.codeserver/ace.themes/code-server-dark",
+            "code-server-light": "plugins/c9.ide.theme.codeserver/ace.themes/code-server-light",
             "light": "ace/theme/cloud9_day",
             "light-gray": "ace/theme/cloud9_day",
             "flat-light": "ace/theme/cloud9_day",
@@ -194,6 +196,11 @@
                     
                     theme.bg = ui.getStyle(div.firstChild, "backgroundColor");
                     theme.fg = ui.getStyle(div.firstChild, "color");
+                    // theme.bg is the gutter's colour; the text area's is
+                    // used by the code-server skins (see changeTheme)
+                    var editorBg = ui.getStyle(div, "backgroundColor");
+                    theme.editorBg = /^(transparent|rgba\(0, 0, 0, 0\))$/.test(editorBg || "")
+                        ? theme.bg : editorBg;
                     theme.path = path;
                     
                     document.body.removeChild(div);
@@ -2125,6 +2132,7 @@
                 if (handle.theme && currentSession.cssClass != theme.cssClass) {
                     var tab = currentDocument.tab;
                     var html = plugin.aml.$int;
+                    var isCodeServer = /^code-server-/.test(settings.get("user/general/@skin"));
                     
                     if (theme.isDark) {
                         tab.classList.add("dark");
@@ -2133,13 +2141,19 @@
                     else {
                         tab.classList.remove("dark");
                         html.style.boxShadow = skin.indexOf("flat") == -1
+                            && !isCodeServer
                             ? "0 1px 0 0 rgba(255, 255, 255, .3) inset"
                             : "";
                     }
                     
-                    html.style.backgroundColor = theme.bg;
+                    // The code-server skins connect the active tab to the
+                    // text area, so the page (whose top padding shows above
+                    // the first line) and the tab take its colour rather
+                    // than the gutter's
+                    var bg = isCodeServer && theme.editorBg || theme.bg;
+                    html.style.backgroundColor = bg;
                     
-                    tab.backgroundColor = theme.bg;
+                    tab.backgroundColor = bg;
                     // tab.foregroundColor = theme.fg;
                     
                     currentSession.isDark = theme.isDark;

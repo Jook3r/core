@@ -53,7 +53,9 @@ define(function(require, exports, module) {
             "light": "#d6d5d5", 
             "light-gray": "#d6d5d5",
             "dark": "#303130",
-            "dark-gray": "#303130" 
+            "dark-gray": "#303130",
+            "code-server-dark": "#121314",
+            "code-server-light": "#FFFFFF"
         };
         
         var previewers = {};
@@ -746,7 +748,7 @@ define(function(require, exports, module) {
                 }
                 
                 function setTheme(e) {
-                    var isDark = e.theme == "dark";
+                    var isDark = e.theme == "dark" || e.theme == "code-server-dark";
                     tab.backgroundColor = BGCOLOR[e.theme];
                     if (isDark) tab.classList.add("dark");
                     else tab.classList.remove("dark");

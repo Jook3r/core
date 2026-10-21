@@ -62,7 +62,30 @@ define(function(require, exports, module) {
             "light": ["rgb(248, 248, 231)", "#000000", "rgb(137, 193, 253)", false], 
             "light-gray": ["rgb(248, 248, 231)", "#000000", "rgb(137, 193, 253)", false], 
             "dark": ["#153649", "#FFFFFF", "#515D77", true],
-            "dark-gray": ["#153649", "#FFFFFF", "#515D77", true]
+            "dark-gray": ["#153649", "#FFFFFF", "#515D77", true],
+            // VS Code 2026 Dark/Light: terminal.background (the panel colour),
+            // terminal.foreground, terminal.selectionBackground blended onto
+            // the background (#3994BC33 / #0069CC26)
+            "code-server-dark": ["#191A1B", "#CCCCCC", "#1F323B", true],
+            "code-server-light": ["#FAFAFD", "#3B3B3B", "#D5E4F6", false]
+        };
+
+        // ANSI colours 0-15 for the code-server skins' default backgrounds:
+        // VS Code's terminal.ansi* defaults (dark and light variants, which
+        // the 2026 themes do not override); other backgrounds keep theirs
+        var ansiColors = {
+            "#191a1b": [
+                "#000000", "#cd3131", "#0dbc79", "#e5e510",
+                "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
+                "#666666", "#f14c4c", "#23d18b", "#f5f543",
+                "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+            ],
+            "#fafafd": [
+                "#000000", "#cd3131", "#107c10", "#949800",
+                "#0451a5", "#bc05bc", "#0598bc", "#555555",
+                "#666666", "#f14c4c", "#14ce14", "#b5ba00",
+                "#3b8eea", "#d670d6", "#29b8db", "#a5a5a5"
+            ]
         };
 
         var themeName;
@@ -234,6 +257,12 @@ define(function(require, exports, module) {
                       '#20C7C7', // mint
                       '#BBBBBB' // light grey
                     ];
+                }
+                else if (/^code-server-/.test(settings.get("user/general/@skin"))
+                    && ansiColors[String(bcolor).toLowerCase()]) {
+                    // a copy: libterm appends the 240 extended colours to
+                    // the array it is given and keeps it
+                    colors = ansiColors[String(bcolor).toLowerCase()].slice();
                 }
                 
                 libterm.setColors(fcolor, bcolor, colors);
@@ -985,11 +1014,13 @@ define(function(require, exports, module) {
                     var bg = settings.get("user/terminal/@backgroundColor");
                     var shade = util.shadeColor(bg, 0.75);
                     var skinName = settings.get("user/general/@skin");
-                    var isLight = ~skinName.indexOf("flat") || shade.isLight;
+                    // code-server skins paint the tab with the exact body colour, like flat
+                    var isFlat = ~skinName.indexOf("flat") || /^code-server-/.test(skinName);
+                    var isLight = isFlat || shade.isLight;
                     doc.tab.backgroundColor = isLight ? bg : shade.color;
                     
                     if (isLight) {
-                        if (~skinName.indexOf("flat") && !shade.isLight) {
+                        if (isFlat && !shade.isLight) {
                             doc.tab.classList.add("dark");
                             container.className = "c9terminalcontainer flat-dark";
                         }

@@ -47,7 +47,7 @@ define(function(require, exports, module) {
                     }
                     var skins = options.withSkins;
                     if (skins === true || skins === "all")
-                        skins = ["dark", "light", "dark-gray", "light-gray", "flat-light", "flat-dark", "jett-dark"];
+                        skins = ["dark", "light", "dark-gray", "light-gray", "flat-light", "flat-dark", "jett-dark", "code-server-dark", "code-server-light"];
                     else
                         skins = skins ? skins.split(/,\s*/) : [];
                     
@@ -123,7 +123,7 @@ define(function(require, exports, module) {
             
             function save(nameParts, cb) {
                 return function(err, result) {
-                    if (err) return cb(err);
+                    if (err) return (cb || done)(err);
                     var code = result.code;
                     nameParts.unshift(root);
 
@@ -190,7 +190,9 @@ define(function(require, exports, module) {
                 "plugins/c9.ide.ace.keymaps/vim/keymap",
                 "plugins/c9.ide.ace.keymaps/emacs/keymap",
                 "plugins/c9.ide.ace.keymaps/sublime/keymap",
-                "plugins/c9.ide.theme.jett/ace.themes/jett"
+                "plugins/c9.ide.theme.jett/ace.themes/jett",
+                "plugins/c9.ide.theme.codeserver/ace.themes/code-server-dark",
+                "plugins/c9.ide.theme.codeserver/ace.themes/code-server-light"
             ];
             
             // FIXME: this could be resolved via pathConfig:

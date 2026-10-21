@@ -51,7 +51,11 @@ define(function(require, exports, module) {
             "light": ["#eef7ff", "#333333", "#89c1ff"],
             "light-gray": ["#eef7ff", "#333333", "#89c1ff"],
             "dark": ["#003a58", "#FFFFFF", "#225477"],
-            "dark-gray": ["#003a58", "#FFFFFF", "#225477"]
+            "dark-gray": ["#003a58", "#FFFFFF", "#225477"],
+            // VS Code 2026 Dark/Light Output view: panel background, editor
+            // foreground, editor.selectionBackground blended onto the background
+            "code-server-dark": ["#191A1B", "#BBBEBF", "#255D74"],
+            "code-server-light": ["#FAFAFD", "#202020", "#BBD6F1"]
         };
 
         handle.on("load", function() {
@@ -1072,11 +1076,13 @@ define(function(require, exports, module) {
                     var bg = settings.get("user/output/@backgroundColor");
                     var shade = util.shadeColor(bg, 0.75);
                     var skinName = settings.get("user/general/@skin");
-                    var isLight = ~skinName.indexOf("flat") || shade.isLight;
+                    // code-server skins paint the tab with the exact body colour, like flat
+                    var isFlat = ~skinName.indexOf("flat") || /^code-server-/.test(skinName);
+                    var isLight = isFlat || shade.isLight;
                     doc.tab.backgroundColor = isLight ? bg : shade.color;
                     
                     if (isLight) {
-                        if (~skinName.indexOf("flat") && !shade.isLight) {
+                        if (isFlat && !shade.isLight) {
                             doc.tab.classList.add("dark");
                             plugin.container.className = "c9terminalcontainer flat-dark";
                         }

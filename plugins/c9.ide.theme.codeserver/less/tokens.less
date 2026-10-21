@@ -1,0 +1,77 @@
+/*
+ * code-server skins: design tokens shared by both variants
+ * (radius tiers, spacing, sizes, shadows, type). Colours live in the palettes.
+ */
+
+/* Type */
+@cs-font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", system-ui, "Ubuntu", "Droid Sans", sans-serif;
+@cs-font-size: 13px;          // body
+@cs-font-size-label: 12px;    // labels, tabs
+@cs-font-size-small: 11px;
+@cs-font-weight: 400;
+@cs-font-weight-heading: 600;
+
+/* Radius tiers */
+@cs-radius-control: 4px;      // inputs, buttons, dropdown fields, rows, toolbar buttons, scrollbar thumbs, find toggles
+@cs-radius-checkbox: 3px;
+@cs-radius-outer: 8px;        // menus, dropdown popups, dialogs, error bar, autocomplete, tooltips, floating widgets
+@cs-radius-card: 8px;         // side panel, editor panes, console, right panels
+@cs-radius-badge: 999px;      // fully round
+@cs-radius-tab: 4px;          // tab corners (active: convex top; inactive: pill)
+@cs-radius-tab-shoulder: 7px; // concave shoulders of the active tab
+
+/* Spacing scale */
+@cs-space-0: 0;
+@cs-space-2: 2px;
+@cs-space-4: 4px;
+@cs-space-6: 6px;
+@cs-space-8: 8px;
+@cs-space-10: 10px;
+@cs-space-12: 12px;
+@cs-space-16: 16px;
+@cs-space-20: 20px;
+@cs-space-24: 24px;
+@cs-space-28: 28px;
+@cs-space-32: 32px;
+
+/* Layout sizes */
+@cs-gutter: 4px;              // gap between cards and to the window edges
+@cs-card-border-width: 1px;
+@cs-row-height: 22px;         // list and tree rows (change heights only through the base variables, see palette.less)
+@cs-tabstrip-height: 28px;    // tab strip
+@cs-tab-height: 24px;         // painted height of an inactive pill
+@cs-tab-inset: 2px;           // pill inset inside the strip
+
+/* Shadows */
+@cs-shadow-sm: 0 0 4px @cs-shadow-color-sm;
+@cs-shadow-md: 0 0 6px @cs-shadow-color-md;
+@cs-shadow-lg: 0 0 12px @cs-shadow-color-lg;   // menus, dropdowns, popups
+@cs-shadow-xl: 0 0 20px @cs-shadow-color-xl;   // dialogs
+
+/* Motion */
+@cs-ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+@cs-duration-fast: 0.1s;
+@cs-duration: 0.2s;
+
+/* Glyphs: simple 16x16 SVG shapes, painted as masks over currentColor
+   (background-color) so they follow the palette; drawn for this skin. */
+@cs-svg-head: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'>";
+@cs-icon-close: url("@{cs-svg-head}<path d='M4.5 4.5l7 7M11.5 4.5l-7 7'/></svg>");
+@cs-icon-plus: url("@{cs-svg-head}<path d='M8 3.5v9M3.5 8h9'/></svg>");
+@cs-icon-chevron-down: url("@{cs-svg-head}<path d='M4.5 6.5L8 10l3.5-3.5'/></svg>");
+@cs-icon-chevron-right: url("@{cs-svg-head}<path d='M6.5 4.5L10 8l-3.5 3.5'/></svg>");
+@cs-icon-chevron-up: url("@{cs-svg-head}<path d='M4.5 9.5L8 6l3.5 3.5'/></svg>");
+@cs-icon-check: url("@{cs-svg-head}<path d='M3.5 8.5l3 3 6-7' stroke-width='1.5'/></svg>");
+@cs-icon-list: url("@{cs-svg-head}<path d='M3 4.5h10M3 8h10M3 11.5h10'/></svg>");
+@cs-icon-dot: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='4' fill='black'/></svg>");
+@cs-icon-circle: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='3' fill='black'/></svg>");
+@cs-icon-maximize: url("@{cs-svg-head}<rect x='3.5' y='3.5' width='9' height='9' rx='1.5'/></svg>");
+@cs-icon-restore: url("@{cs-svg-head}<rect x='3.5' y='5.5' width='7' height='7' rx='1.5'/><path d='M5.5 3.5h5.5a1.5 1.5 0 0 1 1.5 1.5v5.5'/></svg>");
+@cs-icon-gear: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.2'><circle cx='8' cy='8' r='2'/><path d='M8 1.8l1.1 1.6 1.9-.5.4 1.9 1.8.8-.6 1.8 1.2 1.6-1.6 1.1.2 1.9-1.9.2-.8 1.8-1.7-.8L8 14.2l-1.1-1.6-1.9.5-.4-1.9-1.8-.8.6-1.8L2.2 7l1.6-1.1-.2-1.9 1.9-.2.8-1.8 1.7.8z' stroke-linejoin='round'/></svg>");
+
+/* .cs-mask(@icon, @size): paint a glyph in the current text colour */
+.cs-mask(@icon; @size: 16px) {
+    background: currentColor;
+    -webkit-mask: @icon center / @size @size no-repeat;
+    mask: @icon center / @size @size no-repeat;
+}

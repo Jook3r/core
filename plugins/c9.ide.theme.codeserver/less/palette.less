@@ -1,0 +1,482 @@
+/*
+ * code-server skins: Cloud9 base theme variables mapped to the @cs-* tokens.
+ *
+ * Shared by both variants. It comes after themes/default-flat-<v>.less in the
+ * build, so every definition here replaces the flat value everywhere it is
+ * used, including in other plugins' LESS. palette-dark/light.less (next in the
+ * build) define the @cs-* colours and may override any line here per variant;
+ * tokens.less defines the radii, sizes and shadows.
+ *
+ * Rules of thumb:
+ *  - Prefer changing a variable here over adding an override rule in parts/.
+ *  - Row heights (e.g. @tree-row-height) are read back by JS through exact
+ *    selectors (lib_apf findCssRule): change them here, never with a new rule.
+ *  - Variables for widgets shown on dark editor themes (*-dark) are mapped to
+ *    the same tokens: VS Code widgets follow the workbench theme.
+ */
+
+/* Generic */
+@color: @cs-fg;
+@chrome-background: @cs-window-bg;
+@border-highlight-dark: @cs-card-border;
+@border-highlight-dark-medium: @cs-card-border;
+@selected-color: @cs-list-active-fg;
+@selected-background: @cs-list-inactive-bg;
+@selected-hover-color: @cs-fg;
+@selected-hover-background: @cs-list-hover-bg;
+@selected-focus-color: @cs-list-active-fg;
+@selected-focus-background: @cs-list-active-bg;
+@highlight-color: @cs-highlight-fg;
+@highlight-selected-color: @cs-highlight-fg;
+@empty-message-color: @cs-fg-muted;
+@inactive-font-color: @cs-fg-disabled;
+@general-font-family: @cs-font-family;
+@general-font-size: @cs-font-size;
+
+/* flat-dark.less paints some boxes and inputs with these directly
+   (.dgLikeContaier, .cboffline, .spinner, input hover/focus) */
+@element-background: @cs-input-bg;
+@element-background-hover: @cs-input-bg;
+@element-border: @cs-input-border;
+@element-chrome-highlight: @cs-switch-knob;
+
+/* Panels (side panel bar and panel bodies) */
+@panel-background: @cs-card-bg;
+@panel-bar-border: transparent;      // the activity columns sit on the window, no edge line
+@panel-bar-background: @cs-window-bg;
+@panel-button-color: @cs-fg-muted;
+@panel-button-text-shadow: none;
+@panel-button-hover: transparent;    // hover/active chips are drawn by parts/panels.less
+@panel-button-active-background: transparent;
+@panel-button-active-color: @cs-list-active-fg;
+@panel-border-color: @cs-card-border;
+@panel-shadow-color: transparent;
+
+/* Panes and tabs */
+@pane-background: @cs-card-bg;
+@pane-button-font-family: @cs-font-family;
+@pane-button-font-size: @cs-font-size-label;
+@pane-button-color: @cs-fg-muted;
+@pane-button-active-color: @cs-fg;
+@pane-button-textshadow: none;
+@pane-button-hover-background: @cs-tab-hover-bg;
+@pane-button-hover-color: @cs-fg;
+@pane-buttons-border-bottom-color: transparent;
+@pane-buttons-border-bottom-highlight: transparent;
+@pane-button-background: transparent;
+/* tab strip geometry (connected tabs, see parts/tabs.less) */
+@pane-button-container-height: @cs-tabstrip-height;
+@pane-button-container-inner-height: @cs-tabstrip-height;
+@pane-button-container-padding: 0 4px 0 30px;
+@pane-button-height: @cs-tabstrip-height;
+@pane-button-left-width: 0px;
+@pane-button-right-width: 0px;
+@pane-button-margin-right: 0px;
+@pane-button-max-width: 180px;
+@pane-button-title-padding: 0;
+@pane-button-title-margin-right: 0;
+@pane-button-title-margin-left: 0;
+@pane-button-title-height: @cs-tab-height;
+@pane-button-close-hack: 0px;
+@pane-button-close-right: 4px;
+@pane-button-close-top: 4px;
+@pane-button-states-right: 4px;
+@pane-button-states-top: 4px;
+@pane-button-running-right: 5px;
+@pane-button-running-top: 5px;
+@pane-button-save-right: 5px;
+@pane-button-save-top: 5px;
+@pane-button-destroyed-width: 0px;
+@pane-plus-margin: 0 0 0 4px;
+@pane-plus-width: 22px;
+@pane-plus-height: 22px;
+@pane-menu-margin: 2px 0 0 0;
+@pane-menu-left: 4px;
+@pane-menu-top: 3px;
+
+/* Menu bar */
+@menu-bar-border-bottom: transparent;
+@menu-bar-background: @cs-window-bg;
+@menu-bar-minimized-background: @cs-window-bg;
+@menu-bar-minimized-hover-background: @cs-menubar-selection-bg;
+@menu-button-color: @cs-fg;
+@menu-button-font-family: @cs-font-family;
+@menu-button-font-size: @cs-font-size;
+@menu-button-text-shadow: none;
+@menu-button-hover-color: @cs-fg;
+@menu-button-hover-background: @cs-menubar-selection-bg;
+@menu-button-active-background: @cs-menubar-selection-bg;
+@menu-button-active-box-shadow: none;
+@menu-button-active-border: 1px solid transparent;
+@menu-button-disabled-color: @cs-fg-disabled;
+
+/* Menus and context menus */
+@menu-font-family: @cs-font-family;
+@menu-font-size: @cs-font-size;
+@menu-border-radius: @cs-radius-outer;
+@menu-color: @cs-menu-fg;
+@menu-text-shadow: none;
+@menu-background: @cs-menu-bg;
+@menu-border-color: @cs-widget-border;
+@menu-box-shadow: @cs-shadow-lg;
+@menu-item-hover-background: @cs-menu-selection-bg;
+@menu-item-hover-color: @cs-menu-selection-fg;
+@menu-item-disabled-color: @cs-fg-disabled;
+@menu-divider-top-color: @cs-menu-separator;
+@menu-divider-bottom-color: transparent;
+
+/* Dialogs */
+@dialog-border-radius: @cs-radius-outer;
+@dialog-shadow: @cs-shadow-xl;
+@dialog-background-color: @cs-widget-bg;
+@dialog-header-color: @cs-fg;
+@dialog-header-gradient: linear-gradient(to bottom, @cs-widget-bg 0%, @cs-widget-bg 100%);
+@dialog-header-bottom-border: 1px solid @cs-widget-border;
+@dialog-header-font-family: @cs-font-family;
+@dialog-header-font-weight: @cs-font-weight-heading;
+@dialog-content-color: @cs-fg;
+@dialog-content-background: @cs-widget-bg;
+@dialog-footer-background: @cs-widget-bg;
+@filesave-tree-border: 1px solid @cs-well-border;
+
+/* Error and disconnect bars */
+@error-background: @cs-error-bg;
+@error-color: @cs-fg;
+@error-font-smoothing: false;
+@disconnect-background: @cs-warning-bg;
+
+/* Frames (debugger panel sections) */
+@frame-border-bottom: @cs-card-border;
+@frame-title-color: @cs-fg;
+@frame-title-background: @cs-card-bg;
+@frame-title-border-bottom: @cs-card-border;
+
+/* Data grids */
+@datagrid-font-family: @cs-font-family;
+@datagrid-color: @cs-fg;
+@datagrid-background: @cs-card-bg;
+@datagrid-heading-color: @cs-fg;
+@datagrid-heading-background: @cs-card-bg;
+@datagrid-heading-border-color: @cs-card-border;
+@datagrid-heading-hover-color: @cs-fg;
+@datagrid-heading-hover-background: @cs-list-hover-bg;
+@datagrid-selected-background: @cs-list-inactive-bg;
+@datagrid-watch-new: @cs-fg-muted;
+
+/* Breakpoints list */
+@breakpoint-list-font-family: @cs-font-family;
+@breakpoint-list-color: @cs-fg;
+@breakpoint-list-code-color: @cs-link;
+@breakpoint-list-item-border-bottom: @cs-card-border;
+@breakpoint-list-item-hover-color: @cs-fg;
+@breakpoint-list-item-hover-background: @cs-list-hover-bg;
+@breakpoint-condition-border-radius: @cs-radius-outer;
+
+/* Splitters: the 4px gutters between cards are the splitters */
+@splitter-vertical-line-color: transparent;
+@splitter-vertical-dark-line-color: transparent;
+@splitter-horizontal-line-color: transparent;
+@splitter-top-divider-color: transparent;
+@splitter-left-divider-color: transparent;
+@splitter-highlight: transparent;
+
+/* Spinner (number input) */
+@spinner-color: @cs-input-fg;
+@spinner-background: @cs-input-bg;
+@spinner-border-color: @cs-input-border;
+@spinner-focus-border-color: @cs-focus-solid;
+@spinner-button-hover-background: @cs-list-hover-bg;
+
+/* Text areas and text boxes */
+@textarea-border-radius: @cs-radius-control;
+@textarea-gradient: linear-gradient(to bottom, @cs-input-bg 0%, @cs-input-bg 100%);
+@textarea-font-family: @cs-font-family;
+@textarea-color: @cs-input-fg;
+@textarea-border: 1px solid @cs-input-border;
+@textarea-disabled-border: 1px solid @cs-input-border;
+@textarea-disabled-color: @cs-fg-disabled;
+@textbox-color: @cs-input-fg;
+@textbox-background: @cs-input-bg;
+@textbox-border-color: @cs-input-border;
+@textbox-initial-color: @cs-placeholder;
+@textbox-initial-text-shadow: none;
+@textbox-disabled-color: @cs-fg-disabled;
+@textbox-disabled-background: @cs-window-bg;
+@tbsimple-border: 1px solid @cs-input-border;
+@tbsimple-border-radius: @cs-radius-control;
+@tbsimple-gradient: linear-gradient(to top, @cs-input-bg 0%, @cs-input-bg 100%);
+@tbsimple-color: @cs-input-fg;
+@tbsimple-font-family: @cs-font-family;
+@tbsimple-disabled-gradient: linear-gradient(to top, @cs-window-bg 0%, @cs-window-bg 100%);
+
+/* Buttons: green = primary, grey = secondary, red = danger */
+@button-border-radius: @cs-radius-control;
+@button-font-family: @cs-font-family;
+@button-font-weight: @cs-font-weight;
+@button-font-size: @cs-font-size;
+@button-focussed-border: 1px solid @cs-focus;
+@button-grey-color: @cs-button2-fg;
+@button-grey-idle-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-grey-over-gradient: linear-gradient(to top, @cs-button2-fill-hover 0%, @cs-button2-fill-hover 100%);
+@button-grey-focus-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-grey-down-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-grey-disabled-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-grey-disabled-color: @cs-fg-disabled;
+/* green is Cloud9's primary button */
+@button-green-color: @cs-accent-fg;
+@button-green-idle-gradient: linear-gradient(to top, @cs-accent 0%, @cs-accent 100%);
+@button-green-over-gradient: linear-gradient(to top, @cs-accent-hover 0%, @cs-accent-hover 100%);
+@button-green-focus-gradient: linear-gradient(to top, @cs-accent 0%, @cs-accent 100%);
+@button-green-down-gradient: linear-gradient(to top, @cs-accent-hover 0%, @cs-accent-hover 100%);
+@button-green-disabled-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-green-disabled-color: @cs-fg-disabled;
+/* red is Cloud9's "cancel / no" button: VS Code dialogs show those as secondary */
+@button-red-color: @cs-button2-fg;
+@button-red-idle-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-red-over-gradient: linear-gradient(to top, @cs-button2-fill-hover 0%, @cs-button2-fill-hover 100%);
+@button-red-focus-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-red-down-gradient: linear-gradient(to top, @cs-button2-fill-hover 0%, @cs-button2-fill-hover 100%);
+@button-red-disabled-gradient: linear-gradient(to top, @cs-button2-fill 0%, @cs-button2-fill 100%);
+@button-red-disabled-color: @cs-fg-disabled;
+
+/* "Black" buttons (find bar Replace / Replace All and others): secondary */
+@button-black-color: @cs-button2-fg;
+@button-black-font-weight: @cs-font-weight;
+@button-black-hover-shadow: @cs-toolbar-hover-bg;
+@button-black-disabled-color: @cs-fg-disabled;
+@button-black-background-1: @cs-button2-fill;
+@button-black-background-2: @cs-button2-fill;
+@button-black-background-3: @cs-button2-fill;
+@button-black-background-4: @cs-button2-fill;
+
+/* Toolbar ("glossy") buttons: Run, Preview, console buttons */
+@button-glossy-color: @cs-fg;
+@button-glossy-disabled-color: @cs-fg-disabled;
+@button-glossy-hover-border-color: transparent;
+@button-glossy-hover-background-1: @cs-toolbar-hover-bg;
+@button-glossy-hover-background-2: @cs-toolbar-hover-bg;
+@button-glossy-hover-background-3: @cs-toolbar-hover-bg;
+@button-glossy-hover-background-4: @cs-toolbar-hover-bg;
+@button-glossy-active-border-color: transparent;
+@button-glossy-active-background-1: @cs-toolbar-active-bg;
+@button-glossy-active-background-2: @cs-toolbar-active-bg;
+@button-glossy-active-background-3: @cs-toolbar-active-bg;
+@button-glossy-active-background-4: @cs-toolbar-active-bg;
+@button-console-hover-border: transparent;
+@button-console-hover-background: @cs-toolbar-hover-bg;
+@button-console-active-border: transparent;
+@button-console-active-box-shadow: none;
+@button-console-active-background: @cs-toolbar-active-bg;
+
+/* Checkboxes and labels */
+@checkbox-font-family: @cs-font-family;
+@checkbox-black-color: @cs-fg;
+@label-font-family: @cs-font-family;
+@label-color: @cs-fg;
+
+/* Tree */
+@tree-heading-color: @cs-fg;
+@tree-editor-color: @cs-input-fg;
+@tree-editor-background: @cs-input-bg;
+@tree-editor-border-color: @cs-focus-solid;
+@tree-selected-background-alternative: @cs-list-active-bg;
+@tree-selected-color-alternative: @cs-list-active-fg;
+@tree-extrainfo-color: @cs-fg-muted;
+@tree-focus-selected-extrainfo-color: @cs-fg-muted;
+
+/* Preview tool bar */
+@preview-bar-background-color: @cs-card-bg;
+@preview-chooser-box-shadow: none;
+@preview-chooser-color: @cs-fg;
+@preview-chooser-background: @cs-button2-fill;
+@preview-chooser-over-background: @cs-button2-fill-hover;
+@preview-chooser-active-background: @cs-button2-fill-hover;
+@preview-chooser-font-family: @cs-font-family;
+
+/* Preferences */
+@preferences-nav-border: 1px solid @cs-card-border;
+@preferences-nav-background: @cs-editor-bg;
+@preferences-nav-main-color: @cs-fg;
+@preferences-nav-main-border-color: @cs-card-border;
+@preferences-nav-main-hover-color: @cs-fg;
+@preferences-nav-main-hover-background: @cs-list-hover-bg;
+@preferences-nav-active-area-background: @cs-editor-bg;
+@preferences-nav-main-active-color: @cs-list-active-fg;
+@preferences-nav-main-active-background: @cs-list-active-bg;
+@preferences-nav-sub-color: @cs-fg;
+@preferences-nav-link-color: @cs-fg-muted;
+@preferences-nav-link-hover-background: @cs-list-hover-bg;
+@preferences-nav-link-active-color: @cs-link;
+@preferences-background: @cs-editor-bg;
+@preferences-border-top-color: @cs-card-border;
+@preferences-header-color: @cs-fg;
+@preferences-header-background: @preferences-background; // section headers; preferences.js also reads it for the tab fill
+@preferences-header-border-top-color: @cs-card-border;
+@preferences-form-label-color: @cs-fg;
+@preferences-datagrid-header-background: @cs-card-bg;
+@preferences-datagrid-header-font-weight: @cs-font-weight-heading;
+@preferences-datagrid-header-color: @cs-fg;
+@preferences-datagrid-header-hover-background: @cs-list-hover-bg;
+@preferences-datagrid-header-hover-color: @cs-fg;
+@preferences-datagrid-background: @cs-editor-bg;
+@preferences-datagrid-border: @cs-card-border;
+@preferences-datagrid-border-radius: @cs-radius-control;
+@preferences-datagrid-font-family: @cs-font-family;
+@preferences-datagrid-color: @cs-fg;
+@preferences-datagrid-focus-border: @cs-focus-solid;
+@preferences-datagrid-group-background: @cs-window-bg;
+@preferences-intro-color: @cs-fg;
+@preferences-intro-link-color: @cs-link;
+@preferences-intro-hint-color: @cs-fg-muted;
+@preferences-radiobutton-active: @cs-focus-solid;
+@preferences-textbox-border-radius: @cs-radius-control;
+@preferences-textbox-font-family: @cs-font-family;
+
+/* Dropdowns */
+@dropdown-black-font-family: @cs-font-family;
+@dropdown-black-color: @cs-input-fg;
+@dropdown-black-selected-color: @cs-highlight-fg;
+@dropdown-black-border-color: @cs-dropdown-border;
+@dropdown-black-background: @cs-input-bg;
+@dropdown-black-divider-left: transparent;
+@dropdown-black-gradient-start: @cs-input-bg;
+@dropdown-black-gradient-stop: @cs-input-bg;
+@dropdown-black-hover-gradient-start: @cs-input-bg;
+@dropdown-black-hover-gradient-stop: @cs-input-bg;
+@dropdown-black-active-gradient-start: @cs-input-bg;
+@dropdown-black-active-gradient-stop: @cs-input-bg;
+@dropdown-glossy-list-font-family: @cs-font-family;
+@dropdown-glossy-list-shadow: @cs-shadow-lg;
+@dropdown-glossy-list-border-radius: @cs-radius-outer;
+@dropdown-glossy-list-item-border-radius: @cs-radius-control;
+
+/* Find bar, tooltips, find toggles */
+@find-bar-background: @cs-widget-bg;
+@find-search-count-color: @cs-fg-muted;
+@find-textbox-font-family: @cs-font-family;
+@find-button-font-family: @cs-font-family;
+@tooltip-label-gradient: linear-gradient(to top, @cs-widget-bg 0%, @cs-widget-bg 100%);
+@tooltip-label-background-color: @cs-widget-bg;
+@tooltip-label-border: 1px solid @cs-widget-border;
+@tooltip-label-box-shadow: @cs-shadow-md;
+@tooltip-label-color: @cs-fg;
+@tooltip-label-font-family: @cs-font-family;
+@checkbox-holder-border-radius: @cs-radius-control;
+@checkbox-holder-box-border-radius: @cs-radius-control;
+@checkbox-holder-box-hover-box-shadow: 0 0 0 1px @cs-option-active-border inset, 0 0 0 1000px @cs-list-hover-bg inset;
+
+/* Go to line (light and dark editor variants) */
+@gotoline-background: @cs-widget-bg;
+@gotoline-box-shadow: @cs-shadow-lg;
+@gotoline-border: 1px solid @cs-widget-border;
+@gotoline-border-radius: @cs-radius-outer;
+@gotoline-list-background: linear-gradient(to top, @cs-widget-bg 0%, @cs-widget-bg 100%);
+@gotoline-list-color: @cs-fg;
+@gotoline-list-border-color: transparent;
+@gotoline-list-border-radius: @cs-radius-control;
+@gotoline-list-selected-background: @cs-list-active-bg;
+@gotoline-input-border-color: @cs-input-border;
+@gotoline-input-border-radius: @cs-radius-control;
+@gotoline-background-dark: @cs-widget-bg;
+@gotoline-box-shadow-dark: @cs-shadow-lg;
+@gotoline-border-dark: 1px solid @cs-widget-border;
+@gotoline-list-background-dark: linear-gradient(to top, @cs-widget-bg 0%, @cs-widget-bg 100%);
+@gotoline-list-color-dark: @cs-fg;
+@gotoline-list-border-color-dark: transparent;
+@gotoline-list-border-radius-dark: @cs-radius-control;
+@gotoline-list-selected-background-dark: @cs-list-active-bg;
+@gotoline-input-border-color-dark: @cs-input-border;
+@gotoline-input-border-radius-dark: @cs-radius-control;
+
+/* Autocomplete and language tooltips (light and dark editor variants) */
+@language-tooltip-color: @cs-fg;
+@language-tooltip-background: @cs-widget-bg;
+@language-tooltip-border-color: @cs-widget-border;
+@language-tooltip-box-shadow: @cs-shadow-md;
+@language-tooltip-text-shadow: none;
+@complete-color: @cs-fg;
+@complete-background: @cs-widget-bg;
+@complete-border-color: @cs-widget-border;
+@complete-inner-border-color: transparent;
+@complete-box-shadow: @cs-shadow-lg;
+@complete-match: @cs-highlight-fg;
+@complete-selected-match: @cs-highlight-fg;
+@complete-selected-match-text-overflow: none;
+@complete-selected-color: @cs-fg;
+@complete-selected-background: @cs-list-active-bg;
+@complete-hover-color: @cs-fg;
+@complete-hover-background: @cs-list-hover-bg;
+@complete-docs-color: @cs-fg;
+@complete-docs-background: @cs-widget-bg;
+@complete-docs-border-color: @cs-widget-border;
+@complete-activeparam: @cs-fg-strong;
+@complete-paramhelp: @cs-fg;
+@language-tooltip-dark-color: @cs-fg;
+@language-tooltip-dark-background: @cs-widget-bg;
+@language-tooltip-dark-border-color: @cs-widget-border;
+@language-tooltip-dark-box-shadow: @cs-shadow-md;
+@language-tooltip-dark-text-shadow: none;
+@complete-dark-color: @cs-fg;
+@complete-dark-background: @cs-widget-bg;
+@complete-dark-border-color: @cs-widget-border;
+@complete-dark-inner-border-color: transparent;
+@complete-dark-box-shadow: @cs-shadow-lg;
+@complete-dark-match: @cs-highlight-fg;
+@complete-dark-selected-match: @cs-highlight-fg;
+@complete-dark-selected-match-text-overflow: none;
+@complete-dark-selected-color: @cs-fg;
+@complete-dark-selected-background: @cs-list-active-bg;
+@complete-dark-hover-color: @cs-fg;
+@complete-dark-hover-background: @cs-list-hover-bg;
+@complete-dark-docs-color: @cs-fg;
+@complete-dark-docs-background: @cs-widget-bg;
+@complete-dark-activeparam: @cs-fg-strong;
+@complete-dark-paramhelp: @cs-fg;
+@gutter-tooltip-shadow: @cs-shadow-md;
+@gutter-tooltip-background: @cs-widget-bg;
+@gutter-tooltip-border: @cs-widget-border;
+@gutter-tooltip-color: @cs-fg;
+@gutter-tooltip-dark-shadow: @cs-shadow-md;
+@gutter-tooltip-dark-background: @cs-widget-bg;
+@gutter-tooltip-dark-border: @cs-widget-border;
+@gutter-tooltip-dark-color: @cs-fg;
+
+/* Welcome page */
+@welcome-background: @cs-editor-bg;
+@welcome-color: @cs-fg;
+@welcome-highlight-color: @cs-link;
+@welcome-heading-color: @cs-fg-muted;
+@welcome-heading-border-bottom: 1px solid @cs-card-border;
+
+/* Output / Run panel */
+@output-toolbar-border-color: @cs-card-border;
+@output-label-color: @cs-fg;
+@output-textbox-color: @cs-input-fg;
+@output-textbox-background-color: @cs-input-bg;
+@output-textbox-border-radius: @cs-radius-control;
+@output-textbox-active-color: @cs-input-fg;
+
+/* Run button: the same green play icon in both variants (flat-dark's is olive) */
+@runbtn-stopped-image: "@{icon-path}/run_flat_light.png";
+
+/* Commands panel, image editor, debugger */
+@commands-keys-color: @cs-fg-muted;
+@imgeditor-toolbar-background: @cs-card-bg;
+@imgeditor-toolbar-border-color: @cs-card-border;
+@imgeditor-toolbar-label-color: @cs-fg;
+@imgeditor-background: @cs-editor-bg;
+@debug-pane-toolbar-bottom-border-top: 1px solid @cs-card-border;
+
+/* Terminal "install tmux" style messages, installer, share */
+@terminal-message-gradient: linear-gradient(to bottom, @cs-widget-bg 0%, @cs-widget-bg 100%);
+@terminal-message-border: 1px solid @cs-widget-border;
+@terminal-message-border-radius: @cs-radius-outer;
+@terminal-message-color: @cs-fg;
+@terminal-message-font-family: @cs-font-family;
+@terminal-message-box-shadow: @cs-shadow-lg;
+@terminal-message-link-color: @cs-link;
+@installer-font-family: @cs-font-family;
+@installer-log-border-radius: @cs-radius-control;
+@share-container-border-radius: @cs-radius-control;
+@share-link-border-radius: @cs-radius-control;
+@share-members-border-radius: @cs-radius-control;

@@ -1,0 +1,479 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/tabs.less */
+/*
+ * code-server skins: connected editor and console tabs
+ *
+ * Strip about 28-30px (@cs-tabstrip-height), background @cs-tabstrip-bg.
+ * ACTIVE tab joins its card body: convex @cs-radius-tab top corners, concave
+ * @cs-radius-tab-shoulder shoulders at the bottom, fill = body colour. The
+ * Jett plugin sets --cs-tab-bg / --cs-tab-fg on the active tab button
+ * (editor bg for ace tabs, terminal bg for terminal tabs, ...): use
+ * var(--cs-tab-bg, @cs-editor-bg) for the fill and the shoulders.
+ * INACTIVE tabs: @cs-radius-tab pills, @cs-tab-height painted inside the strip,
+ * @cs-tab-inset inset.
+ * NO accent line or border on the active tab (owner requirement).
+ * The close sprite (strong) carries changed/saving/error/running states.
+ * JS geometry: plusMargin / apf.tabRightDelta are set in plugin.js (GEOMETRY).
+ * Reference: modernUI connectedEditorTabs.css, tabs.css.
+ *
+ * Geometry (the strip height and paddings come from the @pane-button-*
+ * variables in palette.less, so the base rules and JS that read them agree):
+ *  - every tab is a @cs-tabstrip-height high hitbox; its .tab_middle is the
+ *    painted surface;
+ *  - inactive: .tab_middle inset @cs-tab-inset on top, left and right
+ *    (4px between two pills), @cs-tab-height high, all corners rounded;
+ *  - active: .tab_middle spans the hitbox width and runs down to the strip
+ *    bottom, where the body starts; the two shoulders are the ::before and
+ *    ::after of the tab button (Cloud9's per-tab colour rule only reaches
+ *    .tab_middle and its pseudo elements), painted with a radial gradient:
+ *    transparent inside a circle of the shoulder radius centred on the
+ *    shoulder box's outer top corner, body colour outside it.
+ */
+
+@cs-tab-fill: var(--cs-tab-bg, @cs-editor-bg);
+@cs-console-tab-fill: var(--cs-tab-bg, @cs-terminal-bg); /* console bodies: the panel colour */
+@cs-tab-text: var(--cs-tab-fg, @cs-fg);
+@cs-shoulder: @cs-radius-tab-shoulder;
+
+/* ---- Strip --------------------------------------------------------------- */
+
+.editor_tab .btnsesssioncontainer {
+    left: 0;
+    right: 0;
+    top: 0;
+    border: 0;
+    margin: 0;
+    box-shadow: none;
+    background: @cs-tabstrip-bg;
+    color: @cs-fg;
+    clip: auto;
+    font-family: @cs-font-family;
+    font-size: @cs-font-size-label;
+}
+.editor_tab .btnsesssioncontainer .inside {
+    box-sizing: border-box;
+    align-items: flex-end;
+}
+.has_apf .console .btnsesssioncontainer .inside {
+    padding-left: @cs-space-8;
+    padding-right: 64px; /* maximise / close buttons */
+}
+
+/* ---- Tab hitbox ---------------------------------------------------------- */
+
+.session_btn,
+.session_btn.curbtn {
+    height: @cs-tabstrip-height;
+    margin: 0;
+    padding: 0;
+    line-height: @cs-tab-height;
+}
+.session_btn.curbtn {
+    overflow: visible;
+}
+.session_btn .tab_shadow,
+.session_btn .tab_middle:before,
+.session_btn .tab_middle:after,
+.session_btn .tab_shadow:before,
+.session_btn .tab_shadow:after {
+    display: none;
+    -webkit-mask: none;
+    mask: none;
+}
+
+/* ---- Painted surface ----------------------------------------------------- */
+
+.session_btn .tab_middle,
+.session_btn.curbtn .tab_middle,
+.dark.session_btn.curbtn .tab_middle {
+    box-sizing: border-box;
+    height: @cs-tab-height;
+    margin: @cs-tab-inset @cs-tab-inset 0;
+    padding: 0 26px 0 @cs-space-10;
+    border-radius: @cs-radius-tab;
+    background-image: none;
+    color: @cs-fg-muted;
+    transition: background-color @cs-duration-fast linear;
+}
+.session_btn:not(.curbtn) .tab_middle {
+    background-color: @cs-tab-pill-bg;
+}
+.session_btn.over:not(.curbtn) .tab_middle {
+    background-color: @cs-tab-pill-hover-bg;
+}
+
+/* Active: connected cap */
+.session_btn.curbtn .tab_middle,
+.dark.session_btn.curbtn .tab_middle {
+    height: @cs-tabstrip-height - @cs-tab-inset;
+    margin: @cs-tab-inset 0 0;
+    border-radius: @cs-radius-tab @cs-radius-tab 0 0;
+    background-color: @cs-tab-fill;
+}
+/* The fill comes from --cs-tab-bg (set by the Jett plugin from the tab's
+   body), not from Cloud9's per-tab rule (".<tab>.curbtn .tab_middle", painted
+   with tab.backgroundColor, inserted after the skin): the Immediate window's
+   body, for one, is not its editor's colour. Until the plugin has styled a
+   new console tab, the fallback is the panel colour. */
+.has_apf .session_btn.curbtn .tab_middle,
+.has_apf .dark.session_btn.curbtn .tab_middle {
+    background-color: @cs-tab-fill;
+}
+.has_apf .console .session_btn.curbtn .tab_middle,
+.has_apf .console .dark.session_btn.curbtn .tab_middle {
+    background-color: @cs-console-tab-fill;
+}
+/* flat-light: .dark.session_btn.curbtn .tab_middle { margin-top: 3px !important }
+   (a tab on a dark body would start 1px below the pills) */
+.dark.session_btn.curbtn .tab_middle {
+    margin-top: @cs-tab-inset !important;
+}
+/* The pills next to the active tab keep clear of its shoulders, so a strip
+   gap separates the pill's rounded corner from the shoulder curve. */
+.session_btn:has(+ .session_btn.curbtn) .tab_middle {
+    margin-right: @cs-shoulder - @cs-tab-inset;
+}
+.session_btn.curbtn + .session_btn .tab_middle {
+    margin-left: @cs-shoulder - @cs-tab-inset;
+}
+.session_btn.curbtn:before,
+.session_btn.curbtn:after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    width: @cs-shoulder;
+    height: @cs-shoulder;
+    pointer-events: none;
+}
+.session_btn.curbtn:before {
+    left: -@cs-shoulder;
+    background: radial-gradient(circle at 0 0, transparent (@cs-shoulder - 0.5), @cs-tab-fill (@cs-shoulder + 0.5));
+}
+.session_btn.curbtn:after {
+    right: -@cs-shoulder;
+    background: radial-gradient(circle at 100% 0, transparent (@cs-shoulder - 0.5), @cs-tab-fill (@cs-shoulder + 0.5));
+}
+.console .session_btn.curbtn:before {
+    background: radial-gradient(circle at 0 0, transparent (@cs-shoulder - 0.5), @cs-console-tab-fill (@cs-shoulder + 0.5));
+}
+.console .session_btn.curbtn:after {
+    background: radial-gradient(circle at 100% 0, transparent (@cs-shoulder - 0.5), @cs-console-tab-fill (@cs-shoulder + 0.5));
+}
+/* a tab being dragged floats on its own: no shoulders */
+body > .session_btn.curbtn:before,
+body > .session_btn.curbtn:after {
+    display: none;
+}
+body > .session_btn.curbtn .tab_middle {
+    border-radius: @cs-radius-tab;
+    box-shadow: @cs-shadow-lg;
+}
+
+/* ---- Title --------------------------------------------------------------- */
+
+.session_btn .sessiontab_title,
+.session_btn.btnclose .tab_middle .sessiontab_title,
+.dark.session_btn.curbtn .sessiontab_title,
+.focus.session_btn.curbtn .sessiontab_title {
+    height: @cs-tab-height;
+    margin: 0;
+    padding: 0;
+    line-height: @cs-tab-height;
+    font-size: @cs-font-size-label;
+    font-weight: @cs-font-weight;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    text-shadow: none;
+    color: @cs-fg-muted;
+}
+/* Text colours. Each state also lists the ".btnclose ... .tab_middle" form:
+   the geometry rule above needs that weight (flat-light sets margins with it),
+   so a state rule without it would lose to the muted colour.
+   inactive: tab.inactiveForeground; hover: foreground;
+   active in the focused pane, and the active console tab (VS Code's panel
+   titles do not dim): the body's text colour (--cs-tab-fg);
+   active in an unfocused pane: tab.unfocusedActiveForeground, which is the
+   muted colour, never lighter than an inactive tab. */
+.session_btn.over .sessiontab_title,
+.session_btn.btnclose.over .tab_middle .sessiontab_title {
+    color: @cs-fg;
+}
+.session_btn.curbtn .sessiontab_title,
+.session_btn.btnclose.curbtn .tab_middle .sessiontab_title,
+.dark.session_btn.curbtn .sessiontab_title {
+    color: @cs-fg-muted;
+    opacity: 1;
+}
+.focus.session_btn.curbtn .sessiontab_title,
+.focus.session_btn.btnclose.curbtn .tab_middle .sessiontab_title,
+.console .session_btn.curbtn .sessiontab_title,
+.console .session_btn.btnclose.curbtn .tab_middle .sessiontab_title {
+    color: @cs-tab-text;
+}
+.focus.session_btn.curbtn .sessiontab_title:after {
+    display: none;
+}
+/* file icon: a block centred on the 24px line, not on the text baseline */
+.session_btn .sessiontab_title .filetree-icon {
+    display: inline-block;
+    vertical-align: top;
+    width: auto;
+    height: @cs-tab-height;
+    line-height: @cs-tab-height !important; /* icons.less: 18px !important */
+    font-size: 14px;
+}
+.session_btn .sessiontab_title .filetree-icon:before {
+    top: 0;
+    padding-right: @cs-space-6;
+}
+
+/* ---- Close button and file states --------------------------------------- */
+/* The strong carries the state classes of its tab: a glyph for every state.
+   idle: close (x); changed: dot (x on hover); saving: dot + sonar ring;
+   saved / conflict / error: coloured dot; running / loading / connecting:
+   Cloud9's animated sprites (kept). */
+
+.session_btn strong,
+.has_apf .session_btn strong,
+.has_apf .session_btn strong:hover,
+.has_apf .session_btn strong:active,
+.has_apf .session_btn.curbtn strong,
+.has_apf .session_btn.curbtn strong:hover,
+.has_apf .session_btn.curbtn strong:active,
+.has_apf .dark.session_btn.curbtn strong,
+.has_apf .dark.session_btn.curbtn strong:hover,
+.has_apf .dark.session_btn.curbtn strong:active,
+.has_apf .session_btn.changed strong,
+.has_apf .session_btn.saving strong,
+.has_apf .session_btn.saved strong,
+.has_apf .session_btn.conflict strong,
+.has_apf .session_btn.error strong {
+    width: 16px;
+    height: 16px;
+    right: 4px;
+    top: 4px;
+    margin: 0;
+    border-radius: @cs-radius-control;
+    background: none;
+    color: @cs-fg-muted;
+    animation: none;
+}
+/* base: .dark.session_btn.curbtn strong { margin-top: 1px !important } */
+.has_apf .dark.session_btn.curbtn strong {
+    top: 3px;
+}
+.session_btn strong:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 16px;
+    height: 16px;
+    .cs-mask(@cs-icon-close, 16px);
+}
+.session_btn:not(.curbtn):not(.over) strong:before {
+    opacity: 0.6;
+}
+.has_apf .session_btn strong:hover,
+.has_apf .session_btn.curbtn strong:hover {
+    background-color: @cs-toolbar-hover-bg;
+    color: @cs-fg;
+}
+.session_btn.curbtn strong {
+    color: @cs-tab-text;
+}
+
+/* changed: dot, close glyph on hover */
+.has_apf .session_btn.changed strong:not(:hover):before,
+.has_apf .session_btn.saving strong:before,
+.has_apf .session_btn.saved strong:before,
+.has_apf .session_btn.conflict strong:before,
+.has_apf .session_btn.error strong:before {
+    opacity: 1;
+    -webkit-mask-image: @cs-icon-dot;
+    mask-image: @cs-icon-dot;
+}
+.has_apf .session_btn.saving strong:before { color: @cs-warning; }
+.has_apf .session_btn.saved strong:before { color: @cs-success; }
+.has_apf .session_btn.conflict strong:before { color: @cs-warning; }
+.has_apf .session_btn.error strong:before { color: @cs-error; }
+.has_apf .session_btn.saving strong:before,
+.has_apf .session_btn.saved strong:before,
+.has_apf .session_btn.conflict strong:before,
+.has_apf .session_btn.error strong:before {
+    background-color: currentColor;
+}
+
+/* saving: Jett's sonar ring */
+.has_apf .session_btn.saving strong:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 2px solid @cs-warning;
+    border-radius: 50%;
+    opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .has_apf .session_btn.saving strong:after {
+        animation: sonar 1.6s ease-out infinite;
+    }
+}
+
+/* running / loading / connecting keep Cloud9's spinners */
+.has_apf .session_btn.running strong,
+.has_apf .session_btn.loading strong,
+.has_apf .session_btn.connecting strong {
+    border-radius: 0;
+}
+.has_apf .session_btn.running strong:before,
+.has_apf .session_btn.loading strong:before,
+.has_apf .session_btn.connecting strong:before {
+    display: none;
+}
+.has_apf .session_btn.running strong {
+    .image-2x(@pane-button-running-image, @pane-button-running-image-width, @pane-button-running-image-height, no-repeat);
+    width: @pane-button-running-width;
+    height: @pane-button-running-height;
+    right: @pane-button-running-right;
+    top: @pane-button-running-top;
+    animation: @pane-button-running-animation;
+}
+.has_apf .session_btn.loading strong,
+.has_apf .session_btn.connecting strong {
+    .image-2x(@pane-button-save-image, @pane-button-save-image-width, @pane-button-save-image-height, no-repeat);
+    width: @pane-button-save-width;
+    height: @pane-button-save-height;
+    right: @pane-button-save-right;
+    top: @pane-button-save-top;
+    animation: @pane-button-save-animation;
+}
+
+/* ---- "+" and tab list buttons ------------------------------------------- */
+
+.has_apf .plus_tab_button,
+.has_apf .tabmenubtn {
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: @cs-radius-control;
+    box-shadow: none;
+    background: none;
+    color: @cs-fg-muted;
+    transform: none;
+}
+.has_apf .plus_tab_button {
+    align-self: center;
+    top: 0;
+    margin: 0 0 0 @cs-space-4;
+    flex: none;
+}
+.has_apf .tabmenubtn {
+    left: @cs-space-4;
+    top: (@cs-tabstrip-height - 22px) / 2;
+}
+.has_apf .plus_tab_button:after,
+.has_apf .plus_tab_button.c9-simple-btnOver:after,
+.has_apf .plus_tab_button.c9-simple-btnDown:after,
+.has_apf .tabmenubtn:after {
+    content: "";
+    display: block;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    transform: none;
+    .cs-mask(@cs-icon-plus, 16px);
+}
+.has_apf .tabmenubtn:after {
+    -webkit-mask-image: @cs-icon-list;
+    mask-image: @cs-icon-list;
+}
+.plus_tab_button.c9-simple-btnOver,
+.has_apf .tabmenubtn.c9-simple-btnOver {
+    border: 0;
+    box-shadow: none;
+    background: @cs-toolbar-hover-bg;
+    color: @cs-fg;
+}
+.plus_tab_button.c9-simple-btnDown,
+.has_apf .tabmenubtn.c9-simple-btnDown {
+    height: 22px;
+    border: 0;
+    box-shadow: none;
+    background: @cs-toolbar-active-bg;
+    color: @cs-fg;
+}
+
+/* The tab list menu: a plain floating menu under its button */
+.tabsContextMenu:before,
+.tabsContextMenu:after {
+    display: none;
+}
+
+/* ---- Console buttons (maximise / close) in its tab strip ----------------- */
+/* The .hbox holding them is a flex row (inline: align-items center, height
+   24px), placed at the holder's top right: centre it in the strip, so the
+   22px buttons, their hover and pressed backgrounds and the glyphs sit in
+   the middle of the strip. flat-light sizes the buttons with !important. */
+
+@cs-console-btns-height: 24px; /* inline height of the .hbox */
+@cs-console-btns-top: (@cs-tabstrip-height - @cs-console-btns-height) / 2;
+
+.console > .hbox {
+    margin-top: @cs-half-gutter + @cs-card-border-width + @cs-console-btns-top;
+    margin-right: @cs-half-gutter + @cs-card-border-width;
+}
+body > .console > .hbox { /* maximised console: a full gutter */
+    margin-top: @cs-gutter + @cs-card-border-width + @cs-console-btns-top;
+    margin-right: @cs-gutter + @cs-card-border-width;
+}
+.console > .hbox > .btn_console,
+.console > .hbox > .console_close_btn {
+    box-sizing: border-box;
+    width: 22px !important;
+    height: 22px !important;
+    margin: 0 0 0 @cs-space-2 !important;
+    border: 0;
+    border-radius: @cs-radius-control;
+    box-shadow: none;
+    background: none;
+    color: @cs-fg-muted;
+}
+.console > .hbox > .btn_consoleOver,
+.console > .hbox > .btn_consoleDown,
+.console > .hbox > .console_close_btn:hover {
+    border: 0;
+    box-shadow: none;
+    background: @cs-toolbar-hover-bg;
+    color: @cs-fg;
+}
+/* maximised: the button shows the restore glyph, not a pressed state */
+.console > .hbox > .btn_consoleChecked {
+    background: none;
+}
+.console > .hbox > .btn_consoleChecked.btn_consoleOver {
+    background: @cs-toolbar-hover-bg;
+}
+/* glyphs instead of the sprites */
+.console > .hbox > .btn_console div {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    .cs-mask(@cs-icon-maximize, 16px);
+}
+.console > .hbox > .btn_consoleChecked div {
+    -webkit-mask-image: @cs-icon-restore;
+    mask-image: @cs-icon-restore;
+}
+.console > .hbox > .console_close_btn:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    .cs-mask(@cs-icon-close, 16px);
+}

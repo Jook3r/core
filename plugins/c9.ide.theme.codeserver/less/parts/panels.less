@@ -1,0 +1,209 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/panels.less */
+/*
+ * code-server skins: side panel bar, right panels, debugger, preferences, output
+ *
+ * Panel buttons use the Jett icon glyphs (icons.less). Debugger resume pulse:
+ * fadeinout keyframes in animations.less.
+ *
+ * Panel buttons (activity bars): Jett's icon font and its soft "chip" that
+ * scales in behind the icon, shaped like VS Code's Modern UI activity bar:
+ * a 28px square with the control radius, list.inactiveSelectionBackground
+ * when active and list.hoverBackground on hover. The columns themselves sit
+ * on the window background without an edge line (@panel-bar-border).
+ * The buttons and their bar are rotated by the panels skin; the chip is a
+ * square, so the rotation does not matter.
+ */
+
+@cs-chip: 28px;
+
+.panelsbutton.workspace,
+.panelsbutton.navigate,
+.panelsbutton.commands,
+.panelsbutton.changes,
+.panelsbutton.outline,
+.panelsbutton.debugger,
+.panelsbutton.collab {
+    position: relative;
+    border-radius: 0;
+    color: @cs-fg-muted;
+    transition: color @cs-duration-fast linear;
+}
+.panelsbutton.workspace:hover,
+.panelsbutton.navigate:hover,
+.panelsbutton.commands:hover,
+.panelsbutton.changes:hover,
+.panelsbutton.outline:hover,
+.panelsbutton.debugger:hover,
+.panelsbutton.collab:hover {
+    color: @cs-fg;
+}
+
+/* Same box in every state: the base skin shifts the active button by its
+   1px borders and negative margins, which moved the icon. */
+.panelsbuttonDown,
+.panelsbuttonDown:hover,
+.right .panelsbuttonDown,
+.right .panelsbuttonDown:hover {
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
+    margin-left: -1px;
+    margin-right: 2px;
+    margin-top: -1px;
+    padding-bottom: 6px;
+    height: 19px;
+    vertical-align: baseline;
+    color: @cs-list-active-fg;
+}
+.right .panelsbuttonDown,
+.right .panelsbuttonDown:hover {
+    margin-top: 0;
+}
+
+/* the chip */
+.panelsbutton.panelsbuttonBool:before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: @cs-chip;
+    height: @cs-chip;
+    margin: (-@cs-chip / 2) 0 0 (-@cs-chip / 2);
+    padding: 0;
+    box-sizing: border-box;
+    border-radius: @cs-radius-control;
+    background: @cs-list-hover-bg;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: transform @cs-duration @cs-ease, opacity @cs-duration @cs-ease;
+}
+.panelsbutton.panelsbuttonBool:hover:before {
+    opacity: 1;
+    transform: scale(1);
+}
+.panelsbutton.panelsbuttonDown:before,
+.panelsbutton.panelsbuttonDown:hover:before {
+    opacity: 1;
+    transform: scale(1);
+    background: @cs-list-inactive-bg;
+}
+
+/* ---- Preferences navigation (sentence case, rounded rows) ---------------- */
+
+.bar-preferences .navigation .level1 > a {
+    margin: 0 @cs-space-8;
+    padding: 6px 10px 6px 26px;
+    border-radius: @cs-radius-control;
+    font-size: @cs-font-size;
+    font-weight: @cs-font-weight-heading;
+    text-transform: none;
+    color: @cs-fg;
+}
+.bar-preferences .navigation .level1 > a:after,
+.bar-preferences .navigation .level1.active > a:after {
+    left: 6px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    opacity: 1;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-chevron-right, 14px);
+}
+.bar-preferences .navigation .level1.active > a:after {
+    -webkit-mask-image: @cs-icon-chevron-down;
+    mask-image: @cs-icon-chevron-down;
+}
+.bar-preferences .navigation .level1 > a:hover {
+    background: @cs-list-hover-bg;
+}
+.bar-preferences .navigation .level1.active,
+.bar-preferences .navigation .level1.active > blockquote {
+    background: transparent;
+}
+.bar-preferences .navigation .level1.active > a {
+    background: @cs-list-inactive-bg;
+    color: @cs-list-active-fg;
+}
+.bar-preferences .navigation .level2 > span {
+    text-transform: none;
+    font-size: @cs-font-size-small;
+    font-weight: @cs-font-weight-heading;
+    color: @cs-fg-muted;
+}
+.bar-preferences .navigation .level3 a {
+    border-radius: @cs-radius-control;
+}
+
+/* Preferences tables (run configurations, env, keybindings): flat-dark drops
+   their border (.has_apf .bar-preferences .blackdg { border: 0 }); keep the
+   rounded box in both variants */
+.has_apf .bar-preferences .blackdg {
+    border: 1px solid @preferences-datagrid-border;
+}
+.has_apf .bar-preferences .blackdgFocus {
+    border-color: @preferences-datagrid-focus-border;
+}
+
+/* ---- Other ALL-CAPS headers ---------------------------------------------- */
+
+.ace_tree .heading {
+    font-variant: normal;
+}
+body .runner-form-header,
+.coverage-btn .title {
+    text-transform: none;
+}
+
+/* ---- Preferences page headings: VS Code's 18px semibold, glyph gear ------ */
+
+.prefpanel h1 {
+    font-size: 18px;
+    font-weight: @cs-font-weight-heading;
+    color: @cs-fg;
+}
+.prefpanel h1:after {
+    left: 12px;
+    top: 10px;
+    width: 20px;
+    height: 20px;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-gear, 20px);
+}
+
+/* ---- Panel header buttons (the tree's settings gear) --------------------- */
+
+.panel-bar .header-btn.panel-settings,
+.panel-bar .header-btn.panel-settings:hover,
+.panel-bar .header-btn.panel-settings.header-btnDown {
+    width: 22px;
+    height: 22px !important; /* base: 16px !important */
+    top: 11px;
+    right: @cs-space-8;
+    border-radius: @cs-radius-control;
+    background: none;
+    color: @cs-fg-muted;
+}
+.panel-bar .header-btn.panel-settings:hover,
+.panel-bar .header-btn.panel-settings.header-btnDown {
+    background: @cs-toolbar-hover-bg;
+    color: @cs-fg;
+}
+.panel-bar .header-btn.panel-settings:before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 16px;
+    height: 16px;
+    .cs-mask(@cs-icon-gear, 16px);
+}
+
+/* ---- Debugger: bottom bar (Output / Immediate) --------------------------- */
+/* its buttons draw a bottom line that ran just above the card's bottom
+   border; the enabled item is already marked by its colour */
+.toolbar-top.bottom .c9-menu-btn {
+    border-bottom: 0;
+}

@@ -88,20 +88,9 @@
     }
 }
 
-@font-face {
-    font-family: 'c9';
-    src: url('plugins/c9.ide.theme.jett/fonts/c9.eot?zd96sh');
-    src: url('plugins/c9.ide.theme.jett/fonts/c9.eot?zd96sh#iefix') format('embedded-opentype'), url('plugins/c9.ide.theme.jett/fonts/c9.ttf?zd96sh') format('truetype'), url('plugins/c9.ide.theme.jett/fonts/c9.woff?zd96sh') format('woff');
-    font-weight: normal;
-    font-style: normal;
-}
 
+/* Icons (the icon font and file icons are in icons.less) */
 
-/* Icons */
-
-.filetree .tree-row .toggler,
-.filetree-icon.folder,
-.filetree-icon:before,
 .c9-menu-btn.c9btn:before,
 .disconnectlabel div:before,
 .errorlabel div:before,
@@ -114,8 +103,6 @@
 .checkbox,
 .btn-preview-choice:before,
 .btn-preview-choice span:before,
-.frame .buttons div.min,
-.ace_tree .toggler,
 .bar-preferences .navigation .level1>a:after,
 .prefpanel h1:after,
 .header-btn:before,
@@ -137,28 +124,6 @@ span.chattime:before {
     -moz-osx-font-smoothing: grayscale;
 }
 
-
-/* Tree min arrows */
-
-.frame .buttons div.min:before,
-.ace_tree .toggler:before {
-    /* Arrow open */
-    content: '\f05b';
-    font-size: 9px;
-    line-height: 12px;
-    position: relative;
-}
-
-.frame .buttons div.min:before,
-.memberstree.ace_tree .toggler.open:before {
-    top: -2px;
-}
-
-.memberstree.ace_tree .toggler:before,
-.outline.ace_tree .toggler:before {
-    top: -1px;
-}
-
 .memberstree .tree-row {
     line-height: 18px;
 }
@@ -174,26 +139,6 @@ span.chattime:before {
 .debugcontainer .blackdg .selected,
 .blackdgDisabled .selected {
     color: rgba(255, 255, 255, 0.7);
-}
-
-.frame .buttons div.min,
-.ace_tree .toggler {
-    text-align: center;
-    cursor: pointer;
-}
-
-.ace_tree .toggler {
-    line-height: 7px;
-}
-
-.frame.frameMin .buttons div.min:before,
-.ace_tree .toggler.closed:before {
-    /* Arrow closed */
-    content: '\f05a';
-}
-
-.ace_tree .toggler.empty:before {
-    content: '';
 }
 
 .frame .title span {
@@ -308,242 +253,6 @@ div.find-and-replace .cbcontainerChecked div.checkbox:before {
 }
 
 
-/* Tabs icon */
-
-.sessiontab_title .filetree-icon:before {
-    position: relative;
-    top: 3px;
-    padding-right: 3px;
-}
-
-
-/* File icons begin */
-
-.filetree-icon {
-    background-image: none !important;
-}
-
-.filetree-icon:before {
-    content: "\e907";
-}
-
-.filetree-icon.preferences:before {
-    content: "\f07c";
-}
-
-.filetree-icon.searchresults:before {
-    content: "\e901";
-}
-
-.filetree-icon.terminal:before {
-    content: "\e6a2";
-}
-
-.filetree-icon.css:before,
-.filetree-icon.scss:before,
-.filetree-icon.sass:before,
-.filetree-icon.less:before {
-    color: #71A3B7;
-    content: "\e64a";
-}
-
-.filetree-icon.html:before,
-.filetree-icon.htm:before {
-    color: #D28445;
-    content: "\e636";
-}
-
-.filetree-icon.scala:before {
-    content: "\e637";
-    color: #DE3423;
-}
-
-.filetree-icon.composer:before {
-    content: "\e683";
-}
-
-.filetree-icon.bower:before {
-    content: "\e64d";
-}
-
-.filetree-icon.gulp:before {
-    content: "\e663";
-}
-
-.filetree-icon.grunt:before {
-    content: "\e64c";
-}
-
-.filetree-icon.npm:before {
-    content: "\e61e";
-}
-
-.filetree-icon.go:before {
-    content: "\e624";
-}
-
-.filetree-icon.swift:before {
-    content: "\e655";
-    color: #F05138;
-}
-
-.filetree-icon.groovy:before {
-    color: #6398AA;
-    content: "\e675";
-}
-
-.filetree-icon.sh:before,
-.filetree-icon.makefile:before,
-.filetree-icon.bat:before,
-.filetree-icon.bash:before {
-    color: #BABFC7;
-    content: "\f0c8";
-}
-
-.filetree-icon.xml:before,
-.filetree-icon.cfm:before,
-.filetree-icon.rhtml:before,
-.filetree-icon.smarty:before,
-.filetree-icon.jsp:before,
-.filetree-icon.twig:before {
-    color: #D77676;
-    content: "\f010";
-}
-
-.filetree-icon.php:before,
-.filetree-icon.inc:before,
-.filetree-icon.php5:before {
-    color: #8892BF;
-    content: "\e63d";
-}
-
-.filetree-icon.ejs:before,
-.filetree-icon.sjs:before,
-.filetree-icon.js:before {
-    content: "\e64e";
-}
-
-.filetree-icon.js:before {
-    color: #F6C076;
-}
-
-
-/* Microsoft */
-
-.filetree-icon.vbs:before,
-.filetree-icon.cs:before {
-    content: "\e60c";
-}
-
-.filetree-icon.hs:before {
-    content: "\e677";
-    color: #999999;
-}
-
-.filetree-icon.json:before {
-    color: #F6C076;
-    content: "{}";
-}
-
-.filetree-icon.py:before {
-    color: #F4BF75;
-    content: "\e63c";
-}
-
-.filetree-icon.sql:before,
-.filetree-icon.sqlserver:before,
-.filetree-icon.pgsql:before {
-    content: "\f096";
-}
-
-.filetree-icon.pdf:before {
-    content: "\e908";
-}
-
-.filetree-icon.eot:before,
-.filetree-icon.ttf:before,
-.filetree-icon.woff:before {
-    content: "\e915";
-}
-
-.filetree-icon.dockerfile:before {
-    content: "\e6b0";
-    color: #3498db;
-}
-
-.filetree-icon.pl:before {
-    content: "\e669";
-    color: #4E5D84;
-}
-
-.filetree-icon.zip:before,
-.filetree-icon.tar:before,
-.filetree-icon.gz:before {
-    content: "\f013";
-}
-
-.filetree-icon.clj:before {
-    color: #43D06B;
-    content: "\e66a";
-}
-
-.filetree-icon.ru:before,
-.filetree-icon.erb:before,
-.filetree-icon.rb:before {
-    color: #D14748;
-    content: "\e691";
-}
-
-.filetree-icon.coffee:before {
-    color: #AB7558;
-    content: "\e651";
-}
-
-.filetree-icon.java:before {
-    color: #EA8222;
-    content: "\e638";
-}
-
-.filetree-icon.md:before {
-    color: #A8BB80;
-    content: "\e63e";
-}
-
-.filetree-icon.mysql:before {
-    content: "\e604";
-}
-
-.filetree-icon.jpg:before,
-.filetree-icon.svg:before,
-.filetree-icon.jpeg:before,
-.filetree-icon.png:before,
-.filetree-icon.gif:before,
-.filetree-icon.bmp:before {
-    content: "\f012";
-}
-
-.filetree .tree-row .toggler.open:before {
-    content: "\e90c";
-    font-size: 0.8rem;
-}
-
-.filetree .tree-row .toggler.closed:before {
-    content: "\e90a";
-    font-size: 0.8rem;
-}
-
-.filetree-icon {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    line-height: 18px !important;
-}
-
-.filetree-icon.folder:before {
-    content: "\e90e";
-    opacity: 0.3;
-}
-
 .filetree .tree-row .toggler {
     width: 12px;
     height: 25px;
@@ -554,78 +263,8 @@ div.find-and-replace .cbcontainerChecked div.checkbox:before {
     line-height: 27px;
 }
 
-.filetree .loading .filetree-icon:before {
-    content: "\e913";
-    animation: flash 2s ease infinite;
-}
-
-div.navigate-list span.filetree-icon:before {
-    padding-right: 5px;
-}
-
 div.navigate-list small {
     color: @base;
-}
-
-
-/* Panel Icons */
-
-.panelsbutton.workspace,
-.panelsbutton.navigate,
-.panelsbutton.commands,
-.panelsbutton.changes,
-.panelsbutton.outline,
-.panelsbutton.debugger,
-.panelsbutton.collab {
-    font-size: 0px !important;
-    transform: rotate(-90deg);
-    font-family: 'c9' !important;
-    speak: none;
-    font-style: normal;
-    font-weight: normal;
-    font-variant: normal;
-    font-smoothing: false;
-    border-radius: 50%;
-    width: 15px;
-    text-align: center;
-}
-
-.panelsbutton.workspace:after,
-.panelsbutton.navigate:after,
-.panelsbutton.commands:after,
-.panelsbutton.changes:after,
-.panelsbutton.outline:after,
-.panelsbutton.debugger:after,
-.panelsbutton.collab:after {
-    font-size: 15px;
-}
-
-.panelsbutton.workspace:after {
-    content: "\f017";
-}
-
-.panelsbutton.navigate:after {
-    content: "\f02e";
-}
-
-.panelsbutton.commands:after {
-    content: "\e909";
-}
-
-.panelsbutton.changes:after {
-    content: "\e602";
-}
-
-.panelsbutton.outline:after {
-    content: "\e90f";
-}
-
-.panelsbutton.debugger:after {
-    content: "\e910";
-}
-
-.panelsbutton.collab:after {
-    content: "\f04f";
 }
 
 

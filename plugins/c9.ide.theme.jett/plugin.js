@@ -2,7 +2,7 @@ define(function(require, exports, module) {
 
     main.consumes = [
         "Plugin", "layout", "app",
-        "util", "tabManager", "ace",
+        "util", "tabManager", "ace", "settings"
     ];
     main.provides = ["theme.jett"];
     return main;
@@ -20,6 +20,7 @@ define(function(require, exports, module) {
         var layout = imports.layout;
         var tabs = imports.tabManager;
         var ace = imports.ace;
+        var settings = imports.settings;
         var services = imports.app.services;
         
         var escapeHTML = require("ace/lib/lang").escapeHTML;
@@ -30,6 +31,15 @@ define(function(require, exports, module) {
         var emit = plugin.getEmitter();
 
         var themeEnabled = false;
+        // "jett" for jett-dark, "code-server" for the code-server skins,
+        // which reuse the file icons and the active tab colouring
+        var mode = null;
+        
+        function getMode(theme) {
+            if (theme == "jett-dark") return "jett";
+            if (/^code-server-/.test(theme || "")) return "code-server";
+            return null;
+        }
 
         /**
          * Called when plugin is loaded
@@ -57,8 +67,9 @@ define(function(require, exports, module) {
             });
 
             layout.on("themeChange", function(e) {
-                if (e.theme == "jett-dark")
-                    enableJett(true);
+                var newMode = getMode(e.theme);
+                if (newMode)
+                    enableJett(true, newMode);
                 else if (themeEnabled)
                     enableJett(false);
             });
@@ -74,12 +85,15 @@ define(function(require, exports, module) {
          * @param {} enabled If true then jett theme is on
          * @return
          */
-        function enableJett(enabled) {
+        function enableJett(enabled, newMode) {
+            var wasEnabled = themeEnabled;
+            var oldMode = mode;
             // Update settings
             themeEnabled = enabled;
+            mode = enabled ? newMode || "jett" : null;
             
             // If the jett theme is enabled set some defaults and theme specific prefs
-            if (enabled) {
+            if (enabled && !wasEnabled) {
                 // Anytime the user switches tabs or themes make sure we have the correct tab colors
                 ace.on("themeChange", styleTabs, plugin);
                 tabs.on("focusSync", styleTabs, plugin);
@@ -87,10 +101,32 @@ define(function(require, exports, module) {
                 tabs.on("tabCreate", onTabCreate, plugin);
                 enableFileIcons();
             }
-            else {
+            else if (!enabled) {
                 ace.off("themeChange", styleTabs, plugin);
                 tabs.off("focusSync", styleTabs, plugin);
                 tabs.off("tabCreate", onTabCreate, plugin);
+            }
+            
+            // The code-server skins also follow the terminal and output
+            // colours and tabs activated without a focus change
+            if (mode == "code-server" && oldMode != "code-server") {
+                tabs.on("tabAfterActivate", styleTabs, plugin);
+                settings.on("user/terminal", styleTabs, plugin);
+                settings.on("user/output", styleTabs, plugin);
+                // once more after the event: a new tab's editor (e.g. the
+                // output tab opened by Run) and an editor's theme class may
+                // only be in place after the other listeners ran
+                tabs.on("tabAfterActivate", styleTabsSoon, plugin);
+                tabs.on("tabCreate", styleTabsSoon, plugin);
+                ace.on("themeChange", styleTabsSoon, plugin);
+            }
+            else if (mode != "code-server" && oldMode == "code-server") {
+                tabs.off("tabAfterActivate", styleTabs, plugin);
+                settings.off("user/terminal", styleTabs, plugin);
+                settings.off("user/output", styleTabs, plugin);
+                tabs.off("tabAfterActivate", styleTabsSoon, plugin);
+                tabs.off("tabCreate", styleTabsSoon, plugin);
+                ace.off("themeChange", styleTabsSoon, plugin);
             }
             styleTabs();
             // Refresh file icons
@@ -209,7 +245,12 @@ define(function(require, exports, module) {
                 // Add a file icon to the tab if jett is enabled
                 pane.getTabs().forEach(function(tab) {
                     setTabIcon(tab);
-                    if (themeEnabled && tab.isActive()) {
+                    if (mode == "code-server" || tab.aml.$button.style.getPropertyValue("--cs-tab-bg"))
+                        styleCodeServerTab(tab);
+                    if (mode == "code-server") {
+                        // colours come from CSS, through --cs-tab-bg/--cs-tab-fg
+                    }
+                    else if (themeEnabled && tab.isActive()) {
                         if (ace.theme && ace.theme.bg && ace.theme.fg) {
                             // Color tabs based on their tab.aml.type
                             var colorHash = {
@@ -231,6 +272,85 @@ define(function(require, exports, module) {
                     
                 });
             });
+        }
+
+        var styleTimer;
+        function styleTabsSoon() {
+            clearTimeout(styleTimer);
+            styleTimer = setTimeout(function() {
+                if (mode == "code-server")
+                    styleTabs();
+            }, 50);
+        }
+
+        /**
+         * code-server skins: the active tab is filled with the colour of its
+         * body. Instead of inline colours (which CSS could not override) the
+         * tab button gets the custom properties --cs-tab-bg and --cs-tab-fg,
+         * used by the skin's tab rules (fill and concave shoulders).
+         * @method styleCodeServerTab
+         * @param {Tab} tab
+         */
+        function styleCodeServerTab(tab) {
+            var style = tab.aml.$button.style;
+            var colors = mode == "code-server" && tab.isActive() && getBodyColors(tab);
+            if (mode == "code-server") {
+                // drop the inline colours jett-dark may have left behind
+                style.backgroundColor = "";
+                style.color = "";
+            }
+            if (colors && colors.bg) {
+                style.setProperty("--cs-tab-bg", colors.bg);
+                if (colors.fg)
+                    style.setProperty("--cs-tab-fg", colors.fg);
+                else
+                    style.removeProperty("--cs-tab-fg");
+            }
+            else {
+                style.removeProperty("--cs-tab-bg");
+                style.removeProperty("--cs-tab-fg");
+            }
+        }
+        
+        var aceTextColors = {};
+        function getBodyColors(tab) {
+            var type = tab.aml.type;
+            if (type == "editor::ace" || type == "editor::immediate") {
+                var theme = ace.theme;
+                if (!theme || !theme.bg) return null;
+                if (!aceTextColors[theme.cssClass]) {
+                    // ace.theme.fg is the gutter colour; read the text colour
+                    var div = document.createElement("div");
+                    div.className = theme.cssClass;
+                    div.style.display = "none";
+                    document.body.appendChild(div);
+                    aceTextColors[theme.cssClass] = getComputedStyle(div).color;
+                    document.body.removeChild(div);
+                }
+                // ace.theme.bg is the gutter colour too: use the text area's
+                var bg = theme.editorBg || theme.bg;
+                // the Immediate window may sit on another colour (the
+                // code-server editor themes put it on the panel colour):
+                // take what its editor shows
+                var el = type == "editor::immediate" && tab.editor
+                    && tab.editor.ace && tab.editor.ace.container;
+                var shown = el && getComputedStyle(el).backgroundColor;
+                if (shown && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(shown))
+                    bg = shown;
+                return { bg: bg, fg: aceTextColors[theme.cssClass] };
+            }
+            if (type == "editor::terminal")
+                return {
+                    bg: settings.get("user/terminal/@backgroundColor"),
+                    fg: settings.get("user/terminal/@foregroundColor")
+                };
+            if (type == "editor::output")
+                return {
+                    bg: settings.get("user/output/@backgroundColor"),
+                    fg: settings.get("user/output/@foregroundColor")
+                };
+            // other editors (preview, welcome, image viewer, ...) set their own
+            return { bg: tab.backgroundColor };
         }
 
         /**
@@ -258,6 +378,7 @@ define(function(require, exports, module) {
         plugin.on("unload", function() {
             enableJett(false);
             themeEnabled = false;
+            mode = null;
         });
 
         /***** Register and define API *****/

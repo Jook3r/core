@@ -1,0 +1,88 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/menus.less */
+/*
+ * code-server skins: menus, context menus, submenus
+ *
+ * Outer radius (@cs-radius-outer), @cs-shadow-lg, @cs-menu-* colours.
+ * Items: @cs-radius-control rows inside a 4px inset.
+ * Check/radio/arrow glyphs come from GIF sprites (@menu-item-*-background).
+ *
+ * The GIF check, radio and submenu-arrow sprites are replaced by masked
+ * glyphs in the text colour, so they follow the palette in both variants.
+ * The radius, border, shadow and colours of the menu box itself come from
+ * the @menu-* variables (palette.less).
+ */
+
+@cs-menu-item-height: 16px; /* + 2 x 4px padding = 24px rows */
+
+.c9menu {
+    padding: @cs-space-4 0;
+    margin-top: @cs-space-2;
+}
+.c9menu > div.menu_item {
+    height: @cs-menu-item-height;
+    margin: 0 @cs-space-4;
+    padding: 4px 24px 4px 28px;
+    line-height: @cs-menu-item-height;
+    border-radius: @cs-radius-control;
+}
+.c9menu > div.menu_item.hover {
+    background-color: @cs-menu-selection-bg;
+    color: @cs-menu-selection-fg;
+}
+.c9menu > div.menu_item.disabled {
+    color: @cs-fg-disabled;
+}
+/* keyboard shortcut */
+.c9menu > div.menu_item > span {
+    right: 12px;
+    padding-left: @cs-space-24;
+    color: @cs-fg-muted;
+}
+.c9menu > div.menu_item.disabled > span {
+    color: @cs-fg-disabled;
+}
+.c9menu > div.menu_divider {
+    margin: @cs-space-4 @cs-space-8;
+    border-top: 1px solid @cs-menu-separator;
+    border-bottom: 0;
+}
+
+/* submenu chevron */
+.c9menu > div.submenu > span,
+.c9menu > div.submenu.hover > span {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    right: 6px;
+    padding: 0;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-chevron-right, 14px);
+}
+.c9menu > div.submenu.hover > span {
+    color: @cs-fg;
+}
+
+/* check and radio marks */
+.c9menu > div.menu_item > u {
+    left: 8px;
+    margin-top: 0;
+}
+.c9menu > div.menu_item.checked > u,
+.c9menu > div.menu_item.checked:hover > u,
+.c9menu > div.menu_item.checked.disabled > u {
+    .cs-mask(@cs-icon-check, 14px);
+}
+.c9menu > div.menu_item.selected > u,
+.c9menu > div.menu_item.selected:hover > u,
+.c9menu > div.menu_item.selected.disabled > u {
+    .cs-mask(@cs-icon-circle, 16px);
+}
+.c9menu > div.menu_item.disabled > u {
+    opacity: 0.5;
+}
+
+/* the update item */
+.c9menu > div.menu_item.update {
+    background-color: @cs-menu-selection-bg;
+    font-weight: @cs-font-weight-heading;
+}

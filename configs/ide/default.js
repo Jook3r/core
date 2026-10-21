@@ -509,6 +509,7 @@ module.exports = function(options) {
         "plugins/c9.ide.theme.flat/flat-light",
         "plugins/c9.ide.theme.flat/flat-dark",
         "plugins/c9.ide.theme.jett/plugin",
+        "plugins/c9.ide.theme.codeserver/plugin",
 
         {
             packagePath: "plugins/c9.ide.layout.classic/preload",

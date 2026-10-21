@@ -226,7 +226,11 @@ define(function(require, exports, module) {
                 "Click Yes to change the theme or No to keep the current theme.",
                 function() { // yes
                     ignoreTheme = true;
-                    var theme = { "dark": "dark", "light": "flat-light" }[kind];
+                    var current = settings.get("user/general/@skin") || "";
+                    // the code-server skins switch to their own other variant
+                    var theme = /^code-server-/.test(current)
+                        ? "code-server-" + kind
+                        : { "dark": "dark", "light": "flat-light" }[kind];
                     settings.set("user/general/@skin", theme);
                     updateTheme(false, type);
                     ignoreTheme = false;

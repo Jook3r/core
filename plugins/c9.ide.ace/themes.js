@@ -118,6 +118,24 @@ define(function(require, exports, module) {
                 },
                 {
                     type: "custom",
+                    title: "code-server Theme",
+                    position: 1,
+                    node: new ui.hsplitbox({
+                        height: 49,
+                        edge: "10 10 10 10",
+                        style: "white-space:nowrap",
+                        childNodes: [
+                            new ui.label({ 
+                                width: 150, 
+                                caption: "code-server Theme:", 
+                                style: "padding-top:5px" 
+                            }),
+                            themeContainers["code-server"] = new ui.bar({})
+                        ]
+                    })
+                },
+                {
+                    type: "custom",
                     title: "Classic Theme",
                     position: 1,
                     node: new ui.hsplitbox({
@@ -183,6 +201,7 @@ define(function(require, exports, module) {
             var setTheme = function(e) {
                 [].concat(
                     themeContainers.flat.childNodes,
+                    themeContainers["code-server"].childNodes,
                     themeContainers.classic.childNodes
                 ).some(function(rb) {
                     if (rb.value == e.value) {
@@ -217,16 +236,22 @@ define(function(require, exports, module) {
         
         function drawThemeSwatches() {
             var themes = layout.listThemes();
-            themeContainers.classic.childNodes.forEach(function(n) {
+            // (copies: remove() takes the node out of the array iterated)
+            themeContainers.classic.childNodes.slice().forEach(function(n) {
                 n.remove();
             });
-            themeContainers.flat.childNodes.forEach(function(n) {
+            themeContainers.flat.childNodes.slice().forEach(function(n) {
+                n.remove();
+            });
+            themeContainers["code-server"].childNodes.slice().forEach(function(n) {
                 n.remove();
             });
             
             themes.forEach(function(theme) {
                 if (theme.hidden) return;
-                var container = theme.group == "flat" ? themeContainers.flat : themeContainers.classic;
+                var container = theme.group == "flat" ? themeContainers.flat
+                    : theme.group == "code-server" ? themeContainers["code-server"]
+                    : themeContainers.classic;
                 container.appendChild(
                     new ui.radiobutton({
                         group: themeContainers.group, 

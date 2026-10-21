@@ -1,0 +1,99 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/misc.less */
+/*
+ * code-server skins: everything else
+ *
+ * Small fixes that do not belong to another area.
+ */
+
+/* ---- Tooltips and hovers (outer radius) --------------------------------- */
+
+.tooltipLabel {
+    height: 18px;
+    padding: 1px 8px 0;
+    line-height: 18px;
+    border-bottom-width: 1px;
+    border-radius: @cs-radius-outer;
+    font-size: @cs-font-size-label;
+    box-shadow: @cs-shadow-md;
+}
+.ace_tooltip {
+    border-radius: @cs-radius-outer;
+    box-shadow: @cs-shadow-md;
+}
+
+/* ---- Completion popup, its doc box and language tooltips (outer radius) -- */
+
+.code_complete_text.ace_autocomplete,
+.code_complete_text.dark.ace_autocomplete,
+.code_complete_doc_text,
+.code_complete_doc_text.dark {
+    border-radius: @cs-radius-outer;
+    overflow: hidden;
+}
+.code_complete_text .ace_line .meta {
+    color: @cs-fg-muted;
+    opacity: 1;
+}
+/* Rows inset 4px with the control radius, like the other lists. Cloud9 paints
+   the selected text line, which is as wide as the text layer (1e6px), so the
+   selection is drawn by the popup's full-line marker instead (ace_active-line,
+   positioned inline with left/right 0), and hover by its hover marker. */
+.code_complete_text .ace_line.ace_selected,
+.code_complete_text.dark .ace_line.ace_selected {
+    background: transparent;
+}
+.code_complete_text .ace_marker-layer .ace_active-line,
+.code_complete_text .ace_marker-layer .ace_line-hover {
+    left: @cs-space-4 !important;
+    right: @cs-space-4 !important;
+    border-radius: @cs-radius-control;
+}
+.code_complete_text .ace_marker-layer .ace_active-line {
+    background: @complete-selected-background;
+}
+/* the text clears the inset highlight's left edge */
+.code_complete_text .ace_text-layer {
+    padding-left: @cs-space-4;
+}
+.code_complete_text.dark .ace_marker-layer .ace_active-line {
+    background: @complete-dark-selected-background;
+}
+.language_tooltip,
+.language_tooltip.dark {
+    padding: 4px 8px;
+    border-radius: @cs-radius-outer;
+}
+
+/* ---- File icons ---------------------------------------------------------- */
+/* The Dockerfile whale is drawn with hairlines: at 14px its antialiased
+   strokes never reach the icon colour (about 3:1 on the tree). A thin text
+   stroke in the same colour gives it the weight of the other icons. */
+.filetree-icon.dockerfile:before {
+    -webkit-text-stroke: 0.5px currentColor;
+}
+
+/* ---- Terminal cursor ----------------------------------------------------- */
+/* The cursor is the reverse-video cell. VS Code 2026 terminalCursor colours,
+   picked by the terminal's brightness (terminal.js adds .flat-dark to the
+   container on a dark terminal background), so a custom terminal colour
+   still gets a readable cursor. */
+
+@cs-terminal-cursor-on-light: #202020; // 2026 Light terminalCursor.foreground
+@cs-terminal-cursor-on-dark: #BFBFBF;  // 2026 Dark terminalCursor.foreground
+
+.c9terminalFocus .c9terminalcontainer .terminal .reverse-video {
+    background-color: @cs-terminal-cursor-on-light;
+    color: #FFFFFF;                        // terminalCursor.background
+}
+.c9terminalFocus .c9terminalcontainer.dark .terminal .reverse-video,
+.c9terminalFocus .c9terminalcontainer.flat-dark .terminal .reverse-video {
+    background-color: @cs-terminal-cursor-on-dark;
+    color: #191A1B;                        // terminalCursor.background
+}
+.c9terminal .c9terminalcontainer .terminal .reverse-video {
+    outline-color: fade(@cs-terminal-cursor-on-light, 50%);
+}
+.c9terminal .c9terminalcontainer.dark .terminal .reverse-video,
+.c9terminal .c9terminalcontainer.flat-dark .terminal .reverse-video {
+    outline-color: fade(@cs-terminal-cursor-on-dark, 50%);
+}

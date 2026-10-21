@@ -1,0 +1,119 @@
+/*
+ * code-server skins: the Jett animations we keep (subtle only).
+ *
+ * Keyframes are copied from c9.ide.theme.jett/less/overrides.less
+ * (MIT, Copyright (c) 2018 Michael Jett). icons.less needs "flash".
+ *
+ * Kept: menu underline, sonar (save), pulse (dialogs, error bar),
+ * fadeinout (debugger resume). Skins wrap usage in the reduced-motion query.
+ * The save sonar and the debugger pulse are attached by the parts that style
+ * those elements (tabs.less, panels.less) using these keyframes.
+ */
+
+@keyframes fadeinout {
+    0%, 100% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes sonar {
+    from {
+        transform: scale(0);
+        opacity: 1;
+    }
+    to {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+
+@keyframes flash {
+    0%, 100%, 50% {
+        opacity: 1
+    }
+    25%,
+    75% {
+        opacity: 0
+    }
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg)
+    }
+    100% {
+        transform: rotate(359deg)
+    }
+}
+
+@keyframes pulseIn {
+    0%, 20%, 40%, 60%, 80%, 100% {
+        transition-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+    }
+    0% {
+        transform: scale3d(1, 1, 1);
+    }
+    20% {
+        transform: scale3d(1, 1, 1);
+    }
+    40% {
+        transform: scale3d(0.97, 0.97, 0.97);
+    }
+    60% {
+        transform: scale3d(1, 1, 1);
+    }
+    80% {
+        transform: scale3d(0.97, 0.97, 0.97);
+    }
+    100% {
+        transform: scale3d(1, 1, 1);
+    }
+}
+
+@keyframes pulseOut {
+    20% {
+        transform: scale3d(0.9, 0.9, 0.9);
+    }
+    50%,
+    55% {
+        opacity: 1;
+        transform: scale3d(1.1, 1.1, 1.1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale3d(0.3, 0.3, 0.3);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* Menu bar: underline grows under the hovered menu */
+    .c9-menu-bar .c9-menu-btn:after {
+        content: "";
+        position: absolute;
+        width: 100%;
+        height: 1px;
+        bottom: 0;
+        left: 0;
+        background-color: @cs-fg;
+        visibility: hidden;
+        transform: scaleX(0);
+        transition: all 0.3s ease-in-out 0s;
+    }
+    .c9-menu-bar .c9-menu-btnOver:after {
+        visibility: visible;
+        transform: scaleX(1);
+    }
+
+    /* Dialogs and the error / disconnect bar pulse once when shown */
+    .bk-window.relative,
+    .bk-window2.relative {
+        animation: pulseIn 0.4s ease;
+    }
+    .disconnectlabel.anim,
+    .errorlabel.anim {
+        animation: pulseIn 0.5s ease;
+    }
+}

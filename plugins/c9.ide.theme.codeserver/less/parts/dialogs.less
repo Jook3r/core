@@ -1,0 +1,143 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/dialogs.less */
+/*
+ * code-server skins: dialogs, error bar, notifications
+ *
+ * Dialogs: @cs-radius-outer, @cs-shadow-xl. Error bar and notification banner
+ * are positioned/sized by JS (dialog.common/error.js, notification.js):
+ * restyle them in place.
+ *
+ * Dialogs take the radius, shadow and colours from the @dialog-* variables
+ * (palette.less); here they get the widget border, a 14px semibold title, a
+ * glyph close button and a footer on the same surface.
+ * The error bar stays where error.js puts it (centred over the editor, sliding
+ * down from the top edge) but floats 8px below that edge as a VS Code
+ * notification toast: widget surface, border, lg shadow, 8px radius and a
+ * coloured status glyph.
+ */
+
+@cs-icon-status-error: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='black' stroke-width='1.3'/><path d='M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4' stroke='black' stroke-width='1.3' stroke-linecap='round'/></svg>");
+@cs-icon-status-info: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='black' stroke-width='1.3'/><path d='M8 7.2v4' stroke='black' stroke-width='1.4' stroke-linecap='round'/><circle cx='8' cy='5' r='0.9' fill='black'/></svg>");
+@cs-icon-status-warning: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 1.8l6.4 11.4H1.6z' fill='none' stroke='black' stroke-width='1.3' stroke-linejoin='round'/><path d='M8 6.2v3.4' stroke='black' stroke-width='1.4' stroke-linecap='round'/><circle cx='8' cy='11.4' r='0.9' fill='black'/></svg>");
+
+/* ---- Dialogs ------------------------------------------------------------- */
+
+.bk-window {
+    border: 1px solid @cs-widget-border;
+    box-sizing: border-box;
+}
+.bk-window .bk-header {
+    border-bottom-color: @cs-widget-border;
+    font-size: 14px;
+    font-weight: @cs-font-weight-heading;
+    color: @cs-fg;
+}
+.bk-window .bk-header .buttons .close,
+.bk-window .bk-header .buttons .close.hover,
+.bk-window .bk-header .buttons .close.down {
+    width: 22px;
+    height: 22px;
+    margin: -4px -4px 0 0;
+    border-radius: @cs-radius-control;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-close, 16px);
+}
+.bk-window .bk-header .buttons .close.hover,
+.bk-window .bk-header .buttons .close.down {
+    color: @cs-fg;
+}
+.bk-window .bk-win-footer {
+    border-top: 0;
+}
+.bk-window .ace_tree,
+.bk-window .filetree {
+    border-radius: @cs-radius-control;
+}
+/* the box around the Save As / Open tree: an input-like well, the same in
+   both variants (flat-dark fills it with its own grey and no border) */
+.dgLikeContaier {
+    border: 1px solid @cs-well-border;
+    border-radius: @cs-radius-control;
+    background-color: @cs-input-bg;
+    box-shadow: none;
+}
+
+/* ---- Error, info and disconnect bars ------------------------------------- */
+
+.errorlabel div,
+.errorlabel.fade-in div,
+.infolabel.errorlabel div,
+.disconnectlabel div {
+    /* error.js places the bar at the window top: float it there, clear of
+       the editor card below (a single-line toast ends 6px above it) */
+    margin-top: @cs-space-4;
+    padding: 7px 36px 7px 34px;
+    border: 1px solid @cs-widget-border;
+    border-radius: @cs-radius-outer;
+    background: @cs-widget-bg;
+    box-shadow: @cs-shadow-lg;
+    color: @cs-fg;
+    font-family: @cs-font-family;
+    font-size: @cs-font-size;
+    line-height: 18px;
+    text-align: left;
+}
+.errorlabel div:before,
+.disconnectlabel div:before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: 8px;
+    width: 16px;
+    height: 16px;
+    color: @cs-error;
+    .cs-mask(@cs-icon-status-error, 16px);
+}
+.infolabel.errorlabel div:before {
+    color: @cs-info;
+    -webkit-mask-image: @cs-icon-status-info;
+    mask-image: @cs-icon-status-info;
+}
+.disconnectlabel div:before {
+    color: @cs-warning;
+    -webkit-mask-image: @cs-icon-status-warning;
+    mask-image: @cs-icon-status-warning;
+}
+.errorlabel div span {
+    border-bottom-color: @cs-error;
+}
+.errorlabel u.close,
+.errorlabel u.close:hover,
+.errorlabel u.close:active,
+.notificationlabel u.close,
+.notificationlabel u.close:hover,
+.notificationlabel u.close:active {
+    width: 20px;
+    height: 20px;
+    top: 6px;
+    right: 8px;
+    border-radius: @cs-radius-control;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-close, 16px);
+}
+.errorlabel u.close:hover,
+.notificationlabel u.close:hover {
+    color: @cs-fg;
+}
+
+/* ---- Notification banner (full width, sized by notification.js) -------- */
+
+.notificationlabel {
+    padding: 7px 40px 7px 12px;
+    border-bottom: 1px solid @cs-widget-border;
+    background: @cs-widget-bg;
+    color: @cs-fg;
+    font-family: @cs-font-family;
+    font-size: @cs-font-size;
+    line-height: 18px;
+}
+.notificationlabel a {
+    color: @cs-link;
+}
+.notificationlabel u.close {
+    top: 6px;
+}

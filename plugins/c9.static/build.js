@@ -113,6 +113,48 @@ function main(options, imports, register) {
         }, callback);
     }
     
+    /**
+     * LESS libraries appended after the plugins' own styles, per skin.
+     * Later files win (LESS variables are lazily evaluated, so the last
+     * definition of a variable is the one used everywhere).
+     * Skins without an entry use themes/default-<color>.less + themes/<color>.less.
+     */
+    var SKIN_LIBS = {
+        "jett-dark": [
+            "plugins/c9.ide.theme.jett/less/icons.less",
+            "plugins/c9.ide.theme.jett/less/overrides.less",
+            "plugins/c9.ide.theme.jett/less/variables.less"
+        ],
+        "code-server-dark": codeServerLibs("dark"),
+        "code-server-light": codeServerLibs("light")
+    };
+    
+    function codeServerLibs(variant) {
+        var cs = "plugins/c9.ide.theme.codeserver/less/";
+        return [
+            // flat base variables and rules
+            "plugins/c9.ide.layout.classic/themes/default-flat-" + variant + ".less",
+            "plugins/c9.ide.layout.classic/themes/flat-" + variant + ".less",
+            // Jett icon font, before the palette so it can recolour the icons
+            "plugins/c9.ide.theme.jett/less/icons.less",
+            // base variables mapped to tokens, then the variant's tokens
+            cs + "palette.less",
+            cs + "palette-" + variant + ".less",
+            cs + "tokens.less",
+            cs + "animations.less",
+            // component rules (@imports parts/*.less)
+            cs + "parts.less"
+        ];
+    }
+    
+    function getSkinLibs(color) {
+        // always return a fresh array: the less compiler replaces its entries
+        return (SKIN_LIBS[color] || [
+            "plugins/c9.ide.layout.classic/themes/default-" + color + ".less",
+            "plugins/c9.ide.layout.classic/themes/" + color + ".less"
+        ]).slice();
+    }
+    
     function buildSkin(config, color, pathConfig, callback) {
         var data = readConfig(config);
         if (data.error) 
@@ -132,15 +174,7 @@ function main(options, imports, register) {
             compileLess: true,
             lessLibs: [
                 "plugins/c9.ide.layout.classic/less/lesshat.less",
-            ].concat(
-                color == "jett-dark" ? [
-                    "plugins/c9.ide.theme.jett/less/overrides.less",
-                    "plugins/c9.ide.theme.jett/less/variables.less"
-                ] : [
-                    "plugins/c9.ide.layout.classic/themes/default-" + color + ".less",
-                    "plugins/c9.ide.layout.classic/themes/" + color + ".less"
-                ]
-            ),
+            ].concat(getSkinLibs(color)),
             staticPrefix: "plugins/c9.ide.layout.classic",
             lessLibCacheKey: color,
             basepath: pathConfig.root,

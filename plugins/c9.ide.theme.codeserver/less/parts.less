@@ -1,0 +1,26 @@
+/*
+ * code-server skins: component rules, one file per area, in cascade order.
+ *
+ * This file is a LESS library listed in c9.static/build.js; the parts are
+ * pulled in with @import, which the build resolves relative to the repo root
+ * (same as themes/flat-dark.less importing flat-light.less). A missing part
+ * fails the build loudly. To add a part, add a line here.
+ *
+ * Inside parts:
+ *  - all base variables, @cs-* tokens and lesshat mixins are available;
+ *  - do NOT use the @{image-path}/@{icon-path}/@{plugin-path} placeholders:
+ *    the build only expands them in top-level libraries, not in imports.
+ *    Write image URLs as "plugins/<plugin>/<path>" instead;
+ *  - start each part with its "@file" comment so build warnings name it.
+ */
+@import "plugins/c9.ide.theme.codeserver/less/parts/cards.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/tabs.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/menubar.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/menus.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/controls.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/tree.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/dialogs.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/scrollbars.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/statusbar.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/panels.less";
+@import "plugins/c9.ide.theme.codeserver/less/parts/misc.less";

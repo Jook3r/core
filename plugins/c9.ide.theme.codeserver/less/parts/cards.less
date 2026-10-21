@@ -1,0 +1,181 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/cards.less */
+/*
+ * code-server skins: floating cards
+ *
+ * Every major area is a card: 8px radius (@cs-radius-card) on ALL FOUR
+ * corners, 1px @cs-card-border, @cs-gutter (4px) to its neighbours and to the
+ * window edges, filled with @cs-card-bg:
+ *  - the side panel area (tree, navigate, commands, changes);
+ *  - each editor pane: tab strip + editor body (split panes are separate cards);
+ *  - the console: tab strip + terminal/output body;
+ *  - the right panels (outline, debugger) when open.
+ * Corners the owner marked: editor card top-left/top-right at the tab strip,
+ * editor bottom-left/bottom-right above the console, console top-left/top-right.
+ * Reference: vscode src/vs/workbench/browser/media/floatingPanels.css.
+ *
+ * How the gutters are made (no JS, no change to the splitbox layout):
+ *  - apf positions every layout box with inline insets; an absolutely
+ *    positioned box with both insets set and an auto size shrinks by its
+ *    margins, so margins are the gutters;
+ *  - each editor/console holder gets half a gutter of padding on every side
+ *    (box-sizing: border-box, so even the console with its inline height
+ *    keeps its size); two neighbouring panes are therefore 2 + 2 = 4px apart,
+ *    centred on the splitter line between them, and the splitter's 5px grab
+ *    strip lies in that gap: dragging still works;
+ *  - .colMain adds the other half on all four sides (window edges, panel
+ *    button columns, side panels); the side panel cards have a full gutter
+ *    on their outer sides and none on the main column's side;
+ *  - the card itself is the pane's .editor_tab (or the .panel-bar): border,
+ *    radius and overflow: hidden, so the tab strip, the editor and the
+ *    terminal are clipped to the rounded corners.
+ */
+
+@cs-half-gutter: (@cs-gutter / 2);
+
+/* The window: the gutters show the window background */
+html,
+body {
+    background-color: @cs-window-bg;
+}
+
+/* ---- Main column: editor panes and console ---------------------------- */
+
+/* Half a gutter on every side: with the holders' half gutter the cards are
+   a full gutter from the window edges, from the panel button columns when
+   a side panel is closed, and (with no gutter on the side panels' inner
+   side) from an open side panel card. */
+.colMain {
+    margin: @cs-half-gutter;
+}
+
+.colMain .basic.codeditorHolder,
+.basic.console.codeditorHolder {
+    box-sizing: border-box;
+    padding: @cs-half-gutter;
+}
+/* Maximised, the console moves out of .colMain to the body and covers the
+   window below a 1px top inset: it keeps a full gutter on every side. */
+body > .basic.console.codeditorHolder {
+    padding: @cs-gutter;
+    background-color: @cs-window-bg;
+}
+
+.colMain .basic.codeditorHolder .editor_tab,
+.basic.console.codeditorHolder > .editor_tab {
+    box-sizing: border-box;
+    border: @cs-card-border-width solid @cs-card-border;
+    border-radius: @cs-radius-card;
+    background-color: @cs-card-bg;
+    overflow: hidden;
+}
+/* the console card's body is the panel colour (VS Code panel.background),
+   the terminal's and the output's default background */
+.basic.console.codeditorHolder > .editor_tab {
+    background-color: @cs-terminal-bg;
+}
+/* the terminal container is height: 100% plus a 2px padding: keep it inside
+   the card instead of overflowing its rounded bottom corners */
+.console .c9terminalcontainer,
+.colMain .c9terminalcontainer {
+    box-sizing: border-box;
+}
+
+/* An empty pane (no tabs) keeps the same card shape */
+.colMain .basic.codeditorHolder .editor_tab.empty {
+    border: @cs-card-border-width solid @cs-card-border;
+}
+.colMain .basic.codeditorHolder > .editor_tab.empty {
+    margin: 0;
+}
+
+/* Split panes: with a split the panes move into an h/vsplitbox and become
+   absolutely positioned (inline insets), so the holder's padding no longer
+   insets them. Half a gutter of margin on every side does: two panes are
+   4px apart, centred on the 1px splitter between them, whose grab strip
+   stays in the gap. apf writes an inline 1px margin on the pane before a
+   splitter and an inline height: 100% on the last pane (which would push it
+   past the bottom inset once it has a margin), hence the !important. */
+.colMain .basic.codeditorHolder .hsplitbox > .editor_tab,
+.colMain .basic.codeditorHolder .vsplitbox > .editor_tab {
+    margin: @cs-half-gutter !important;
+    height: auto !important;
+}
+
+/* ---- Side panels (left: tree, navigate, commands, changes; right: outline, debugger) */
+
+.basic.left > .panel-bar,
+.basic.right > .panel-bar {
+    box-sizing: border-box;
+    margin: @cs-gutter;
+    border: @cs-card-border-width solid @cs-card-border;
+    border-radius: @cs-radius-card;
+    background-color: @cs-card-bg;
+    box-shadow: none;
+    overflow: hidden;
+}
+.basic.left > .panel-bar {
+    margin-right: 0; /* .colMain has the gutter on this side */
+}
+.basic.right > .panel-bar {
+    margin-left: 0;
+}
+
+/* The panel button columns (activity bars) sit on the window background */
+.basic.left,
+.basic.right {
+    background-color: transparent;
+}
+
+/* ---- Splitters: the gutters are the splitters --------------------------- */
+
+.splitter.vertical,
+.colMain .splitter.vertical,
+.dark.colMain .splitter.vertical {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+.splitter.horizontal {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+/* Grab strips cover the 4px gap; VS Code shows the focus colour on a held sash.
+   The gap between a side panel and the main column lies on the main column's
+   side of the splitter line (its margin): the left splitter's strip is moved
+   right, the right one's (after .colMain) left. Splitters inside the main
+   column (between split panes) are centred on the gap. */
+.splitter.vertical > div {
+    width: @cs-gutter + 2;
+    margin-left: -(@cs-half-gutter + 1);
+}
+.basic.left + .splitter.vertical > div {
+    margin-left: -1px;
+}
+.colMain + .splitter.vertical > div {
+    margin-left: -(@cs-gutter + 1);
+}
+.splitter.horizontal > div {
+    height: @cs-gutter + 2;
+    margin-top: -(@cs-half-gutter + 1);
+}
+.splitterMoving,
+.splitter.splitterMoving {
+    background-color: transparent;
+}
+.splitter.vertical.splitterMoving > div,
+.splitter.horizontal.splitterMoving > div {
+    background: @cs-focus;
+}
+
+/* ---- Find and replace bar: a small card between the editor and console --- */
+/* layout.setFindArea sizes its holder from scrollHeight, so margins count */
+
+.find-and-replace {
+    box-sizing: border-box;
+    margin: @cs-half-gutter;
+    border: @cs-card-border-width solid @cs-card-border;
+    border-radius: @cs-radius-card;
+    background: @cs-widget-bg;
+    box-shadow: none;
+}

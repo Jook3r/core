@@ -1,0 +1,177 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/tree.less */
+/*
+ * code-server skins: file tree, navigate, commands, outline lists
+ *
+ * Rows are 22px (@tree-row-height). JS reads row heights back from exact
+ * selectors such as ".filetree .tree-row" (lib_apf findCssRule): NEVER add a
+ * rule with such an exact selector unless it also carries the height; change
+ * heights through the base variables in palette.less. A broken case shows as
+ * 0 rows in the File > Save As tree.
+ * File icons come from icons.less (Jett icon font).
+ *
+ * Every rule here therefore uses ".filetree.ace_tree .tree-row" (or longer),
+ * never the bare ".filetree .tree-row".
+ * VS Code Modern UI lists: 13px text, 22px rows inset 4px from the card
+ * edges, 4px row radius, list.hoverBackground on hover,
+ * list.inactiveSelectionBackground for the selection of an unfocused list and
+ * list.activeSelectionBackground plus a 1px list.focusOutline when focused.
+ */
+
+/* ---- File tree ----------------------------------------------------------- */
+
+.filetree.ace_tree {
+    font-family: @cs-font-family;
+    font-size: @cs-font-size;
+    -webkit-font-smoothing: antialiased;
+}
+.filetree.ace_tree .tree-row {
+    margin: 0 @cs-space-4;
+    padding-left: @cs-space-4;
+    border-radius: @cs-radius-control;
+    color: @cs-fg;
+}
+.filetree.ace_tree .tree-row.projectRoot:first-child {
+    margin-right: @tree-first-row-margin-right; /* room for the settings gear */
+}
+.filetree.ace_tree .tree-row:hover,
+.filetree.ace_tree .tree-row.hover {
+    background: @cs-list-hover-bg;
+}
+.filetree.ace_tree .tree-row.selected,
+.filetree.ace_tree .tree-row.selected:hover {
+    background: @cs-list-inactive-bg;
+    color: @cs-list-active-fg;
+}
+.filetree.ace_tree.ace_tree_focus .tree-row.selected,
+.filetree.ace_tree.ace_tree_focus.alternative .tree-row.selected {
+    background: @cs-list-active-bg;
+    box-shadow: inset 0 0 0 1px @cs-list-focus-outline;
+    color: @cs-list-active-fg;
+}
+
+/* the cells: chevron, icon, caption */
+.filetree.ace_tree .tree-row > span {
+    padding: 0;
+    line-height: @tree-row-height;
+    height: @tree-row-height;
+    vertical-align: top;
+}
+.filetree.ace_tree .tree-row > .tree-indent {
+    height: 0;
+}
+.filetree.ace_tree .tree-row .toggler,
+.filetree.ace_tree.ace_tree_focus .tree-row.selected .toggler {
+    width: 16px;
+    height: @tree-row-height;
+    margin: 0 @cs-space-2 0 0;
+    padding: 0;
+    line-height: @tree-row-height;
+    text-align: center;
+    color: @cs-fg-muted;
+}
+.filetree.ace_tree .tree-row .toggler:before,
+.filetree.ace_tree .tree-row .toggler.open:before,
+.filetree.ace_tree .tree-row .toggler.closed:before {
+    top: 0;
+    font-size: 9px;
+    line-height: @tree-row-height;
+}
+.filetree.ace_tree .tree-row:hover .toggler,
+.filetree.ace_tree .tree-row.selected .toggler {
+    color: @cs-fg;
+}
+.filetree.ace_tree .tree-row .filetree-icon {
+    width: 16px;
+    height: @tree-row-height;
+    margin: 0 @cs-space-6 0 0;
+    line-height: @tree-row-height !important; /* icons.less sets 18px !important */
+    text-align: center;
+}
+.filetree.ace_tree .tree-row .filetree-icon.folder:before {
+    color: @cs-fg-muted;
+    opacity: 0.7;
+}
+.filetree.ace_tree .tree-row > .caption {
+    margin: 0;
+}
+.filetree.ace_tree .tree-row .extrainfo {
+    color: @cs-fg-muted;
+    font-size: @cs-font-size-small;
+}
+
+/* rename box */
+.filetree.ace_tree .ace_tree-editor {
+    border: 1px solid @cs-focus-solid;
+    border-radius: @cs-radius-control;
+    box-shadow: none;
+}
+
+/* drag and drop */
+.dragOver.filetree.ace_tree .tree-row.dropTarget {
+    background: @cs-list-hover-bg;
+    box-shadow: inset 0 0 0 1px @cs-list-focus-outline;
+    border-radius: @cs-radius-control;
+}
+
+/* the Save As / Open dialogs use the same tree inside a bordered well */
+.bk-window .filetree.ace_tree {
+    border-radius: @cs-radius-control;
+}
+
+/* ---- Navigate and commands result lists --------------------------------- */
+
+.searchresults.ace_tree {
+    font-family: @cs-font-family !important; /* base: !important */
+}
+.searchresults .item,
+.searchresults .item.selected {
+    margin: 1px 0;
+    padding: 3px 6px 4px;
+    border-radius: @cs-radius-control;
+    color: @cs-fg;
+}
+.searchresults .item:not(.selected):hover,
+.searchresults .item:not(.selected).hover {
+    background: @cs-list-hover-bg;
+    color: @cs-fg;
+}
+.searchresults .item.selected {
+    background: @cs-list-active-bg;
+}
+.searchresults .item > span {
+    padding: 1px 2px 0;
+    font-size: @cs-font-size;
+    font-weight: @cs-font-weight;
+}
+.searchresults .item.selected span {
+    color: @cs-list-active-fg;
+}
+.searchresults .item .path,
+.searchresults .item.selected .path {
+    font-size: @cs-font-size-small;
+    color: @cs-fg-muted;
+}
+.searchresults .item span strong,
+.searchresults .item.selected span strong {
+    color: @cs-highlight-fg;
+    font-weight: @cs-font-weight-heading;
+}
+.searchresults .item .keys {
+    color: @cs-fg-muted;
+    font-size: @cs-font-size-label;
+}
+.searchresults .message {
+    color: @cs-fg-muted;
+    font-size: @cs-font-size-label;
+}
+div.navigate-list span.filetree-icon:before {
+    padding-right: @cs-space-6;
+}
+
+/* ---- Outline and other ace_tree lists ----------------------------------- */
+
+.outline.ace_tree,
+.ace_tree.outline {
+    font-family: @cs-font-family;
+    font-size: @cs-font-size-label;
+}

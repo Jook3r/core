@@ -1,0 +1,396 @@
+/* @file plugins/c9.ide.theme.codeserver/less/parts/controls.less */
+/*
+ * code-server skins: inputs, buttons, checkboxes, dropdowns, find bar
+ *
+ * Control radius (@cs-radius-control) for inputs, buttons, dropdown fields,
+ * toolbar buttons and find-bar toggles; @cs-radius-checkbox for checkboxes;
+ * dropdown popups use @cs-radius-outer.
+ * Never set "display: ... !important" on widgets: apf hides them with an
+ * inline display:none.
+ *
+ * Colours mostly come from the base variables (palette.less): primary
+ * (green) buttons are button.background, grey and red ones are the
+ * secondary button. The rules below give the controls their VS Code shapes:
+ * a CSS checkbox and switch instead of the sprites, flat spinner buttons,
+ * a chevron in dropdown fields, rounded popups, focus borders.
+ */
+
+/* ---- Buttons ------------------------------------------------------------- */
+
+.btn-default-css3 {
+    border-radius: @cs-radius-control;
+    font-weight: @cs-font-weight;
+}
+.btn-default-css3 .caption {
+    border-radius: @cs-radius-control;
+}
+.btn-default-css3 .border {
+    border-color: @cs-focus-solid;
+    border-radius: @cs-radius-control;
+}
+
+/* ---- Text inputs, text areas, search boxes ------------------------------- */
+
+.tb_textbox .sbtb_middle,
+.searchbox .sbtb_middle,
+.searchTxt.tb_console .sbtb_middle {
+    border-color: @cs-input-border;
+    border-radius: @cs-radius-control;
+    background-color: @cs-input-bg;
+    box-shadow: none;
+}
+.tb_textboxFocus .sbtb_middle,
+.searchboxFocus .sbtb_middle,
+.tb_textbox .sbtb_middle:focus-within,
+.searchbox .sbtb_middle:focus-within,
+.tbsimpleFocus,
+.taFocus,
+.spinnerFocus {
+    border-color: @cs-focus-solid;
+}
+.tbsimple,
+.ta {
+    border-radius: @cs-radius-control;
+}
+/* flat-dark drops the border and lightens the field on hover and focus
+   (.bar-preferences .tbsimpleFocus, .tbsimple:hover, ...): VS Code inputs keep
+   their background and border on hover, and show the focus border on focus */
+.tbsimple:hover,
+.ta:hover,
+.bar-preferences .tbsimple:hover,
+.bar-preferences .ta:hover,
+.searchbox .sbtb_middle:hover {
+    border-color: @cs-input-border;
+    background: @cs-input-bg;
+}
+.tbsimpleFocus,
+.tbsimpleFocus:hover,
+.taFocus,
+.taFocus:hover,
+.bar-preferences .tbsimpleFocus,
+.bar-preferences .taFocus,
+.searchboxFocus .sbtb_middle,
+.searchboxFocus .sbtb_middle:hover {
+    border-color: @cs-focus-solid;
+    background: @cs-input-bg;
+}
+/* text selected in the find/replace fields (flat-dark: olive) */
+.searchbox .ace-tm .ace_marker-layer .ace_selection {
+    background: @cs-editor-selection;
+}
+/* the clear (x) button of search boxes */
+.searchTxt .btnclose,
+.searchbox.dark .btnclose {
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    margin-top: -8px;
+    right: @cs-space-6;
+    border-radius: @cs-radius-control;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-close, 14px);
+}
+.searchTxt .btnclose:hover {
+    color: @cs-fg;
+}
+
+/* ---- Checkboxes ---------------------------------------------------------- */
+/* .cbblack: the checkbox used in dialogs and preferences (sprite 22x20) */
+
+.cbblack.cbcontainer .checkbox {
+    box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    top: 50%;
+    margin-top: -8px;
+    border: 1px solid @cs-checkbox-border;
+    border-radius: @cs-radius-checkbox;
+    background: @cs-checkbox-bg;
+    transition: border-color @cs-duration-fast linear;
+}
+.cbblack.cbcontainerOver .checkbox,
+.cbblack.cbcontainerDown .checkbox {
+    border-color: @cs-focus-solid;
+    background: @cs-checkbox-bg;
+}
+.cbblack.cbcontainerChecked .checkbox,
+.cbblack.cbcontainerOver.cbcontainerChecked .checkbox,
+.cbblack.cbcontainerChecked.cbcontainerDown .checkbox {
+    background: @cs-checkbox-bg;
+}
+.cbblack.cbcontainerChecked .checkbox:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 14px;
+    height: 14px;
+    color: @cs-checkbox-check;
+    .cs-mask(@cs-icon-check, 14px);
+}
+.cbblack.cbcontainerDisabled .checkbox,
+.cbblack.cbcontainerDisabled.cbcontainerChecked .checkbox {
+    opacity: 0.5;
+    background: @cs-checkbox-bg;
+}
+.cbblack.cbcontainer span {
+    color: @cs-fg;
+}
+.cbblack.cbcontainerDisabled span {
+    color: @cs-fg-disabled;
+}
+.cbcontainerFocus span {
+    border-color: transparent;
+}
+
+/* ---- Switches (preferences on/off) --------------------------------------- */
+/* base sizes carry !important (flat skin), so these have to as well */
+
+.cboffline {
+    box-sizing: border-box;
+    width: 34px !important;
+    height: 18px !important;
+    margin-top: 3px;
+    border: 0;
+    border-radius: @cs-radius-badge;
+    background: @cs-switch-off-bg;
+    transition: background-color @cs-duration @cs-ease;
+}
+.cboffline:after {
+    width: 14px;
+    height: 14px;
+    margin: 2px 0 0 2px;
+    border: 0;
+    border-radius: 50%;
+    background: @cs-switch-knob;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.cbofflineChecked {
+    background: @cs-accent;
+}
+.cbofflineChecked:after {
+    float: right;
+    margin: 2px 2px 0 0;
+    background: @cs-accent-fg;
+}
+
+/* ---- Spinners (number inputs) -------------------------------------------- */
+
+.spinner {
+    height: 26px !important;     /* base: 30px !important */
+    min-height: 26px !important;
+    max-height: 26px !important;
+    border-color: @cs-input-border;
+    border-radius: @cs-radius-control;
+    background: @cs-input-bg;
+}
+.spinner .buttons .minus,
+.spinner .buttons .plus {
+    height: 24px;
+    width: 22px;
+    padding: 0;
+    line-height: 23px;
+    text-align: center;
+    font-size: 14px;
+    color: @cs-fg-muted;
+}
+.spinner .buttons .minus {
+    border-right: 1px solid @cs-input-border;
+    border-radius: (@cs-radius-control - 1) 0 0 (@cs-radius-control - 1);
+}
+.spinner .buttons .plus {
+    border-left: 1px solid @cs-input-border;
+    border-radius: 0 (@cs-radius-control - 1) (@cs-radius-control - 1) 0;
+}
+.spinner .buttons .minus:hover,
+.spinner .buttons .plus:hover {
+    background: @cs-list-hover-bg;
+    color: @cs-fg;
+}
+.spinner .divfix {
+    left: 22px;
+    right: 22px;
+}
+.spinner .divfix input {
+    height: 24px;
+    color: @cs-input-fg;
+}
+
+/* ---- Dropdown fields and their popups ----------------------------------- */
+
+.black_dropdown {
+    border-radius: @cs-radius-control;
+}
+.black_dropdown .lbl {
+    border-right: 0;
+}
+.black_dropdown .button,
+.black_dropdownOver .button,
+.black_dropdownDown .button {
+    border-left: 0;
+    color: @cs-fg-muted;
+    .cs-mask(@cs-icon-chevron-down, 16px);
+}
+.black_dropdownDown,
+.black_dropdownFocus {
+    border-color: @cs-focus-solid;
+}
+.c9-optionList {
+    margin-top: @cs-space-2;
+    /* content-box: apf sets the height to the sum of the items and the
+       width to the field's, so no horizontal padding (the items are inset
+       with margins instead) */
+    padding: @cs-space-4 0;
+    border: 1px solid @cs-widget-border;
+    border-radius: @cs-radius-outer;
+    background: @cs-widget-bg;
+    box-shadow: @cs-shadow-lg;
+}
+.c9-optionList .c9-dd-item {
+    height: 22px;
+    margin: 0 @cs-space-4;
+    padding: 0 @cs-space-8;
+    line-height: 22px;
+    border-radius: @cs-radius-control;
+    font-family: @cs-font-family;
+    font-size: @cs-font-size;
+    color: @cs-fg;
+}
+.c9-optionList .c9-dd-item.selected {
+    color: @cs-highlight-fg;
+}
+.c9-optionList .c9-dd-item.hover {
+    background-color: @cs-menu-selection-bg;
+    color: @cs-menu-selection-fg;
+}
+.dropdown-dark-glossy-options {
+    padding: @cs-space-4;
+    border-color: @cs-widget-border;
+    border-radius: @cs-radius-outer;
+}
+.dropdown-dark-glossy-options .c9-dd-item {
+    border-radius: @cs-radius-control;
+}
+.dropdown-dark-glossy-options .c9-dd-item.selected {
+    color: @cs-highlight-fg;
+}
+
+/* ---- Find bar toggles (.* aA "" ...) ------------------------------------- */
+
+.grouped_checkbox_holder {
+    border-color: transparent;
+}
+.grouped_checkbox_holder .cbcontainer,
+.grouped_checkbox_holder .cbcontainer:first-child,
+.grouped_checkbox_holder .cbcontainer:last-child {
+    border-radius: @cs-radius-control;
+}
+.grouped_checkbox_holder .cbcontainer:before {
+    display: none;
+}
+.grouped_checkbox_holder .cbcontainerOver:not(.cbcontainerChecked),
+.grouped_checkbox_holder .cbcontainerFocus:not(.cbcontainerChecked) {
+    box-shadow: 0 0 0 1000px @cs-toolbar-hover-bg inset !important; /* base: !important */
+}
+.grouped_checkbox_holder .cbcontainerChecked,
+.grouped_checkbox_holder .cbcontainerChecked:first-child,
+.grouped_checkbox_holder .cbcontainerChecked:last-child {
+    background: @cs-option-active-bg;
+    box-shadow: 0 0 0 1px @cs-option-active-border inset;
+}
+/* The one-colour toggle glyphs are painted from the flat sprite used as a
+   mask: icon.foreground when off, inputOption.activeForeground when on
+   (the flat-dark sprite draws the checked glyphs olive). The two-colour ones
+   (highlight matches, search backwards) keep the sprite. */
+@cs-toggle-sprite: url("plugins/c9.ide.layout.classic/images/c9-repeat-x_flat_light@2x.png");
+.cs-toggle-glyph(@y) {
+    background: currentColor;
+    -webkit-mask-image: @cs-toggle-sprite;
+    mask-image: @cs-toggle-sprite;
+    -webkit-mask-position: 50% @y;
+    mask-position: 50% @y;
+    -webkit-mask-size: 32px 1500px;
+    mask-size: 32px 1500px;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+.grouped_checkbox_holder .chkRegEx,
+.grouped_checkbox_holder .chkMatchCase,
+.grouped_checkbox_holder .chkWholeWords,
+.grouped_checkbox_holder .chkPreserveCase,
+.grouped_checkbox_holder .chkSearchSelection,
+.grouped_checkbox_holder .chkWrapAround {
+    color: @cs-fg-muted;
+}
+.grouped_checkbox_holder .chkRegEx.cbcontainerChecked,
+.grouped_checkbox_holder .chkMatchCase.cbcontainerChecked,
+.grouped_checkbox_holder .chkWholeWords.cbcontainerChecked,
+.grouped_checkbox_holder .chkPreserveCase.cbcontainerChecked,
+.grouped_checkbox_holder .chkSearchSelection.cbcontainerChecked,
+.grouped_checkbox_holder .chkWrapAround.cbcontainerChecked,
+.grouped_checkbox_holder .cbcontainerOver {
+    color: @cs-fg;
+}
+.grouped_checkbox_holder .chkRegEx .checkbox,
+.grouped_checkbox_holder .chkRegEx.cbcontainerChecked .checkbox { .cs-toggle-glyph(-540px); }
+.grouped_checkbox_holder .chkMatchCase .checkbox,
+.grouped_checkbox_holder .chkMatchCase.cbcontainerChecked .checkbox { .cs-toggle-glyph(-590px); }
+.grouped_checkbox_holder .chkWholeWords .checkbox,
+.grouped_checkbox_holder .chkWholeWords.cbcontainerChecked .checkbox { .cs-toggle-glyph(-640px); }
+.grouped_checkbox_holder .chkPreserveCase .checkbox,
+.grouped_checkbox_holder .chkPreserveCase.cbcontainerChecked .checkbox { .cs-toggle-glyph(-690px); }
+.grouped_checkbox_holder .chkSearchSelection .checkbox,
+.grouped_checkbox_holder .chkSearchSelection.cbcontainerChecked .checkbox { .cs-toggle-glyph(-840px); }
+.grouped_checkbox_holder .chkWrapAround .checkbox,
+.grouped_checkbox_holder .chkWrapAround.cbcontainerChecked .checkbox { .cs-toggle-glyph(-890px); }
+
+/* ---- "Black" buttons (find bar Replace / Replace All) -------------------- */
+
+.blackbutton {
+    border-radius: @cs-radius-control;
+}
+
+/* find bar: the replace-row toggle (a CSS sprite of a little window) */
+.find-and-replace .btn_console_open {
+    width: 22px;
+    height: 25px !important; /* sized by the find bar markup */
+    margin-top: 1px;
+    padding: 0;
+    border-radius: @cs-radius-control;
+    color: @cs-fg-muted;
+}
+.find-and-replace .btn_console_open:hover {
+    background: @cs-toolbar-hover-bg;
+    color: @cs-fg;
+}
+.find-and-replace .btn_console_open span {
+    width: 16px;
+    height: 16px;
+    margin: 4px 3px;
+    border: 0;
+    box-shadow: none;
+    .cs-mask(@cs-icon-chevron-down, 16px);
+}
+.find-and-replace .btn_console_openDown span {
+    -webkit-mask-image: @cs-icon-chevron-up;
+    mask-image: @cs-icon-chevron-up;
+}
+.find-and-replace .btn_console_open span:after {
+    display: none;
+}
+
+/* ---- Theme swatches (Preferences > Themes radio group) ------------------- */
+
+.rbcontainer.themepicker div {
+    border: 0;
+    border-radius: @cs-radius-control;
+    box-shadow: 0 0 0 1px @cs-card-border;
+}
+.rbcontainer.themepicker.rbcontainerSelected div:after {
+    margin: -5px;
+    width: 36px;
+    height: 36px;
+    border: 2px solid @cs-focus-solid;
+    border-radius: @cs-radius-control + 3px;
+}

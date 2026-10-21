@@ -1,0 +1,140 @@
+/*
+ * code-server Light: colour tokens (VS Code "2026 Light", MIT).
+ *
+ * Same @cs-* names as palette-dark.less; see that file for the conventions.
+ * Comments name the VS Code colour key each value comes from.
+ * The build's LESS 2.7 mangles #RRGGBBAA colours: always write rgba().
+ */
+
+@cs-is-dark: false;
+
+/* Surfaces */
+@cs-window-bg: #FAFAFD;              // titleBar/sideBar/panel/statusBar.background
+@cs-card-bg: #FFFFFF;                // surface.background (white cards on the #FAFAFD window)
+@cs-card-border: #E4E5E6;            // surface.border
+@cs-editor-bg: #FFFFFF;              // editor.background = active tab fill
+@cs-editor-fg: #202020;              // editor.foreground
+@cs-terminal-bg: #FAFAFD;            // panel.background: console card body (= terminal.js/output.js defaults)
+@cs-terminal-fg: #3B3B3B;            // terminal.foreground
+@cs-tabstrip-bg: #EAEAEA;            // editorGroupHeader.connectedTabsBackground
+@cs-tab-inactive-bg: #FAFAFD;        // tab.inactiveBackground
+@cs-tab-hover-bg: rgba(0, 0, 0, 0.078);         // list.hoverBackground (pill hover)
+@cs-tab-pill-bg: rgba(255, 255, 255, 0.55);      // inactive pill on the strip
+@cs-tab-pill-hover-bg: rgba(0, 0, 0, 0.06); // pill hover (foreground mixed over the strip)
+@cs-widget-bg: #FAFAFD;              // menu/quickInput/editorWidget/notifications.background
+@cs-widget-border: #E4E5E6;          // menu.border, editorWidget.border
+
+/* Text */
+@cs-fg: #202020;                     // foreground
+@cs-fg-strong: #000000;              // list.activeSelectionIconForeground
+@cs-fg-muted: #606060;               // descriptionForeground, tab.inactiveForeground, icon.foreground
+@cs-fg-disabled: #BBBBBB;            // disabledForeground
+@cs-placeholder: #999999;            // input.placeholderForeground
+@cs-link: #0069CC;                   // textLink.foreground
+@cs-link-active: #0069CC;            // textLink.activeForeground
+@cs-highlight-fg: #0069CC;           // list.highlightForeground (match highlight)
+
+/* Accent / focus */
+@cs-accent: #0069CC;                 // button.background
+@cs-accent-hover: #0063C1;           // button.hoverBackground
+@cs-accent-fg: #FFFFFF;              // button.foreground
+@cs-focus: #0069CC;                  // focusBorder
+@cs-focus-solid: #0069CC;            // focusBorder
+@cs-badge-bg: #0069CC;               // badge.background
+@cs-badge-fg: #FFFFFF;               // badge.foreground
+
+/* Secondary button */
+@cs-button2-bg: #EAEAEA;             // button.secondaryBackground
+@cs-button2-border: #EAEAEA;         // button.secondaryBorder
+@cs-button2-fg: #202020;             // button.secondaryForeground
+@cs-button2-hover-bg: #F2F3F4;       // button.secondaryHoverBackground
+
+@cs-button2-fill: #EAEAEA;           // button.secondaryBackground
+@cs-button2-fill-hover: #E0E0E0;
+@cs-danger: #C72E0F;                 // statusBarItem.errorBackground
+@cs-danger-hover: #B3290D;
+
+/* Inputs */
+@cs-input-bg: #FFFFFF;               // input.background
+@cs-input-border: rgba(216, 216, 216, 0.4);         // input.border
+@cs-input-fg: #202020;               // input.foreground
+@cs-well-border: #E4E5E6;           // surface.border (input.border is too faint for a box): boxed lists (Save As tree)
+@cs-checkbox-bg: #EAEAEA;            // checkbox.background
+@cs-checkbox-border: #868686;        // checkbox.border
+@cs-checkbox-fg: #606060;            // checkbox.foreground
+@cs-option-active-bg: #D6D6D6;       // inputOption.activeBackground (find-bar toggles)
+@cs-option-active-border: #F0F1F2;   // inputOption.activeBorder
+
+/* Lists, trees, menus */
+@cs-list-hover-bg: rgba(0, 0, 0, 0.078);        // list.hoverBackground
+@cs-list-active-bg: rgba(0, 0, 0, 0.145);       // list.activeSelectionBackground
+@cs-list-active-fg: #202020;         // list.activeSelectionForeground
+@cs-list-inactive-bg: rgba(218, 218, 218, 0.6);     // list.inactiveSelectionBackground
+@cs-list-focus-outline: #0069CC;     // list.focusOutline
+@cs-menu-bg: #FAFAFD;                // menu.background
+@cs-menu-fg: #202020;                // menu.foreground
+@cs-menu-selection-bg: rgba(0, 105, 204, 0.102);    // menu.selectionBackground
+@cs-menu-selection-fg: #202020;      // menu.selectionForeground
+@cs-menu-separator: #EEEEF1;         // menu.separatorBackground
+@cs-menubar-selection-bg: #EAEAEA;   // menubar.selectionBackground
+@cs-quick-focus-bg: #0069CC;         // quickInputList.focusBackground
+@cs-quick-focus-fg: #FFFFFF;         // quickInputList.focusForeground
+@cs-toolbar-hover-bg: rgba(0, 0, 0, 0.122);     // toolbar.hoverBackground
+@cs-toolbar-active-bg: #D6D6D8;      // toolbar.activeBackground
+
+/* Status / notifications */
+@cs-statusbar-fg: #606060;           // statusBar.foreground
+@cs-statusbar-item-hover-bg: #E3E3E5;// statusBarItem.hoverBackground
+@cs-error: #AD0707;                  // errorForeground
+@cs-error-bg: #FDEDED;               // inputValidation.errorBackground
+@cs-error-border: #AD0707;           // inputValidation.errorBorder
+@cs-warning: #B69500;                // notificationsWarningIcon.foreground
+@cs-warning-bg: #FDF6E3;             // inputValidation.warningBackground
+@cs-info: #0069CC;                   // notificationsInfoIcon.foreground
+@cs-success: #587C0C;                // editorGutter.addedBackground
+
+/* Scrollbars */
+@cs-scrollbar-thumb: rgba(100, 100, 100, 0.753);      // scrollbarSlider.background
+@cs-scrollbar-thumb-hover: rgba(100, 100, 100, 0.816);// scrollbarSlider.hoverBackground
+@cs-scrollbar-thumb-active: rgba(100, 100, 100, 0.878);// scrollbarSlider.activeBackground
+
+/* Editor bits used by the skin (gutter, selection) */
+@cs-editor-selection: rgba(0, 105, 204, 0.251);     // editor.selectionBackground
+@cs-editor-line-highlight: rgba(234, 234, 234, 0.251);// editor.lineHighlightBackground
+@cs-editor-line-number: #606060;     // editorLineNumber.foreground
+
+/* Shadows (design spec: sm/md/lg/xl) */
+@cs-shadow-color-sm: rgba(0, 0, 0, 0.08);
+@cs-shadow-color-md: rgba(0, 0, 0, 0.08);
+@cs-shadow-color-lg: rgba(0, 0, 0, 0.14);
+@cs-shadow-color-xl: rgba(0, 0, 0, 0.15);
+
+/* Sprite/image variants for base variables that pick images by name */
+@cs-image-variant: "flat_light";
+
+/* Controls (parts/controls.less) */
+@cs-dropdown-border: #D8D8D8;        // dropdown.border
+@cs-switch-off-bg: #C8C8CC;          // switch track, off
+@cs-switch-knob: #FFFFFF;            // switch knob
+@cs-checkbox-check: #202020;         // check mark (checkbox.foreground is too faint for a state)
+
+/* File-type icon colours (icons.less) darkened for contrast on white */
+@jett-icon-css: #3E7A93;
+@jett-icon-html: #B0601F;
+@jett-icon-scala: #B8281A;
+@jett-icon-swift: #C8391F;
+@jett-icon-groovy: #3F7587;
+@jett-icon-sh: #5F6670;
+@jett-icon-xml: #B04A4A;
+@jett-icon-php: #5D68A3;
+@jett-icon-js: #B8860B;
+@jett-icon-hs: #6E6E6E;
+@jett-icon-json: #B8860B;
+@jett-icon-py: #B07A1E;
+@jett-icon-dockerfile: #1D6FA5;     // thin glyph, thickened in parts/misc.less
+@jett-icon-pl: #3E4C73;
+@jett-icon-clj: #2E9A4E;
+@jett-icon-rb: #B03535;
+@jett-icon-coffee: #8A5A3F;
+@jett-icon-java: #C0661A;
+@jett-icon-md: #6C7F45;
