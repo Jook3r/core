@@ -28,7 +28,16 @@ function main(options, imports, register) {
         // TODO: big hack. Patch engine.io client to disable 'withCredentials"
         var eioClient = require.resolve("engine.io-client/engine.io.js");
         try {
-            fs.writeFileSync(eioClient, fs.readFileSync(eioClient, "utf8").replace("xhr.withCredentials = true;", "xhr.__withCredentials = true;"));
+            // Only write when unpatched, and atomically: several processes
+            // (the server, cdn-cli builds) load this, and one reading the
+            // file while another rewrote it in place could leave it empty
+            var code = fs.readFileSync(eioClient, "utf8");
+            var patched = code.replace("xhr.withCredentials = true;", "xhr.__withCredentials = true;");
+            if (patched != code) {
+                var tmp = eioClient + "." + process.pid + ".tmp";
+                fs.writeFileSync(tmp, patched);
+                fs.renameSync(tmp, eioClient);
+            }
         } catch (e) {
             console.warn("unable to patch engine.io");
         }
