@@ -200,7 +200,12 @@ define(function(require, module, exports) {
                         setTabPadding(1);
                     }
 
-                    toWinExt.style.minWidth = (toWidth - apf.getWidthDiff(toWinExt) - CURWIDTH) + "px";
+                    // The panel's own horizontal margins (a skin's gutter
+                    // next to the panel buttons) lie outside this width:
+                    // without them it slides in wider than it settles and
+                    // jumps when onfinish restores its inset.
+                    toWinExt.style.minWidth = (toWidth - apf.getWidthDiff(toWinExt)
+                        - apf.getMargin(toWinExt)[0] - CURWIDTH) + "px";
                     toWinExt.style[where] = ""; //CURWIDTH + "px";
                     anim.width = toWidth + "px";
                     anims.animateSplitBoxNode(column, anim, onfinish);

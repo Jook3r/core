@@ -244,6 +244,8 @@ define(function(require, exports, module) {
             panes.forEach(function(pane) {
                 // Add a file icon to the tab if jett is enabled
                 pane.getTabs().forEach(function(tab) {
+                    // a tab that is closing has no button any more
+                    if (!tab.aml.$button) return;
                     setTabIcon(tab);
                     if (mode == "code-server" || tab.aml.$button.style.getPropertyValue("--cs-tab-bg"))
                         styleCodeServerTab(tab);

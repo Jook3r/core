@@ -54,8 +54,12 @@ define(function(require, exports, module) {
         var GEOMETRY = {
             menuHeight: 40,
             minimizedHeight: 8,
-            plusMargin: 14,
-            tabRightDelta: 25
+            // the "+" margin-left (4px), which the drag code zeroes inline
+            plusMargin: 4,
+            // our tabs do not overlap (flat's do, by 25px) and collapse to
+            // 0px: the padding must grow by the full tab width. page.js reads
+            // "apf.tabRightDelta || 15", so 0 is written as a hair above it.
+            tabRightDelta: 0.01
         };
         
         var active = false;

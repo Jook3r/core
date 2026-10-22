@@ -60,6 +60,22 @@
     margin-top: 0;
 }
 
+/* The button bars must cover their whole 36px column (BARWIDTH in
+   c9.ide.panels/area.js). A bar is 35px; the base skin covers the last pixel,
+   next to the side panel, with the bar's rotated 1px box-shadow
+   (@panel-bar-border, transparent in these skins). A closing side panel
+   slides under its column and stays parked there, right against the bar,
+   until area.js hides it about 100ms after the animation: through the
+   see-through pixel its card border showed as a full-height line for that
+   moment, and its body as a 1px sliver during the slide. The edge takes the
+   window colour, so it still looks like no line. */
+.panelsbar {
+    box-shadow: 0 -1px 0 @cs-window-bg;
+}
+.basic.right .panelsbar {
+    box-shadow: 0 1px 0 @cs-window-bg;
+}
+
 /* the chip */
 .panelsbutton.panelsbuttonBool:before {
     content: "";
