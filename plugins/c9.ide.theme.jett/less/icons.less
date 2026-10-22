@@ -121,6 +121,22 @@
     background-image: none !important;
 }
 
+/* The link/favourite overlay (c9.ide.tree/style.css) is a block after the
+   icon, which works for a background image; after a glyph it wrapped onto
+   the next line and showed on the row below. Pin it to the icon's bottom
+   left instead, as with the image icons. */
+.filetree .symlink > .filetree-icon,
+.filetree .favorite > .filetree-icon {
+    position: relative;
+}
+
+.filetree .symlink > .filetree-icon:after,
+.filetree .favorite > .filetree-icon:after {
+    position: absolute;
+    top: 50%;
+    margin-top: -5px;
+}
+
 .filetree-icon:before {
     content: "\e907";
 }
