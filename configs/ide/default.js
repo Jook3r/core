@@ -553,6 +553,10 @@ module.exports = function(options) {
             packagePath: "plugins/c9.ide.language.core/outline",
         },
         {
+            packagePath: "plugins/c9.ide.claude/claude",
+            staticPrefix: staticPrefix + "/plugins/c9.ide.claude"
+        },
+        {
             packagePath: "plugins/c9.ide.panels/panels",
             defaultActiveLeft: "tree"
         },
