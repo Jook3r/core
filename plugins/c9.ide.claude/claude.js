@@ -99,7 +99,7 @@ define(function(require, exports, module) {
         });
 
         // UI elements
-        var root, header, statusDot, statusText, modelSelect, modeSelect, btnNew, btnResume;
+        var root, header, statusDot, statusText, modelSelect, modeSelect, btnNew, btnHistory, historyMenu;
         var logEl, welcomeEl, jumpBtn, composer, attachRow, textarea, btnAttach, btnSend, fileInput, dropOverlay;
 
         // connection with claude-service.js
@@ -293,12 +293,12 @@ define(function(require, exports, module) {
             modelSelect = select("claude-model", MODELS, "Model", onModelChange);
             modeSelect = select("claude-mode", MODES, "Permission mode", onModeChange);
             btnNew = iconButton("plus", "New session", newSession);
-            btnResume = iconButton("history", "Resume last session", function() {
-                resumeSession(settings.get("state/claude/@session"));
-            });
+            btnHistory = iconButton("history", "Session history", function() {});
+            btnHistory.setAttribute("aria-haspopup", "true");
+            attachMenu(btnHistory, buildHistoryMenu);
             header = el("div", { className: "claude-header" }, [
                 el("div", { className: "claude-status" }, [statusDot, statusText]),
-                el("div", { className: "claude-header-tools" }, [modelSelect.wrapper, modeSelect.wrapper, btnNew, btnResume])
+                el("div", { className: "claude-header-tools" }, [modelSelect.wrapper, modeSelect.wrapper, btnNew, btnHistory])
             ]);
             root.appendChild(header);
 
@@ -446,38 +446,203 @@ define(function(require, exports, module) {
             return button;
         }
 
-        // a <select> sized to its label: the native control is transparent
-        // over the label and still opens the native list
+        /***** Menus: Cloud9's own, so that every skin styles them *****/
+
+        function newMenu(className) {
+            var menu = new ui.menu({ "class": "claude-menu " + className });
+            plugin.addElement(menu);
+            return menu;
+        }
+
+        function clearMenu(menu) {
+            menu.childNodes.slice().forEach(function(node) {
+                node.destroy(true, true);
+            });
+        }
+
+        function infoItem(menu, caption) {
+            return menu.appendChild(new ui.item({ caption: caption, disabled: true }));
+        }
+
+        // Opens the menu that build() returns under the button. Keyboard: the
+        // button opens it with Enter or Space, the arrows move, Enter picks,
+        // Escape closes and gives the focus back to the button.
+        function attachMenu(button, build) {
+            var lastHide = 0;
+            var byKeyboard = false;
+            var menu = null;
+            var closedByThisClick = false;
+            button.addEventListener("mousedown", function() {
+                // a mousedown outside an open menu closes it (before or after
+                // this handler, depending on the phase): no reopening on click
+                closedByThisClick = !!(menu && menu.visible) || Date.now() - lastHide < 100;
+            });
+            button.addEventListener("click", function(e) {
+                e.preventDefault();
+                if (button.disabled) return;
+                if (closedByThisClick && e.detail !== 0) {
+                    closedByThisClick = false;
+                    return;
+                }
+                byKeyboard = e.detail === 0;
+                menu = build();
+                if (!menu.claudeButton) {
+                    menu.claudeButton = button;
+                    menu.on("prop.visible", function(ev) {
+                        button.classList.toggle("claude-open", !!ev.value);
+                        button.setAttribute("aria-expanded", ev.value ? "true" : "false");
+                        if (!ev.value) {
+                            lastHide = Date.now();
+                            if (byKeyboard) setTimeout(function() { button.focus(); }, 0);
+                        }
+                    });
+                }
+                var r = button.getBoundingClientRect();
+                menu.display(r.left, r.bottom + 2);
+                placeMenu(menu);
+                if (byKeyboard) highlightCurrent(menu);
+            });
+        }
+
+        // keyboard opening: the current choice is highlighted, as in a list
+        function highlightCurrent(menu) {
+            var items = menu.childNodes.filter(function(n) {
+                return n.localName == "item" && !n.disabled;
+            });
+            var current = items.filter(function(n) { return n.checked; })[0] || items[0];
+            if (current && current.$ext) {
+                menu.$selected = current;
+                ui.setStyleClass(current.$ext, "hover");
+            }
+        }
+
+        // under its button, kept inside the window
+        function placeMenu(menu) {
+            var ext = menu.$ext;
+            var button = menu.claudeButton;
+            if (!ext || !button) return;
+            var r = button.getBoundingClientRect();
+            // natural width: at its old place near the window edge the
+            // (shrink-to-fit) menu would be squeezed
+            ext.style.left = "0px";
+            var w = ext.offsetWidth;
+            var left = r.left;
+            if (left + w > window.innerWidth - 6)
+                left = Math.max(6, Math.min(r.right, window.innerWidth - 6) - w);
+            ext.style.left = left + "px";
+        }
+
+        // a header button with a menu of choices (model, permission mode)
         function select(className, items, title, onchange) {
-            var node = el("select", { title: title });
-            items.forEach(function(item) {
-                node.appendChild(el("option", { value: item.value, text: item.caption }));
-            });
             var label = el("span", { className: "claude-select-label" });
-            var wrap = el("span", { className: "claude-select " + className, title: title }, [label, node]);
-            node.syncLabel = function() {
-                var item = items.filter(function(i) { return i.value == node.value; })[0];
-                label.textContent = item ? item.short || item.caption : node.value;
-                wrap.title = title + (item ? ": " + item.caption : node.value ? ": " + node.value : "");
+            var button = el("button", { type: "button", className: "claude-select " + className,
+                title: title, "aria-haspopup": "true" }, [label]);
+            var node = { value: "", items: items.slice(), wrapper: button, menu: null };
+            node.find = function(value) {
+                return node.items.filter(function(i) { return i.value == value; })[0];
             };
-            node.addEventListener("change", function() {
-                node.syncLabel();
-                onchange(node.value);
+            node.syncLabel = function() {
+                var item = node.find(node.value);
+                label.textContent = item ? item.short || item.caption : node.value;
+                button.title = title + (item ? ": " + item.caption : node.value ? ": " + node.value : "");
+            };
+            attachMenu(button, function() {
+                if (!node.menu) node.menu = newMenu("claude-choice-menu");
+                // rebuilt each time: modes the CLI reports join the list
+                clearMenu(node.menu);
+                node.items.forEach(function(item) {
+                    node.menu.appendChild(new ui.item({
+                        type: "check",
+                        caption: item.caption,
+                        checked: item.value == node.value,
+                        onclick: function() {
+                            node.value = item.value;
+                            node.syncLabel();
+                            onchange(item.value);
+                        }
+                    }));
+                });
+                return node.menu;
             });
-            node.wrapper = wrap;
             return node;
         }
 
         function setSelect(node, value) {
             value = value == null ? "" : String(value);
-            var known = [].some.call(node.options, function(o) { return o.value == value; });
             // a mode the panel does not offer (e.g. bypassPermissions from the
             // user's settings): show it as it is
-            if (!known && value)
-                node.appendChild(el("option", { value: value, text: value }));
-            node.value = value;
-            if (node.value != value) node.value = node.options[0].value;
+            if (value && !node.find(value))
+                node.items.push({ value: value, caption: value });
+            node.value = node.find(value) ? value : node.items[0].value;
             node.syncLabel();
+        }
+
+        /***** Session history *****/
+
+        function relativeTime(ms, now) {
+            var s = Math.max(0, (now - ms) / 1000);
+            if (s < 60) return "just now";
+            if (s < 3600) return Math.round(s / 60) + " min ago";
+            if (s < 86400) return Math.round(s / 3600) + " h ago";
+            if (s < 7 * 86400) {
+                var d = Math.round(s / 86400);
+                return d + (d == 1 ? " day ago" : " days ago");
+            }
+            return new Date(ms).toLocaleDateString();
+        }
+
+        // The recent Claude Code sessions of this workspace (the panel's and
+        // the terminal's), newest first. The service reads the transcripts.
+        function buildHistoryMenu() {
+            if (!historyMenu) {
+                historyMenu = newMenu("claude-history-menu");
+                historyMenu.on("display", applyHistoryMeta);
+            }
+            clearMenu(historyMenu);
+            historyMenu.claudeMeta = [];
+            if (!api) {
+                infoItem(historyMenu, "Not connected to the server");
+                return historyMenu;
+            }
+            infoItem(historyMenu, "Loading sessions…");
+            api.sessions(function(err, res) {
+                clearMenu(historyMenu);
+                historyMenu.claudeMeta = [];
+                var list = !err && res && Array.isArray(res.sessions) ? res.sessions : [];
+                if (err)
+                    infoItem(historyMenu, "Could not read the sessions: " + (err.message || err));
+                else if (!list.length)
+                    infoItem(historyMenu, "No Claude Code sessions in this workspace yet.");
+                list.forEach(function(item) {
+                    if (!item || !UUID_RE.test(item.id || "")) return;
+                    var title = String(item.title || "Untitled");
+                    var when = relativeTime(item.mtime, res.now || Date.now());
+                    var meta = [item.folder, when].filter(Boolean).join(" · ");
+                    var mi = historyMenu.appendChild(new ui.item({
+                        type: "check",
+                        caption: title.length > 64 ? title.slice(0, 63) + "…" : title,
+                        checked: item.id == sessionId,
+                        onclick: function() {
+                            if (item.id != sessionId) resumeSession(item.id, item);
+                        }
+                    }));
+                    historyMenu.claudeMeta.push({ item: mi, text: meta, tip: title
+                        + "\n" + (item.folder ? "Folder: " + item.folder + "\n" : "")
+                        + "Last activity: " + new Date(item.mtime).toLocaleString()
+                        + (item.recent ? " (it may still be open)" : "") });
+                });
+                applyHistoryMeta();
+                if (historyMenu.visible) placeMenu(historyMenu);
+            });
+            return historyMenu;
+        }
+
+        // the folder and the time go in the item's right-hand (shortcut) column
+        function applyHistoryMeta() {
+            (historyMenu.claudeMeta || []).forEach(function(m) {
+                if (m.item.$hotkey) m.item.$hotkey.textContent = m.text;
+                if (m.item.$ext) m.item.$ext.title = m.tip;
+            });
         }
 
         function codeSpan(text) {
@@ -576,10 +741,7 @@ define(function(require, exports, module) {
             statusText.title = sessionId ? "Session " + sessionId : "";
             statusDot.className = "claude-status-dot claude-" + state;
 
-            var saved = settings.get("state/claude/@session");
-            btnResume.disabled = !UUID_RE.test(saved || "") || saved == sessionId;
-            btnResume.title = btnResume.disabled ? "Resume last session (none)" : "Resume last session"
-                + (settings.get("state/claude/@title") ? ": " + settings.get("state/claude/@title") : "");
+            btnHistory.disabled = !api;
             btnNew.disabled = !hasMessages && !sessionId;
 
             var showStop = busy || stopping;
@@ -2146,26 +2308,33 @@ define(function(require, exports, module) {
             textarea.focus();
         }
 
-        function resumeSession(id) {
+        // info: the entry of the session list, when picked there
+        function resumeSession(id, info) {
             if (!UUID_RE.test(id || "")) return;
             stopProcess();
             clearChat();
             sessionId = id;
             hasSentInSession = true;
             setSelect(modeSelect, settings.get("user/claude/@mode") || "");
-            var notice = showNotice("Resuming session " + id.slice(0, 8) + "…", "claude-notice-quiet");
+            var title = info && info.title ? String(info.title) : "";
+            var name = title ? "\u201c" + (title.length > 60 ? title.slice(0, 59) + "\u2026" : title) + "\u201d"
+                : "session " + id.slice(0, 8);
+            var notice = showNotice("Resuming " + name + "\u2026", "claude-notice-quiet");
             updateStatus();
             if (!api) return;
             api.history(id, function(err, res) {
                 if (sessionId != id) return;
                 if (err || !res || !res.found) {
-                    notice.textContent = "Resumed session " + id.slice(0, 8)
+                    notice.textContent = "Resumed " + name
                         + ". Its earlier messages are not available here; Claude still remembers them.";
                     return;
                 }
-                notice.textContent = "Resumed session " + id.slice(0, 8)
-                    + (res.truncated ? " (older messages not shown)" : "");
+                notice.textContent = "Resumed " + name + (res.folder ? " (in " + res.folder + ")" : "")
+                    + (res.truncated ? "; older messages are not shown" : "");
                 renderHistory(res.messages || []);
+                if (res.fork)
+                    showNotice("This session was active in the last 2 minutes, probably in a terminal. "
+                        + "It continues here in a copy, so the two do not mix.", "claude-notice-warn");
             });
             textarea.focus();
         }

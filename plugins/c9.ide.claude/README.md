@@ -24,11 +24,17 @@ terminal.
   option the CLI offers (for example "Allow all edits this session"). Typing a
   message while a prompt is open denies it and sends your text to Claude
   instead.
-- The header has the model (Default, Opus, Sonnet, Haiku), the permission mode
-  (Ask before edits, Accept edits, Plan, or "Mode from Claude's settings", the
-  default, which keeps your `defaultMode` and shows the mode the CLI reports),
-  **New session** and **Resume last session**. A resumed session shows its
-  earlier messages.
+- The header has the model (Default, Opus, Sonnet, Haiku) and the permission
+  mode (Ask before edits, Accept edits, Plan, or "Mode from Claude's settings",
+  the default, which keeps your `defaultMode` and shows the mode the CLI
+  reports), as Cloud9 menus, then **New session** and **Session history**.
+- **Session history** lists the recent Claude Code sessions of this workspace,
+  newest first, including the ones started with `claude` in a terminal, in the
+  workspace or in a folder inside it (read from `~/.claude/projects`). Picking
+  one resumes it in the folder it was started in and shows its earlier
+  messages. A session written to in the last 2 minutes (probably still open in
+  a terminal) continues in a copy (`--fork-session`), so the two do not mix.
+  The welcome screen still offers "Resume last session".
 - Each answer ends with its cost and duration.
 
 If `claude` is not on the server's `PATH` (systemd services get a minimal one),

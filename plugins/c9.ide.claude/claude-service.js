@@ -47,6 +47,10 @@ module.exports = function(vfs, options, register) {
     var HISTORY_MESSAGES = 400;             // and send at most this many messages
     var HISTORY_BYTES = 3 * 1024 * 1024;
     var HISTORY_RESULT_TEXT = 4000;
+    var SESSION_SCAN = 50;                  // session list: the most recent transcripts read
+    var SESSION_STAT_LIMIT = 5000;          // ... out of at most this many files looked at
+    var SESSION_PEEK = 64 * 1024;           // bytes read at the head and the tail of each
+    var RECENT_MS = 2 * 60 * 1000;          // written this recently: probably open elsewhere
 
     var MODELS = { opus: true, sonnet: true, haiku: true };
     // no mode: the CLI uses the user's own defaultMode (~/.claude/settings.json)
@@ -81,6 +85,7 @@ module.exports = function(vfs, options, register) {
     var binCache = Object.create(null);     // "" -> the binary found by searching
     var versionCache = Object.create(null); // binary -> version string
     var nextRequestId = 1;
+    var resumePlans = Object.create(null);  // session id -> { cwd, fork } for its next spawn
 
     /***** Client stream *****/
 
@@ -285,7 +290,10 @@ module.exports = function(vfs, options, register) {
 
     /***** The CLI process *****/
 
-    function spawnCli(bin, opts, callback) {
+    // plan: { cwd, fork } decided by the service for a resumed session
+    function spawnCli(bin, opts, callback, plan) {
+        plan = plan || {};
+        var runCwd = plan.cwd || cwd;
         var args = [
             "-p",
             "--input-format", "stream-json",
@@ -304,11 +312,14 @@ module.exports = function(vfs, options, register) {
         var resume = typeof opts.resume == "string" && UUID_RE.test(opts.resume) ? opts.resume : null;
         if (resume)
             args.push("--resume", resume);
+        // probably still open in a terminal: continue in a copy
+        if (resume && plan.fork)
+            args.push("--fork-session");
 
         var child;
         try {
             child = childProcess.spawn(bin, args, {
-                cwd: cwd,
+                cwd: runCwd,
                 env: cleanEnv(bin),
                 stdio: ["pipe", "pipe", "pipe"],
                 // own process group, so that a kill also reaches the commands
@@ -330,6 +341,8 @@ module.exports = function(vfs, options, register) {
             child: child,
             pid: child.pid,
             bin: bin,
+            cwd: runCwd,
+            fork: !!(resume && plan.fork),
             mode: mode,
             model: has(MODELS, opts.model) ? opts.model : "default",
             resume: resume,
@@ -403,6 +416,7 @@ module.exports = function(vfs, options, register) {
         });
 
         function exited(code, signal) {
+            markStopped(state);
             var stderr = state.stderr.trim();
             // --resume with an id the CLI does not know (deleted, other
             // machine): start a new conversation and replay the message. The
@@ -422,7 +436,7 @@ module.exports = function(vfs, options, register) {
                         return send({ ev: "error", message: err.message });
                     sent.forEach(function(line) { writeLine(fresh, line, true); });
                     fresh.busy = true;
-                });
+                }, { cwd: state.cwd });
             }
 
             if (state.heldResult && !state.stopped)
@@ -440,7 +454,8 @@ module.exports = function(vfs, options, register) {
         }
 
         touch(state);
-        send({ ev: "spawn", pid: child.pid, mode: mode, model: state.model, resume: resume });
+        send({ ev: "spawn", pid: child.pid, mode: mode, model: state.model, resume: resume,
+            fork: state.fork, cwd: path.relative(cwd, runCwd) });
         callback(null, state);
     }
 
@@ -835,10 +850,19 @@ module.exports = function(vfs, options, register) {
                 e.tried = tried;
                 return callback(e);
             }
-            spawnCli(bin, opts, function(err, state) {
-                if (err) return callback(err);
-                write(state, true);
-            });
+            var resume = typeof opts.resume == "string" && UUID_RE.test(opts.resume) ? opts.resume.toLowerCase() : null;
+            var go = function(plan) {
+                spawnCli(bin, opts, function(err, state) {
+                    if (err) return callback(err);
+                    write(state, true);
+                }, plan);
+            };
+            if (!resume) return go(null);
+            // decided when the session was picked, or now (e.g. after an idle stop)
+            var plan = resumePlans[resume];
+            delete resumePlans[resume];
+            if (plan) return go(plan);
+            resumePlan(resume, function(err, fresh) { go(fresh); });
         });
     }
 
@@ -927,31 +951,259 @@ module.exports = function(vfs, options, register) {
         callback(null, { running: true, id: id });
     }
 
-    /***** Transcript of an earlier session *****/
+    /***** Sessions: the CLI's transcripts *****/
 
+    // Only files under <config>/projects are read, found by the service
+    // itself: the client passes a session id (UUID), never a path.
+    function projectsDir() {
+        return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "projects");
+    }
+
+    function realDir(dir) {
+        try { return fs.realpathSync(dir); } catch (e) { return null; }
+    }
+
+    // is dir the workspace or inside it?
+    function inWorkspace(dir) {
+        if (typeof dir != "string" || !path.isAbsolute(dir)) return false;
+        var inside = function(p, root) {
+            return p == root || p.indexOf(root.replace(/\/$/, "") + path.sep) === 0;
+        };
+        var ws = path.normalize(cwd), wsReal = realDir(cwd) || ws;
+        var p = path.normalize(dir), pReal = realDir(dir);
+        return inside(p, ws) || inside(p, wsReal) || !!pReal && (inside(pReal, ws) || inside(pReal, wsReal));
+    }
+
+    function folderOf(dir) {
+        var ws = path.normalize(cwd), wsReal = realDir(cwd) || ws;
+        var p = path.normalize(dir), pReal = realDir(dir) || p;
+        var rel = p == ws || p.indexOf(ws + path.sep) === 0 ? path.relative(ws, p) : path.relative(wsReal, pReal);
+        return rel && rel.indexOf("..") !== 0 ? rel : "";
+    }
+
+    // project folders, regular files only (no symlinks)
+    function listDirs(projects) {
+        var dirs;
+        try { dirs = fs.readdirSync(projects); } catch (e) { return []; }
+        return dirs.filter(function(name) {
+            try { return fs.lstatSync(path.join(projects, name)).isDirectory(); }
+            catch (e) { return false; }
+        });
+    }
+
+    function findTranscript(sessionId, callback) {
+        var projects = projectsDir();
+        var name = sessionId.toLowerCase() + ".jsonl";
+        // the CLI names a project folder after its directory; if that naming
+        // changes, look in every project folder
+        var dirs = listDirs(projects);
+        var first = cwd.replace(/[^a-zA-Z0-9]/g, "-");
+        dirs.sort(function(a, b) { return (b == first) - (a == first); });
+        for (var i = 0; i < dirs.length; i++) {
+            var file = path.join(projects, dirs[i], name);
+            try {
+                var st = fs.lstatSync(file);
+                if (st.isFile()) return callback(null, file, st);
+            } catch (e) {}
+        }
+        callback(null, null, null);
+    }
+
+    // the first and last bytes of a transcript, as whole lines
+    function peek(file, size) {
+        var fd;
+        try {
+            fd = fs.openSync(file, "r");
+            var read = function(pos, len) {
+                var buf = Buffer.alloc(len);
+                var n = fs.readSync(fd, buf, 0, len, pos);
+                return buf.toString("utf8", 0, n);
+            };
+            var headText = read(0, Math.min(size, SESSION_PEEK));
+            var head = headText.split("\n");
+            if (size > SESSION_PEEK) head.pop(); // partial last line
+            var tail = [];
+            if (size > SESSION_PEEK) {
+                var len = Math.min(SESSION_PEEK, size - SESSION_PEEK);
+                tail = read(size - len, len).split("\n");
+                tail.shift(); // partial first line
+            }
+            return { head: parseLines(head), tail: parseLines(tail) };
+        } catch (e) {
+            return { head: [], tail: [] };
+        } finally {
+            if (fd != null) try { fs.closeSync(fd); } catch (e) {}
+        }
+    }
+
+    function parseLines(lines) {
+        var out = [];
+        lines.forEach(function(line) {
+            if (!line || line.charAt(0) != "{") return;
+            try { out.push(JSON.parse(line)); } catch (e) {}
+        });
+        return out;
+    }
+
+    function recordedCwd(entries) {
+        for (var i = 0; i < entries.length; i++) {
+            if (entries[i] && typeof entries[i].cwd == "string" && path.isAbsolute(entries[i].cwd))
+                return entries[i].cwd;
+        }
+        return null;
+    }
+
+    // a custom title (/rename) or a summary, else the first real prompt
+    function sessionTitle(parts) {
+        var all = parts.head.concat(parts.tail);
+        var custom = null, summary = null;
+        all.forEach(function(e) {
+            if (!e) return;
+            if (typeof e.customTitle == "string" && e.customTitle.trim()) custom = e.customTitle;
+            else if (e.type == "summary" && typeof e.summary == "string" && e.summary.trim()) summary = e.summary;
+        });
+        if (custom || summary) return oneLine(custom || summary);
+        for (var i = 0; i < parts.head.length; i++) {
+            var text = promptText(parts.head[i]);
+            if (text) return oneLine(text);
+        }
+        return null;
+    }
+
+    function promptText(e) {
+        if (!e || e.type != "user" || e.isMeta || e.isSidechain || e.isCompactSummary || !e.message)
+            return null;
+        var content = e.message.content;
+        var texts = [];
+        if (typeof content == "string") texts.push(content);
+        else if (Array.isArray(content)) {
+            for (var i = 0; i < content.length; i++) {
+                if (!content[i]) continue;
+                if (content[i].type == "tool_result") return null;
+                if (content[i].type == "text" && typeof content[i].text == "string") texts.push(content[i].text);
+            }
+        }
+        var text = texts.join(" ").trim();
+        // slash commands, their output, reminders, interruptions
+        if (!text || /^</.test(text) || /^\[Request interrupted/.test(text) || /^Caveat: /.test(text))
+            return null;
+        return text;
+    }
+
+    function oneLine(text) {
+        text = String(text).replace(/\s+/g, " ").trim();
+        return text.length > 120 ? text.slice(0, 119) + "\u2026" : text;
+    }
+
+    function markerFile(sessionId) {
+        return path.join(RECORD_DIR, "stopped-" + sessionId.toLowerCase());
+    }
+
+    // this service stopped a CLI of that session (its last writes are ours)
+    function markStopped(state) {
+        var id = state.sessionId;
+        if (!id || !UUID_RE.test(id) || state.marked) return;
+        state.marked = true;
+        try {
+            fs.mkdirSync(RECORD_DIR, { recursive: true, mode: 448 });
+            fs.writeFileSync(markerFile(id), String(Date.now()));
+        } catch (e) {}
+    }
+
+    // written in the last minutes, and not by a CLI of this panel that has
+    // stopped since: probably still open (e.g. in a terminal)
+    function inUseElsewhere(sessionId, mtimeMs) {
+        if (Date.now() - mtimeMs > RECENT_MS) return false;
+        if (cli && cli.sessionId == sessionId && !cli.exited) return false;
+        var stopped = 0;
+        try { stopped = +fs.readFileSync(markerFile(sessionId), "utf8") || 0; } catch (e) {}
+        // a stopped CLI may still flush its last lines
+        return !(stopped && mtimeMs <= stopped + 5000);
+    }
+
+    // where a resumed session runs, and whether it continues in a copy
+    function resumePlan(sessionId, callback) {
+        findTranscript(sessionId, function(err, file, stat) {
+            if (!file) return callback(null, { found: false, cwd: null, fork: false, folder: "" });
+            var recorded = recordedCwd(peek(file, stat.size).head);
+            var dir = recorded && inWorkspace(recorded) ? realDir(recorded) : null;
+            var plan = {
+                found: true,
+                file: file,
+                size: stat.size,
+                cwd: dir && fs.statSync(dir).isDirectory() ? dir : null,
+                fork: inUseElsewhere(sessionId, stat.mtimeMs),
+                folder: recorded ? folderOf(recorded) : ""
+            };
+            callback(null, plan);
+        });
+    }
+
+    function sessions(callback) {
+        callback = callback || function() {};
+        var projects = projectsDir();
+        var dirs = listDirs(projects);
+        // folders named after the workspace or a folder in it come first;
+        // the cwd recorded in each transcript decides
+        var prefixes = [cwd, realDir(cwd) || cwd].map(function(p) { return p.replace(/[^a-zA-Z0-9]/g, "-"); });
+        var matching = dirs.filter(function(name) {
+            return prefixes.some(function(pre) { return name == pre || name.indexOf(pre + "-") === 0; });
+        });
+        var files = [];
+        var looked = 0;
+        (matching.length ? matching : dirs).some(function(dir) {
+            var names;
+            try { names = fs.readdirSync(path.join(projects, dir)); } catch (e) { return false; }
+            names.some(function(name) {
+                if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i.test(name)) return false;
+                if (++looked > SESSION_STAT_LIMIT) return true;
+                var file = path.join(projects, dir, name);
+                try {
+                    var st = fs.lstatSync(file);
+                    if (st.isFile() && st.size > 0)
+                        files.push({ id: name.slice(0, 36).toLowerCase(), file: file, size: st.size, mtime: st.mtimeMs });
+                } catch (e) {}
+                return false;
+            });
+            return looked > SESSION_STAT_LIMIT;
+        });
+        files.sort(function(a, b) { return b.mtime - a.mtime; });
+
+        var seen = Object.create(null);
+        var list = [];
+        files.slice(0, SESSION_SCAN).forEach(function(f) {
+            if (seen[f.id]) return;
+            seen[f.id] = true;
+            var parts = peek(f.file, f.size);
+            var recorded = recordedCwd(parts.head) || recordedCwd(parts.tail);
+            if (!recorded || !inWorkspace(recorded)) return;
+            var title = sessionTitle(parts);
+            if (!title) return; // nothing was ever asked in it
+            list.push({
+                id: f.id,
+                title: title,
+                folder: folderOf(recorded),
+                mtime: Math.round(f.mtime),
+                recent: inUseElsewhere(f.id, f.mtime)
+            });
+        });
+        callback(null, { sessions: list, now: Date.now() });
+    }
+
+    // the earlier messages of a session, and how it will be resumed
     function history(sessionId, callback) {
         callback = callback || function() {};
         if (typeof sessionId != "string" || !UUID_RE.test(sessionId))
             return callback(new Error("Invalid session id"));
-        var projects = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "projects");
-        var name = sessionId.toLowerCase() + ".jsonl";
-        // the CLI names a project folder after its directory; if that naming
-        // changes, look in every project folder
-        var file = path.join(projects, cwd.replace(/[^a-zA-Z0-9]/g, "-"), name);
-        fs.stat(file, function(err, stat) {
-            if (!err && stat.isFile())
-                return readTranscript(file, stat.size, callback);
-            fs.readdir(projects, function(err, dirs) {
-                if (err) return callback(null, { found: false });
-                for (var i = 0; i < dirs.length; i++) {
-                    var candidate = path.join(projects, dirs[i], name);
-                    try {
-                        var st = fs.statSync(candidate);
-                        if (st.isFile())
-                            return readTranscript(candidate, st.size, callback);
-                    } catch (e) {}
-                }
-                callback(null, { found: false });
+        sessionId = sessionId.toLowerCase();
+        resumePlan(sessionId, function(err, plan) {
+            if (!plan.found) return callback(null, { found: false });
+            resumePlans[sessionId] = plan;
+            readTranscript(plan.file, plan.size, function(err, res) {
+                if (err) return callback(err);
+                res.fork = plan.fork;
+                res.folder = plan.folder;
+                callback(null, res);
             });
         });
     }
@@ -1114,6 +1366,14 @@ module.exports = function(vfs, options, register) {
         var files;
         try { files = fs.readdirSync(RECORD_DIR); } catch (e) { return; }
         files.forEach(function(name) {
+            if (/^stopped-/.test(name)) {
+                // markers of stopped sessions only matter for minutes
+                try {
+                    var marker = path.join(RECORD_DIR, name);
+                    if (Date.now() - fs.statSync(marker).mtimeMs > 24 * 3600 * 1000) fs.unlinkSync(marker);
+                } catch (e) {}
+                return;
+            }
             if (!/^\d+-\d+\.json$/.test(name)) return;
             var file = path.join(RECORD_DIR, name);
             var rec;
@@ -1149,6 +1409,7 @@ module.exports = function(vfs, options, register) {
             cli = null;
             state.reason = "shutdown";
             state.stopped = true;
+            markStopped(state);
             try { state.child.stdin.end(); } catch (e) {}
             killGroup(state, "SIGTERM");
         }
@@ -1197,6 +1458,7 @@ module.exports = function(vfs, options, register) {
         setModel: setModel,
         stop: stop,
         history: history,
+        sessions: sessions,
         destroy: destroy
     });
 };
