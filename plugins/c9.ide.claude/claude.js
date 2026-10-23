@@ -33,12 +33,19 @@ define(function(require, exports, module) {
 
         /***** Constants *****/
 
-        var MODELS = [
-            { value: "default", caption: "Default" },
-            { value: "opus", caption: "Opus" },
-            { value: "sonnet", caption: "Sonnet" },
-            { value: "haiku", caption: "Haiku" }
+        // until claude has run once and reported its own list (list_models)
+        // levels of a model that supports effort but does not list them
+        var FALLBACK_LEVELS = ["low", "medium", "high"];
+        var FALLBACK_MODELS = [
+            { value: "default", displayName: "Default", description: "Claude's default model", supportsEffort: true, supportedEffortLevels: FALLBACK_LEVELS },
+            { value: "opus", displayName: "Opus", description: "", supportsEffort: true, supportedEffortLevels: FALLBACK_LEVELS },
+            { value: "sonnet", displayName: "Sonnet", description: "", supportsEffort: true, supportedEffortLevels: FALLBACK_LEVELS },
+            { value: "haiku", displayName: "Haiku", description: "", supportsEffort: true, supportedEffortLevels: FALLBACK_LEVELS }
         ];
+        var EFFORTS = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
+        var MODEL_RE = /^[a-z][a-z0-9.\-]{0,63}(\[1m\])?$/i;
+        var THINKING_GAP = 30000;       // a pause this long: the thinking time is not shown
+        var PROMPT_GUARD = 500;         // clicks on a new prompt are ignored this long (ms)
         // "": no --permission-mode flag, the CLI uses the user's own default
         // (defaultMode in ~/.claude/settings.json); the label then shows the
         // mode the CLI reports
@@ -99,7 +106,8 @@ define(function(require, exports, module) {
         });
 
         // UI elements
-        var root, header, statusDot, statusText, modelSelect, modeSelect, btnNew, btnHistory, historyMenu;
+        var root, header, statusDot, statusText, modelSelect, effortSelect, modeSelect, btnNew, btnHistory, historyMenu;
+        var actEl, actText, actMeta, actHint;
         var logEl, welcomeEl, jumpBtn, composer, attachRow, textarea, btnAttach, btnSend, fileInput, dropOverlay;
 
         // connection with claude-service.js
@@ -120,7 +128,20 @@ define(function(require, exports, module) {
         var permCards = Object.create(null);    // request_id -> card
         var attachments = [];
         var autoScroll = true;
-        var activity = "";              // status detail while busy
+        var activity = { parts: "", kind: "", tokens: 0 };  // what Claude does now (the activity row)
+        var turnStart = 0;              // when the turn started (elapsed time)
+        var actTimer = null;            // ticks the elapsed times while busy
+        var liveTools = [];             // tool cards running in this turn, oldest first
+        var liveThinking = null;        // the thinking block being streamed
+        var taskSummary = "";           // the CLI's summary of the task (header)
+        var debug = false;              // localStorage "claude-debug": log event times
+
+        // model and effort: the CLI's model list, and what it really applies
+        var modelList = null;           // list_models (null: FALLBACK_MODELS)
+        var applied = null;             // { model, effort } from get_settings
+        var appliedFor = null;          // ... for this choice in the menus: { model, effort }
+        var confirmNext = false;        // a choice made while claude was not running
+        var confirmModeNext = false;
         var hasMessages = false;
         var lastTotalCost = 0;
         var lastResultError = false;    // the last turn ended with an error that is shown
@@ -139,6 +160,7 @@ define(function(require, exports, module) {
                 settings.setDefaults("user/claude", [
                     ["path", ""],
                     ["model", "default"],
+                    ["effort", ""],
                     ["mode", ""]
                 ]);
                 settings.setDefaults("state/claude", [
@@ -239,6 +261,7 @@ define(function(require, exports, module) {
                     // usable once its events can reach us
                     api = remote;
                     stream = meta.stream;
+                    debug = debugOn();
                     stream.on("data", function(chunk) {
                         var events;
                         try {
@@ -247,6 +270,7 @@ define(function(require, exports, module) {
                             return console.error("[claude] bad event from the service", e);
                         }
                         if (!Array.isArray(events)) events = [events];
+                        if (debug) debugLog(events);
                         events.forEach(function(event) {
                             try {
                                 onEvent(event);
@@ -290,7 +314,9 @@ define(function(require, exports, module) {
             // header
             statusDot = el("span", { className: "claude-status-dot" });
             statusText = el("span", { className: "claude-status-text", text: "Claude" });
-            modelSelect = select("claude-model", MODELS, "Model", onModelChange);
+            restoreModelCache();
+            modelSelect = select("claude-model", modelItems, "Model", onModelChange);
+            effortSelect = select("claude-effort", effortItems, "Effort", onEffortChange);
             modeSelect = select("claude-mode", MODES, "Permission mode", onModeChange);
             btnNew = iconButton("plus", "New session", newSession);
             btnHistory = iconButton("history", "Session history", function() {});
@@ -298,7 +324,7 @@ define(function(require, exports, module) {
             attachMenu(btnHistory, buildHistoryMenu);
             header = el("div", { className: "claude-header" }, [
                 el("div", { className: "claude-status" }, [statusDot, statusText]),
-                el("div", { className: "claude-header-tools" }, [modelSelect.wrapper, modeSelect.wrapper, btnNew, btnHistory])
+                el("div", { className: "claude-header-tools" }, [modelSelect.wrapper, effortSelect.wrapper, modeSelect.wrapper, btnNew, btnHistory])
             ]);
             root.appendChild(header);
 
@@ -317,6 +343,15 @@ define(function(require, exports, module) {
             });
             jumpBtn.classList.add("claude-jump");
             root.appendChild(el("div", { className: "claude-log-wrap" }, [logEl, jumpBtn]));
+
+            // activity: what Claude does now, while a turn runs
+            actText = el("span", { className: "claude-activity-text", "aria-live": "polite" });
+            actMeta = el("span", { className: "claude-activity-meta" });
+            actHint = el("span", { className: "claude-activity-hint", text: "Esc to stop" });
+            actEl = el("div", { className: "claude-activity" }, [
+                icon("spark", "claude-activity-spark"), actText, actMeta, actHint
+            ]);
+            root.appendChild(actEl);
 
             // composer
             attachRow = el("div", { className: "claude-attachments" });
@@ -353,6 +388,15 @@ define(function(require, exports, module) {
                 fileInput
             ]);
             root.appendChild(composer);
+            // Esc stops Claude from anywhere in the panel, except in a prompt
+            root.addEventListener("keydown", function(e) {
+                if (e.keyCode != 27 || !(busy || stopping) || e.defaultPrevented) return;
+                if (e.target && e.target.closest && e.target.closest(".claude-perm")) return;
+                if (menuOpen()) return;
+                e.preventDefault();
+                e.stopPropagation();
+                interrupt();
+            });
             composer.addEventListener("click", function(e) {
                 if (e.target == composer || e.target.classList.contains("claude-composer-box"))
                     textarea.focus();
@@ -392,7 +436,9 @@ define(function(require, exports, module) {
             });
 
             setSelect(modelSelect, settings.get("user/claude/@model") || "default");
+            setSelect(effortSelect, settings.get("user/claude/@effort") || "");
             setSelect(modeSelect, settings.get("user/claude/@mode") || "");
+            updateSettingLabels();
 
             renderWelcome();
             updateStatus();
@@ -451,7 +497,18 @@ define(function(require, exports, module) {
         function newMenu(className) {
             var menu = new ui.menu({ "class": "claude-menu " + className });
             plugin.addElement(menu);
+            menu.claudeMeta = [];
+            menu.on("display", function() { applyMeta(menu); });
             return menu;
+        }
+
+        // secondary text (a model's description; a session's folder and
+        // time) goes in the item's right-hand (shortcut) column
+        function applyMeta(menu) {
+            (menu.claudeMeta || []).forEach(function(m) {
+                if (m.item.$hotkey) m.item.$hotkey.textContent = m.text;
+                if (m.item.$ext && m.tip) m.item.$ext.title = m.tip;
+            });
         }
 
         function clearMenu(menu) {
@@ -504,6 +561,11 @@ define(function(require, exports, module) {
             });
         }
 
+        function menuOpen() {
+            return [modelSelect, effortSelect, modeSelect].some(function(n) { return n && n.menu && n.menu.visible; })
+                || !!(historyMenu && historyMenu.visible);
+        }
+
         // keyboard opening: the current choice is highlighted, as in a list
         function highlightCurrent(menu) {
             var items = menu.childNodes.filter(function(n) {
@@ -532,47 +594,68 @@ define(function(require, exports, module) {
             ext.style.left = left + "px";
         }
 
-        // a header button with a menu of choices (model, permission mode)
-        function select(className, items, title, onchange) {
+        // A header button with a menu of choices (model, effort, permission
+        // mode). source: the items, or a function that returns them (the
+        // model list and the effort levels change). An item: { value,
+        // caption, short (the button label), desc (secondary text), info
+        // (a disabled line) }. node.label and node.tip override the button's
+        // label and tooltip (what the CLI really applies).
+        function select(className, source, title, onchange) {
             var label = el("span", { className: "claude-select-label" });
             var button = el("button", { type: "button", className: "claude-select " + className,
                 title: title, "aria-haspopup": "true" }, [label]);
-            var node = { value: "", items: items.slice(), wrapper: button, menu: null };
+            var node = { value: "", items: [], extra: [], wrapper: button, menu: null, label: null, tip: null };
+            node.refresh = function() {
+                var items = typeof source == "function" ? source() : source;
+                node.items = items.concat(node.extra.filter(function(x) {
+                    return !items.some(function(i) { return !i.info && i.value == x.value; });
+                }));
+            };
             node.find = function(value) {
-                return node.items.filter(function(i) { return i.value == value; })[0];
+                return node.items.filter(function(i) { return !i.info && i.value == value; })[0];
             };
             node.syncLabel = function() {
                 var item = node.find(node.value);
-                label.textContent = item ? item.short || item.caption : node.value;
-                button.title = title + (item ? ": " + item.caption : node.value ? ": " + node.value : "");
+                label.textContent = node.label || (item ? item.short || item.caption : node.value);
+                button.title = node.tip || title + (item ? ": " + item.caption : node.value ? ": " + node.value : "");
             };
             attachMenu(button, function() {
-                if (!node.menu) node.menu = newMenu("claude-choice-menu");
-                // rebuilt each time: modes the CLI reports join the list
+                if (!node.menu) node.menu = newMenu("claude-choice-menu " + className + "-menu");
+                // rebuilt each time: the model list, the levels of the model
+                // and the modes the CLI reports change
+                node.refresh();
                 clearMenu(node.menu);
+                node.menu.claudeMeta = [];
                 node.items.forEach(function(item) {
-                    node.menu.appendChild(new ui.item({
+                    if (item.info) return infoItem(node.menu, item.caption);
+                    var mi = node.menu.appendChild(new ui.item({
                         type: "check",
                         caption: item.caption,
                         checked: item.value == node.value,
                         onclick: function() {
+                            if (item.value == node.value) return;
                             node.value = item.value;
                             node.syncLabel();
                             onchange(item.value);
                         }
                     }));
+                    if (item.desc) node.menu.claudeMeta.push({ item: mi, text: item.desc, tip: item.caption + "\n" + item.desc });
                 });
                 return node.menu;
             });
+            node.refresh();
             return node;
         }
 
         function setSelect(node, value) {
             value = value == null ? "" : String(value);
-            // a mode the panel does not offer (e.g. bypassPermissions from the
-            // user's settings): show it as it is
-            if (value && !node.find(value))
-                node.items.push({ value: value, caption: value });
+            node.refresh();
+            // a value the panel does not offer (e.g. bypassPermissions from
+            // the user's settings, a model id): show it as it is
+            if (value && !node.find(value)) {
+                node.extra.push({ value: value, caption: value });
+                node.refresh();
+            }
             node.value = node.find(value) ? value : node.items[0].value;
             node.syncLabel();
         }
@@ -594,10 +677,8 @@ define(function(require, exports, module) {
         // The recent Claude Code sessions of this workspace (the panel's and
         // the terminal's), newest first. The service reads the transcripts.
         function buildHistoryMenu() {
-            if (!historyMenu) {
+            if (!historyMenu)
                 historyMenu = newMenu("claude-history-menu");
-                historyMenu.on("display", applyHistoryMeta);
-            }
             clearMenu(historyMenu);
             historyMenu.claudeMeta = [];
             if (!api) {
@@ -617,7 +698,8 @@ define(function(require, exports, module) {
                     if (!item || !UUID_RE.test(item.id || "")) return;
                     var title = String(item.title || "Untitled");
                     var when = relativeTime(item.mtime, res.now || Date.now());
-                    var meta = [item.folder, when].filter(Boolean).join(" · ");
+                    var open = item.elsewhere && typeof item.elsewhere == "object";
+                    var meta = [item.folder, when, open ? "open elsewhere" : ""].filter(Boolean).join(" · ");
                     var mi = historyMenu.appendChild(new ui.item({
                         type: "check",
                         caption: title.length > 64 ? title.slice(0, 63) + "…" : title,
@@ -629,20 +711,13 @@ define(function(require, exports, module) {
                     historyMenu.claudeMeta.push({ item: mi, text: meta, tip: title
                         + "\n" + (item.folder ? "Folder: " + item.folder + "\n" : "")
                         + "Last activity: " + new Date(item.mtime).toLocaleString()
-                        + (item.recent ? " (it may still be open)" : "") });
+                        + (open ? item.elsewhere.how == "process" ? "\nOpen in another process (e.g. a terminal)"
+                            : "\nIt may still be open elsewhere" : "") });
                 });
-                applyHistoryMeta();
+                applyMeta(historyMenu);
                 if (historyMenu.visible) placeMenu(historyMenu);
             });
             return historyMenu;
-        }
-
-        // the folder and the time go in the item's right-hand (shortcut) column
-        function applyHistoryMeta() {
-            (historyMenu.claudeMeta || []).forEach(function(m) {
-                if (m.item.$hotkey) m.item.$hotkey.textContent = m.text;
-                if (m.item.$ext) m.item.$ext.title = m.tip;
-            });
         }
 
         function codeSpan(text) {
@@ -734,12 +809,12 @@ define(function(require, exports, module) {
             else if (cliInfo && !cliInfo.found) { text = "claude not found"; state = "error"; }
             else if (stopping) { text = "Stopping…"; state = "busy"; }
             else if (pending) { text = "Waiting for your approval"; state = "waiting"; }
-            else if (busy) { text = activity || "Working…"; state = "busy"; }
+            else if (busy) { text = taskSummary || "Working…"; state = "busy"; }
             else if (sessionId) { text = "Ready"; state = "ready"; }
             else { text = "New session"; state = "ready"; }
             statusText.textContent = text;
             statusText.title = sessionId ? "Session " + sessionId : "";
-            statusDot.className = "claude-status-dot claude-" + state;
+            statusDot.className = "claude-status-dot claude-dot-" + state;
 
             btnHistory.disabled = !api;
             btnNew.disabled = !hasMessages && !sessionId;
@@ -750,11 +825,157 @@ define(function(require, exports, module) {
             btnSend.title = showStop ? "Stop (Esc)" : "Send (Enter)";
             btnSend.classList.toggle("claude-stop", showStop);
             btnSend.disabled = !showStop && !textarea.value.trim() && !attachments.length;
+            renderActivity();
         }
 
-        function setActivity(text) {
-            activity = text;
+        /***** Activity row *****/
+
+        // parts: a string, or an array of strings and { code: "..." }
+        // kind: "thinking" shows the token estimate of the thinking block
+        function setActivity(parts, kind) {
+            activity = { parts: parts || "", kind: kind || "" };
             updateStatus();
+        }
+
+        var actShown = null;
+        function renderActivity() {
+            if (!actEl) return;
+            var show = busy || stopping;
+            actEl.classList.toggle("claude-show", show);
+            if (!show) {
+                clearInterval(actTimer);
+                actTimer = null;
+                actShown = null;
+                return;
+            }
+            if (!actTimer) actTimer = setInterval(tick, 1000);
+            var waiting = !stopping && pendingPermissions().length > 0;
+            var parts = stopping ? "Stopping…" : waiting ? "Waiting for your approval" : activity.parts || "Working…";
+            var key = JSON.stringify(parts);
+            if (key != actShown) {
+                actShown = key;
+                actText.textContent = "";
+                [].concat(parts).forEach(function(part) {
+                    if (part && typeof part == "object") actText.appendChild(codeSpan(part.code));
+                    else actText.appendChild(document.createTextNode(String(part)));
+                });
+            }
+            actEl.title = activity.title || "";
+            actEl.classList.toggle("claude-act-waiting", waiting);
+            actEl.classList.toggle("claude-act-stopping", stopping);
+            renderActivityMeta();
+        }
+
+        function renderActivityMeta() {
+            if (!actMeta) return;
+            var bits = [];
+            var tokens = activity.kind == "thinking" && liveThinking ? liveThinking.tokens() : 0;
+            if (tokens && !stopping) bits.push(formatTokens(tokens));
+            if (turnStart) bits.push(formatElapsed(Date.now() - turnStart));
+            actMeta.textContent = bits.join(" · ");
+        }
+
+        function tick() {
+            if (!busy && !stopping) return renderActivity();
+            renderActivityMeta();
+        }
+
+        function formatElapsed(ms) {
+            var s = Math.max(0, Math.floor(ms / 1000));
+            if (s < 60) return s + "s";
+            var m = Math.floor(s / 60);
+            s -= m * 60;
+            return m + "m " + (s < 10 ? "0" : "") + s + "s";
+        }
+
+        function formatTokens(n) {
+            n = Math.max(0, Math.round(n));
+            return n < 1000 ? n + " tokens" : (n / 1000).toFixed(1) + "k tokens";
+        }
+
+        // what a tool call does, for the activity row
+        function toolActivity(name, input) {
+            input = input || {};
+            var file = input.file_path || input.notebook_path || input.path || "";
+            var base = file ? String(file).replace(/[\/\\]+$/, "").split(/[\/\\]/).pop() : "";
+            switch (name) {
+                case "Bash":
+                    return input.command ? codeActivity("Running ", input.command, 48) : "Running a command…";
+                case "Read":
+                case "NotebookRead":
+                    return base ? "Reading " + base + "…" : "Reading…";
+                case "Edit":
+                case "MultiEdit":
+                case "NotebookEdit":
+                    return base ? "Editing " + base + "…" : "Editing…";
+                case "Write":
+                    return base ? "Writing " + base + "…" : "Writing a file…";
+                case "Grep":
+                    return input.pattern ? codeActivity("Searching for ", input.pattern, 40) : "Searching…";
+                case "Glob":
+                    return input.pattern ? codeActivity("Finding ", input.pattern, 40) : "Finding files…";
+                case "LS":
+                    return "Listing " + (base || "files") + "…";
+                case "WebFetch":
+                    var host = /^[a-z]+:\/\/([^\/?#]+)/i.exec(input.url || "");
+                    return host ? "Fetching " + host[1] + "…" : "Fetching…";
+                case "WebSearch":
+                    return "Searching the web…";
+                case "Task":
+                case "Agent":
+                    return input.description ? "Agent: " + firstLine(input.description, 50) + "…" : "Starting an agent…";
+                case "TodoWrite":
+                    return "Updating the to-do list…";
+                case "BashOutput":
+                    return "Reading command output…";
+                case "ExitPlanMode":
+                    return "Presenting the plan…";
+                case "AskUserQuestion":
+                    return "Asking you a question…";
+                default:
+                    return "Using " + toolInfo(name).verb + "…";
+            }
+        }
+
+        // "Running `npm test`…"; a long command ends in its own ellipsis
+        function codeActivity(prefix, text, max) {
+            var code = firstLine(text, max);
+            return [prefix, { code: code }].concat(/…$/.test(code) ? [] : ["…"]);
+        }
+
+        // the tool cards of this turn that wait for their result
+        function toolStarted(card) {
+            if (liveTools.indexOf(card) == -1) liveTools.push(card);
+        }
+
+        function toolEnded(card) {
+            var i = liveTools.indexOf(card);
+            if (i != -1) liveTools.splice(i, 1);
+            if (!busy) return;
+            var last = liveTools[liveTools.length - 1];
+            if (last) setActivity(toolActivity(last.name, last.input));
+            // the result goes back to the model
+            else setActivity("Thinking…", "thinking");
+        }
+
+        function debugOn() {
+            try { return !!window.localStorage.getItem("claude-debug"); } catch (e) { return false; }
+        }
+
+        var debugLast = 0;
+        function debugLog(events) {
+            var now = Date.now();
+            var from = turnStart || now;
+            console.log("[claude] +" + (now - from) + "ms (" + (debugLast ? now - debugLast : 0) + "ms since the last) "
+                + events.length + " event(s): " + events.map(function(event) {
+                    var d = event && event.data || {};
+                    if (!event || event.ev != "msg") return event && event.ev;
+                    var what = d.type + (d.subtype ? "/" + d.subtype : "");
+                    var e = d.type == "stream_event" && d.event;
+                    if (e) what = e.type + (e.delta ? ":" + e.delta.type : e.content_block ? ":" + e.content_block.type : "");
+                    return what;
+                }).join(", "));
+            debugLast = now;
         }
 
         /***** Welcome screen *****/
@@ -931,7 +1152,9 @@ define(function(require, exports, module) {
             return turn;
         }
 
-        function finishTurn() {
+        // fromHistory: tool calls without a result are not marked stopped
+        function finishTurn(fromHistory) {
+            liveTools = [];
             if (!turn) return;
             Object.keys(turn.msgs).forEach(function(id) {
                 var msg = turn.msgs[id];
@@ -940,7 +1163,7 @@ define(function(require, exports, module) {
             Object.keys(toolCards).forEach(function(id) {
                 var card = toolCards[id];
                 if (card.status == "running" || card.status == "waiting")
-                    card.setStatus("stopped");
+                    card.setStatus(fromHistory ? "none" : "stopped");
             });
             Object.keys(permCards).forEach(function(id) {
                 if (permCards[id].pending) permCards[id].resolve("cancelled");
@@ -999,20 +1222,37 @@ define(function(require, exports, module) {
             return block;
         }
 
-        function createThinkingBlock() {
+        // live: streamed now. While it runs: "Thinking… · 1.2k tokens"; then
+        // "Thought for 6s" (timed here, from its start to its end; not shown
+        // after a pause of more than 30 s, e.g. a sleeping laptop). From the
+        // history: "Thinking". Its text, when the CLI passes it on (often
+        // it is empty or redacted), can be expanded.
+        function createThinkingBlock(live) {
             var t = ensureTurn();
             var body = el("div", { className: "claude-thinking-body" });
-            var card = el("div", { className: "claude-thinking" });
+            var label = el("span", { className: "claude-thinking-label", text: live ? "Thinking…" : "Thinking" });
+            var meta = el("span", { className: "claude-thinking-meta" });
+            var card = el("div", { className: "claude-thinking" + (live ? " claude-live" : "") });
             var head = el("div", { className: "claude-thinking-head" }, [
-                icon("thinking"), el("span", { text: "Thinking" }), icon("chevron", "claude-chevron")
+                icon("thinking", "claude-thinking-icon"), label, meta, icon("chevron", "claude-chevron")
             ]);
-            head.addEventListener("click", function() { card.classList.toggle("claude-expanded"); });
+            head.addEventListener("click", function() {
+                if (block.text.trim()) card.classList.toggle("claude-expanded");
+            });
             card.appendChild(head);
             card.appendChild(body);
-            card.style.display = "none"; // shown once it has text (thinking can be redacted)
             t.el.appendChild(card);
-            var block = { el: card, text: "", done: false };
+            var now = Date.now();
+            var block = { el: card, text: "", done: false, start: now, last: now, maxGap: 0,
+                deltaTokens: 0, absTokens: null };
+            function touch() {
+                var at = Date.now();
+                block.maxGap = Math.max(block.maxGap, at - block.last);
+                block.last = at;
+            }
             block.append = function(text) {
+                touch();
+                if (!text) return;
                 block.text += text;
                 update();
             };
@@ -1020,16 +1260,49 @@ define(function(require, exports, module) {
                 block.text = text || block.text;
                 update();
             };
-            block.finish = function() {
-                block.done = true;
-                if (!block.text.trim() && card.parentNode) card.parentNode.removeChild(card);
+            // the estimate of a thinking_delta is an increment
+            block.addTokens = function(n) {
+                if (typeof n == "number" && n > 0) block.deltaTokens += n;
+                showTokens();
             };
+            // thinking_tokens: the total so far; it wins once seen
+            block.setTokens = function(n) {
+                touch();
+                if (typeof n == "number" && n >= 0) block.absTokens = n;
+                showTokens();
+            };
+            block.tokens = function() {
+                return block.absTokens != null ? block.absTokens : block.deltaTokens;
+            };
+            block.finish = function() {
+                if (block.done) return;
+                block.done = true;
+                if (liveThinking === block) liveThinking = null;
+                if (!live) return;
+                touch();
+                card.classList.remove("claude-live");
+                var secs = Math.max(1, Math.round((Date.now() - block.start) / 1000));
+                label.textContent = block.maxGap > THINKING_GAP ? "Thinking"
+                    : "Thought for " + (secs < 60 ? secs + "s" : formatElapsed(secs * 1000));
+                meta.textContent = "";
+                if (block.tokens()) head.title = "About " + formatTokens(block.tokens());
+            };
+            function showTokens() {
+                if (block.done) return;
+                var n = block.tokens();
+                meta.textContent = n ? "· " + formatTokens(n) : "";
+                if (liveThinking === block) renderActivityMeta();
+            }
             function update() {
                 if (!block.text.trim()) return;
-                card.style.display = "";
+                card.classList.add("claude-has-text");
                 body.textContent = block.text;
             }
-            setActivity("Thinking…");
+            if (live) {
+                if (liveThinking) liveThinking.finish();
+                liveThinking = block;
+                setActivity("Thinking…", "thinking");
+            }
             return block;
         }
 
@@ -1233,7 +1506,8 @@ define(function(require, exports, module) {
             return box;
         }
 
-        function codePreview(text, path, maxLines) {
+        // wrap: long lines wrap (commands) instead of scrolling
+        function codePreview(text, path, maxLines, wrap) {
             text = String(text == null ? "" : text);
             var lines = text.split("\n");
             var more = 0;
@@ -1243,13 +1517,13 @@ define(function(require, exports, module) {
             }
             var code = el("code", { text: text });
             var pre = el("pre", { className: codeThemeClass() }, [code]);
-            var wrap = el("div", { className: "claude-code claude-code-plain" }, [pre]);
+            var box = el("div", { className: "claude-code claude-code-plain" + (wrap ? " claude-code-wrap" : "") }, [pre]);
             if (more)
-                wrap.appendChild(el("div", { className: "claude-code-more", text: "… " + more + " more lines" }));
+                box.appendChild(el("div", { className: "claude-code-more", text: "… " + more + " more lines" }));
             var lang = path ? String(path).split(/[\/\\]/).pop().split(".").pop() : "";
             if (path && /\./.test(String(path).split(/[\/\\]/).pop()))
                 markdown.highlight(code, lang);
-            return wrap;
+            return box;
         }
 
         function outputBlock(text, isError) {
@@ -1293,7 +1567,7 @@ define(function(require, exports, module) {
                     var parts = [];
                     if (input.description)
                         parts.push(el("div", { className: "claude-tool-desc", text: input.description }));
-                    parts.push(codePreview(input.command, "command.sh", 40));
+                    parts.push(codePreview(input.command, "command.sh", 40, true));
                     return el("div", null, parts);
                 case "NotebookEdit":
                     return codePreview(input.new_source, input.cell_type == "markdown" ? "cell.md" : "cell.py", PREVIEW_LINES);
@@ -1344,7 +1618,7 @@ define(function(require, exports, module) {
 
         function createToolCard(id, name) {
             var info = toolInfo(name);
-            var node = el("div", { className: "claude-tool claude-running" });
+            var node = el("div", { className: "claude-tool claude-st-running" });
             var statusEl = el("span", { className: "claude-tool-status" });
             var titleEl = el("span", { className: "claude-tool-title" });
             var head = el("div", { className: "claude-tool-head", title: name }, [
@@ -1403,18 +1677,15 @@ define(function(require, exports, module) {
                 node.classList.toggle("claude-has-body", !!preview || !!resultEl.firstChild || !!subEl.firstChild);
                 if (EXPANDED_BY_DEFAULT[name] && preview && !card.userToggled)
                     card.toggle(true);
-                if (name == "Bash" || name == "Task" || name == "Agent")
-                    setActivity((name == "Bash" ? "Running " : "Agent: ") + firstLine(name == "Bash"
-                        ? card.input.description || card.input.command : card.input.description, 40) + "…");
-                else if (card.status == "running")
-                    setActivity(info.verb + "…");
             };
+            // running, waiting (for a permission), ok, error, denied,
+            // stopped, none (no result in a resumed session)
             card.setStatus = function(status) {
                 card.status = status;
-                node.className = node.className.replace(/\bclaude-(running|waiting|ok|error|denied|stopped)\b/g, "").trim()
-                    + " claude-" + status;
+                node.className = node.className.replace(/\s*\bclaude-st-\w+/g, "") + " claude-st-" + status;
                 statusEl.textContent = "";
-                if (status == "error") statusEl.appendChild(icon("error"));
+                if (status == "running") statusEl.appendChild(el("span", { className: "claude-spinner", title: "Running" }));
+                else if (status == "error") statusEl.appendChild(icon("error"));
                 else if (status == "denied") statusEl.textContent = "Denied";
                 else if (status == "stopped") statusEl.textContent = "Stopped";
                 else if (status == "waiting") statusEl.textContent = name == "AskUserQuestion" ? "Needs an answer" : "Needs approval";
@@ -1422,6 +1693,7 @@ define(function(require, exports, module) {
             };
             card.setResult = function(content, isError) {
                 var text = resultText(content);
+                if (isError) text = text.replace(/^\s*<tool_use_error>([\s\S]*)<\/tool_use_error>\s*$/, "$1");
                 var status = !isError ? "ok"
                     : card.status == "denied" || /^(The user (denied|stopped|doesn't want)|The session was stopped)/i.test(text) ? "denied"
                     : "error";
@@ -1450,9 +1722,10 @@ define(function(require, exports, module) {
                 subEl.appendChild(line);
                 while (subEl.childNodes.length > 50) subEl.removeChild(subEl.firstChild);
                 node.classList.add("claude-has-body");
-                setActivity("Agent: " + sub.verb + "…");
+                if (busy && card.status == "running")
+                    setActivity(["Agent: "].concat(toolActivity(block.name, block.input)));
             };
-            card.updateTitle();
+            card.setStatus("running");
             return card;
         }
 
@@ -1551,24 +1824,37 @@ define(function(require, exports, module) {
             }
             else {
                 var preview = name == "Bash"
-                    ? codePreview(input.command, "command.sh", 40)
+                    ? codePreview(input.command, "command.sh", 40, true)
                     : inputPreview(name, input, true);
                 if (preview) node.appendChild(el("div", { className: "claude-perm-preview" }, [preview]));
             }
 
             var buttons = [];
-            function decide(behavior) {
+            var shownAt = Date.now();
+            var feedbackEl = null;
+            // Deny without a note: the turn stops and Claude waits for the
+            // user. With a note (what to do instead): Claude goes on with it.
+            function decide(behavior, feedback) {
                 if (!card.pending) return;
+                // a click meant for what was there before the prompt appeared
+                if (Date.now() - shownAt < PROMPT_GUARD) return;
                 if (!api) return showError("Not connected to the Claude service");
                 buttons.forEach(function(b) { b.disabled = true; });
+                if (feedbackEl) feedbackEl.disabled = true;
                 var decision = { behavior: behavior };
                 if (name == "AskUserQuestion" && behavior == "allow") decision.answers = answers;
+                if (behavior == "deny") {
+                    if (name == "AskUserQuestion") decision.message = "The user skipped the question.";
+                    else if (feedback) decision.message = "The user denied this tool call and said what to do instead: " + feedback;
+                    else decision.interrupt = true;
+                }
                 api.respond(id, decision, function(err) {
                     if (err) {
                         card.resolve("expired");
                         return;
                     }
                     card.resolve(behavior);
+                    if (feedback) renderUserMessage(feedback, [], false, true);
                 });
             }
             if (name == "AskUserQuestion") {
@@ -1580,10 +1866,27 @@ define(function(require, exports, module) {
                 var label = suggestionLabel(req.permission_suggestions);
                 if (label)
                     buttons.push(textButton(label, "claude-btn-secondary", function() { decide("allowAlways"); }));
-                buttons.push(textButton(name == "ExitPlanMode" ? "No, keep planning" : "Deny", "claude-btn-secondary claude-btn-deny", function() { decide("deny"); }));
+                var denyCaption = name == "ExitPlanMode" ? "No, keep planning" : "Deny";
+                var denyBtn = textButton(denyCaption, "claude-btn-secondary claude-btn-deny", function() {
+                    decide("deny", feedbackEl.value.trim());
+                }, "Claude stops and waits for you; or write what to do instead below");
+                buttons.push(denyBtn);
+                feedbackEl = el("input", { type: "text", className: "claude-perm-feedback",
+                    placeholder: "Tell Claude what to do instead", "aria-label": "Tell Claude what to do instead (Enter)" });
+                feedbackEl.addEventListener("input", function() {
+                    denyBtn.textContent = feedbackEl.value.trim()
+                        ? (name == "ExitPlanMode" ? "No, and tell Claude" : "Deny and tell Claude") : denyCaption;
+                });
+                feedbackEl.addEventListener("keydown", function(e) {
+                    if (e.keyCode != 13 || e.isComposing) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (feedbackEl.value.trim()) decide("deny", feedbackEl.value.trim());
+                });
             }
             buttons.forEach(function(b) { actions.appendChild(b); });
             node.appendChild(actions);
+            if (feedbackEl) node.appendChild(feedbackEl);
             node.appendChild(stateEl);
 
             card.resolve = function(how) {
@@ -1600,6 +1903,7 @@ define(function(require, exports, module) {
                     expired: "This request is no longer pending"
                 }[how] || how;
                 stateEl.textContent = text;
+                if (feedbackEl) feedbackEl.style.display = "none";
                 node.classList.add("claude-perm-" + (how == "allowAlways" ? "allow" : how));
                 if (card.toolCard) {
                     if (how == "allow" || how == "allowAlways") {
@@ -1681,7 +1985,7 @@ define(function(require, exports, module) {
             if (!event || typeof event != "object") return;
             // output of a process that was stopped (New session, Resume)
             // belongs to the old chat
-            if ((event.ev == "msg" || event.ev == "control" || event.ev == "notice")
+            if ((event.ev == "msg" || event.ev == "control" || event.ev == "notice" || event.ev == "cli-settings")
               && event.pid && event.pid != cliPid)
                 return;
             switch (event.ev) {
@@ -1696,6 +2000,7 @@ define(function(require, exports, module) {
                     running = !!event.running;
                     cliPid = event.pid || null;
                     if (event.running && event.sessionId && !sessionId) sessionId = event.sessionId;
+                    if (event.busy && !busy) turnStart = Date.now();
                     busy = !!event.busy;
                     (event.pending || []).forEach(function(message) {
                         if (message && !permCards[message.request_id]) showPermission(message);
@@ -1728,6 +2033,9 @@ define(function(require, exports, module) {
                     break;
                 case "msg":
                     onMessage(event.data || {});
+                    break;
+                case "cli-settings":
+                    onCliSettings(event);
                     break;
             }
         }
@@ -1769,16 +2077,50 @@ define(function(require, exports, module) {
                     if (m.subtype == "init") {
                         if (m.session_id) setSession(m.session_id);
                         if (m.permissionMode) syncMode(m.permissionMode);
+                        if (confirmModeNext && m.permissionMode) {
+                            confirmModeNext = false;
+                            insertNotice("Mode: " + modeCaption(m.permissionMode), true);
+                        }
                     }
                     else if (m.subtype == "status") {
                         if (m.permissionMode) syncMode(m.permissionMode);
-                        if (m.status == "compacting") setActivity("Compacting the conversation…");
+                        if (!busy) break;
+                        if (m.status == "compacting") setActivity("Compacting…");
+                        // a request to the model: it thinks until its answer streams
+                        else if (m.status == "requesting") setActivity("Thinking…", "thinking");
+                    }
+                    else if (m.subtype == "thinking_tokens") {
+                        if (liveThinking) liveThinking.setTokens(m.estimated_tokens);
+                    }
+                    else if (m.subtype == "api_retry") {
+                        if (!busy) break;
+                        var attempt = +m.attempt || 0;
+                        setActivity("Retrying" + (attempt ? " (attempt " + attempt + ")" : "") + "…", "retry");
+                        activity.title = "The request failed" + (m.error_status ? " (" + m.error_status + ")" : "")
+                            + (m.error ? ": " + firstLine(m.error, 120) : "")
+                            + (m.retry_delay_ms ? "; next try in " + Math.round(m.retry_delay_ms / 1000) + "s" : "")
+                            + (m.max_retries ? " (at most " + m.max_retries + " tries)" : "");
+                        renderActivity();
+                    }
+                    else if (m.subtype == "model_fallback") {
+                        var from = modelName(m.original_model || m.originalModel);
+                        var to = modelName(m.fallback_model || m.fallbackModel);
+                        showNotice(to ? (from ? from + " is not available" : "The model is not available")
+                            + (m.trigger ? " (" + String(m.trigger).replace(/_/g, " ") + ")" : "")
+                            + "; Claude uses " + to + " for now." : "Claude switched to another model.", "claude-notice-warn");
                     }
                     else if (m.subtype == "compact_boundary") {
-                        showNotice("The conversation was compacted", "claude-notice-quiet");
+                        var cm = m.compact_metadata || {};
+                        var freed = typeof cm.pre_tokens == "number" && typeof cm.post_tokens == "number"
+                            ? cm.pre_tokens - cm.post_tokens : 0;
+                        appendTo(el("div", { className: "claude-divider" }, [el("span", {
+                            text: "Conversation compacted" + (freed > 0 ? " · " + formatTokens(freed) + " freed" : "") })]));
+                        contextUsed = typeof cm.post_tokens == "number" ? cm.post_tokens : 0;
+                        updateHint();
                     }
-                    else if (m.subtype == "task_summary" && m.detail && busy) {
-                        setActivity(firstLine(m.detail, 60));
+                    else if (m.subtype == "task_summary") {
+                        taskSummary = busy && m.detail ? firstLine(m.detail, 80) : "";
+                        updateStatus();
                     }
                     break;
                 case "stream_event":
@@ -1839,17 +2181,18 @@ define(function(require, exports, module) {
                         var tb = createTextBlock();
                         msg.textBlocks.push(tb);
                         msg.byIndex[event.index] = tb;
-                        setActivity("Writing…");
+                        setActivity("Writing…", "writing");
                     }
-                    else if (block.type == "thinking") {
-                        var th = createThinkingBlock();
+                    else if (block.type == "thinking" || block.type == "redacted_thinking") {
+                        var th = createThinkingBlock(true);
                         msg.thinkingBlocks.push(th);
                         msg.byIndex[event.index] = th;
                     }
                     else if (block.type == "tool_use" || block.type == "server_tool_use") {
                         var card = ensureToolCard(block.id, block.name);
                         msg.byIndex[event.index] = card;
-                        setActivity(toolInfo(block.name).verb + "…");
+                        toolStarted(card);
+                        setActivity(toolActivity(block.name, card.input));
                     }
                     break;
                 case "content_block_delta":
@@ -1858,7 +2201,10 @@ define(function(require, exports, module) {
                     var delta = event.delta || {};
                     if (!target || !target.append) break;
                     if (delta.type == "text_delta") target.append(delta.text || "");
-                    else if (delta.type == "thinking_delta") target.append(delta.thinking || "");
+                    else if (delta.type == "thinking_delta" && target.addTokens) {
+                        target.append(delta.thinking || "");
+                        target.addTokens(delta.estimated_tokens);
+                    }
                     break;
                 case "content_block_stop":
                     msg = turn && turn.current;
@@ -1878,6 +2224,10 @@ define(function(require, exports, module) {
                 });
                 return;
             }
+            if (!fromHistory && typeof m.context_tokens == "number") {
+                contextUsed = m.context_tokens;
+                updateHint();
+            }
             var msg = getMsg(message.id);
             content.forEach(function(block) {
                 if (block.type == "text") {
@@ -1890,24 +2240,29 @@ define(function(require, exports, module) {
                     tb.setText(block.text || "");
                     if (!msg.streamed || fromHistory) tb.finish();
                 }
-                else if (block.type == "thinking") {
-                    var th = msg.streamed && msg.thinkingBlocks[msg.thinkingDone];
+                else if (block.type == "thinking" || block.type == "redacted_thinking") {
+                    var th = msg.streamed && !fromHistory && msg.thinkingBlocks[msg.thinkingDone];
                     if (!th) {
-                        if (!block.thinking) return;
-                        th = createThinkingBlock();
+                        th = createThinkingBlock(false);
                         msg.thinkingBlocks.push(th);
                     }
                     msg.thinkingDone++;
                     th.setText(block.thinking || "");
-                    th.finish();
+                    // a streamed block ends with its content_block_stop
+                    if (!msg.streamed || fromHistory) th.finish();
                 }
                 else if (block.type == "tool_use" || block.type == "server_tool_use") {
                     var card = ensureToolCard(block.id, block.name);
                     card.setInput(block.input);
+                    if (!fromHistory && card.status == "running") {
+                        toolStarted(card);
+                        setActivity(toolActivity(block.name, block.input));
+                    }
                 }
                 else if (/_tool_result$/.test(block.type || "") && block.tool_use_id && toolCards[block.tool_use_id]) {
                     var server = toolCards[block.tool_use_id];
                     server.setStatus(block.content && block.content.type && /error/.test(block.content.type) ? "error" : "ok");
+                    toolEnded(server);
                 }
             });
         }
@@ -1924,7 +2279,7 @@ define(function(require, exports, module) {
                 if (block.type == "tool_result") {
                     var card = toolCards[block.tool_use_id];
                     if (card) card.setResult(block.content, !!block.is_error);
-                    if (!fromHistory) setActivity("Working…");
+                    if (card && !fromHistory) toolEnded(card);
                 }
                 else if (block.type == "text") {
                     // "[Request interrupted by user]": the turn footer says Stopped
@@ -1938,7 +2293,7 @@ define(function(require, exports, module) {
                 }
             });
             if (fromHistory && (texts.length || imgs.length)) {
-                finishTurn();
+                finishTurn(true);
                 renderUserMessage(texts.join("\n\n"), imgs);
                 startTurn();
             }
@@ -1958,6 +2313,11 @@ define(function(require, exports, module) {
             var cost = typeof m.turn_cost_usd == "number" ? m.turn_cost_usd
                 : typeof m.total_cost_usd == "number" ? Math.max(0, m.total_cost_usd - lastTotalCost) : null;
             if (typeof m.total_cost_usd == "number") lastTotalCost = m.total_cost_usd;
+            var cw = m.context_window;
+            if (cw && typeof cw.size == "number") {
+                contextWindow = cw.size - Math.min(+cw.max_output || 0, 20000) - 13000;
+                updateHint();
+            }
             var bits = [];
             if (aborted) bits.push("Stopped");
             if (cost != null && (cost > 0 || !aborted && !m.is_error)) bits.push(formatCost(cost));
@@ -1967,10 +2327,12 @@ define(function(require, exports, module) {
                     title: m.num_turns ? m.num_turns + " model calls" + (typeof m.total_cost_usd == "number"
                         ? ", " + formatCost(m.total_cost_usd) + " since claude started" : "") : "" }));
             busy = false;
+            taskSummary = "";
             stopDone();
             finishTurn();
             setActivity("");
             scrollToEnd();
+            refreshApplied();
             sendQueued();
         }
 
@@ -2035,16 +2397,34 @@ define(function(require, exports, module) {
             addFiles(files);
         }
 
-        var hintTimer;
+        var hintTimer = null;
         function flashHint(text) {
             var hint = composer.querySelector(".claude-composer-hint");
             hint.textContent = text;
             hint.classList.add("claude-hint-alert");
+            hint.classList.remove("claude-hint-context");
             clearTimeout(hintTimer);
             hintTimer = setTimeout(function() {
-                hint.textContent = "Enter to send, Shift+Enter for a new line";
+                hintTimer = null;
                 hint.classList.remove("claude-hint-alert");
+                updateHint();
             }, 3500);
+        }
+
+        // The composer hint; once half of the context is used, how much is
+        // left before the CLI compacts the conversation.
+        function updateHint() {
+            if (!composer || hintTimer) return;
+            var hint = composer.querySelector(".claude-composer-hint");
+            var size = contextWindow > 0 ? contextWindow : 0;
+            var used = size && contextUsed ? contextUsed / size : 0;
+            var meter = used >= 0.5;
+            hint.textContent = meter
+                ? Math.max(0, Math.round((1 - used) * 100)) + "% of context left before auto-compact"
+                : "Enter to send, Shift+Enter for a new line";
+            hint.title = meter ? "About " + formatTokens(contextUsed) + " of " + formatTokens(size) + " in use" : "";
+            hint.classList.toggle("claude-hint-context", meter);
+            hint.classList.toggle("claude-hint-low", meter && used >= 0.85);
         }
 
         function addFiles(files) {
@@ -2106,8 +2486,12 @@ define(function(require, exports, module) {
             else submit();
         }
 
+        var contextUsed = 0;        // tokens in the context of the main agent (last answer)
+        var contextWindow = 0;      // ... and how many fit before auto-compact
         var queued = null;          // a message typed while Claude was working
         var pendingTitle = null;
+        var elsewhereCard = null;   // the question how to open a session that is open elsewhere
+        var forkNext = null;        // the session to open in a copy on the next send
 
         function submit() {
             var text = textarea.value;
@@ -2120,6 +2504,8 @@ define(function(require, exports, module) {
                 renderWelcome();
                 return flashHint("claude was not found on the server");
             }
+            if (elsewhereCard)
+                return flashHint("First choose how to open this conversation");
 
             // While a permission prompt is open, a message answers it:
             // the tool call is denied and Claude gets the text instead.
@@ -2172,17 +2558,23 @@ define(function(require, exports, module) {
             lastResultError = false;
             startTurn();
             busy = true;
+            turnStart = Date.now();
+            taskSummary = "";
+            debug = debugOn();
+            debugLast = 0;
             autoScroll = true;
-            setActivity(running ? "Thinking…" : "Starting claude…");
+            setActivity(running ? "Thinking…" : "Starting Claude…", running ? "thinking" : "");
             scrollToEnd(true);
 
             api.send({
                 content: content,
                 options: {
                     model: modelSelect.value,
+                    effort: effortForModel(effortSelect.value, modelSelect.value),
                     // only a mode the user picked; the label may show the CLI's
                     mode: settings.get("user/claude/@mode") || "",
                     resume: sessionId,
+                    fork: !!(sessionId && forkNext == sessionId),
                     path: settings.get("user/claude/@path")
                 }
             }, function(err, result) {
@@ -2201,6 +2593,7 @@ define(function(require, exports, module) {
                     running = true;
                     cliPid = result.pid;
                 }
+                if (result && result.spawned) forkNext = null;
                 updateStatus();
             });
         }
@@ -2249,24 +2642,289 @@ define(function(require, exports, module) {
             }, 15000);
         }
 
-        /***** Model and mode *****/
+        /***** Model, effort and mode *****/
+
+        function models() {
+            return modelList || FALLBACK_MODELS;
+        }
+
+        function modelEntry(value) {
+            return models().filter(function(m) { return m.value == value; })[0] || null;
+        }
+
+        // the levels a model supports (none: no effort control); a model
+        // the list does not know: the common ones
+        function effortLevels(value) {
+            var entry = modelEntry(value);
+            if (!entry) return FALLBACK_LEVELS;
+            if (!entry.supportsEffort) return [];
+            return entry.supportedEffortLevels && entry.supportedEffortLevels.length ? entry.supportedEffortLevels : FALLBACK_LEVELS;
+        }
+
+        function effortForModel(level, model) {
+            return level && effortLevels(model).indexOf(level) != -1 ? level : "";
+        }
+
+        function effortCaption(level) {
+            return EFFORTS.hasOwnProperty(level) ? EFFORTS[level] : String(level);
+        }
+
+        // "claude-opus-5-5" -> "Opus 5.5"
+        function modelName(id) {
+            if (!id || typeof id != "string") return "";
+            var list = models();
+            var hit = list.filter(function(m) { return m.value != "default" && m.resolvedModel == id; })[0]
+                || list.filter(function(m) { return m.value == id && m.value != "default"; })[0];
+            if (hit) return hit.displayName;
+            var m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(\[1m\])?$/i.exec(id);
+            if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1) + " " + m[2] + (m[3] ? "." + m[3] : "");
+            return id;
+        }
+
+        function modeCaption(mode) {
+            var item = MODES.filter(function(m) { return m.value == mode; })[0];
+            return item ? item.caption : String(mode);
+        }
+
+        function modelItems() {
+            return models().map(function(m) {
+                return { value: m.value, caption: m.displayName, desc: m.description,
+                    short: m.value == "default" ? "Default" : m.displayName };
+            });
+        }
+
+        // "Auto": not set, Claude's settings decide
+        function effortItems() {
+            var items = [{ value: "", caption: "Auto", desc: "Claude's settings decide", short: "Effort" }];
+            effortLevels(modelSelect.value).forEach(function(level) {
+                items.push({ value: level, caption: effortCaption(level),
+                    desc: level == "max" ? "May use many tokens and respond slowly" : "" });
+            });
+            return items;
+        }
+
+        function cleanModels(list) {
+            return (Array.isArray(list) ? list : []).filter(function(m) {
+                return m && typeof m.value == "string" && (m.value == "default" || MODEL_RE.test(m.value));
+            }).slice(0, 60).map(function(m) {
+                return {
+                    value: m.value,
+                    resolvedModel: typeof m.resolvedModel == "string" ? m.resolvedModel : null,
+                    displayName: String(m.displayName || m.value).slice(0, 80),
+                    description: String(m.description || "").slice(0, 160),
+                    supportsEffort: !!m.supportsEffort,
+                    supportedEffortLevels: (Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels : [])
+                        .filter(function(level) { return EFFORTS.hasOwnProperty(level); })
+                };
+            });
+        }
+
+        // the last list and settings the CLI reported (state settings)
+        function restoreModelCache() {
+            var list = cleanModels(settings.getJson("state/claude/models"));
+            if (list.length) modelList = list;
+            var last = settings.getJson("state/claude/applied");
+            if (last && last.applied && last.appliedFor) {
+                applied = { model: str(last.applied.model), effort: str(last.applied.effort) };
+                appliedFor = { model: String(last.appliedFor.model || ""), effort: String(last.appliedFor.effort || "") };
+            }
+            function str(v) { return typeof v == "string" ? v : null; }
+        }
+
+        // The button labels: what the CLI applies, when it is known for the
+        // current choice; otherwise the choice (applied when claude starts).
+        function updateSettingLabels() {
+            if (!drawn) return;
+            modelSelect.refresh();
+            effortSelect.refresh();
+            var fresh = !!(applied && appliedFor && appliedFor.model == modelSelect.value
+                && appliedFor.effort == effortSelect.value);
+            var entry = modelEntry(modelSelect.value);
+            var chosen = entry ? entry.displayName : modelSelect.value;
+            var later = running ? "" : " (used when Claude starts)";
+            var inUse = fresh && applied.model ? modelName(applied.model) : "";
+            modelSelect.label = inUse || null;
+            modelSelect.tip = "Model: " + chosen + (inUse && inUse != chosen ? " · in use: " + inUse : fresh ? "" : later);
+            // no effort control for a model without effort levels
+            effortSelect.wrapper.style.display = effortLevels(modelSelect.value).length ? "" : "none";
+            effortSelect.label = fresh && applied.effort ? effortCaption(applied.effort) : null;
+            effortSelect.tip = "Effort: " + (effortSelect.value ? effortCaption(effortSelect.value) : "Auto (Claude's settings decide)")
+                + (fresh && applied.effort && applied.effort != effortSelect.value ? " · in use: " + effortCaption(applied.effort)
+                    : fresh ? "" : later);
+            modelSelect.syncLabel();
+            effortSelect.syncLabel();
+        }
+
+        // the CLI's model list and applied settings, after it started
+        function onCliSettings(event) {
+            if (Array.isArray(event.models)) {
+                var list = cleanModels(event.models);
+                if (list.length) {
+                    modelList = list;
+                    settings.setJson("state/claude/models", list);
+                }
+            }
+            var note = checkEffort();
+            if (note) {
+                insertNotice(note, true);
+                if (api && running) {
+                    return api.setEffort("", function(err, res) {
+                        confirmSettings(!err && res && res.applied || event.applied, true);
+                    });
+                }
+            }
+            confirmSettings(event.applied, confirmNext, true);
+        }
+
+        // An effort level the model does not support: back to the effort
+        // from Claude's settings. Returns what to tell the user.
+        function checkEffort() {
+            var level = effortSelect.value;
+            if (!level || !modelList || effortForModel(level, modelSelect.value)) return null;
+            settings.set("user/claude/@effort", "");
+            setSelect(effortSelect, "");
+            var entry = modelEntry(modelSelect.value);
+            var name = entry && entry.value != "default" ? entry.displayName : "The default model";
+            return name + " does not support " + effortCaption(level) + " effort; effort is back to Auto (Claude's settings decide).";
+        }
+
+        // what the CLI applies now; force: tell it even when it did not change
+        function confirmSettings(a, force, atStart) {
+            confirmNext = false;
+            if (!drawn) return;
+            if (!a) return updateSettingLabels();
+            var before = applied;
+            applied = {
+                model: typeof a.model == "string" ? a.model : null,
+                effort: typeof a.effort == "string" ? a.effort : null
+            };
+            appliedFor = { model: modelSelect.value, effort: effortSelect.value };
+            settings.setJson("state/claude/applied", { applied: applied, appliedFor: appliedFor });
+            updateSettingLabels();
+            var changed = !before || before.model != applied.model || before.effort != applied.effort;
+            if (!force && !changed) return;
+            var text = "Model: " + (modelName(applied.model) || "default")
+                + (applied.effort ? " · Effort: " + effortCaption(applied.effort) : "");
+            insertNotice(text, atStart);
+        }
+
+        // atStart: about the claude that starts for this turn: before Claude's answer
+        function insertNotice(text, atStart) {
+            if (atStart && turn && turn.el.parentNode == logEl) {
+                var node = el("div", { className: "claude-notice claude-notice-quiet claude-notice-settings", text: text });
+                logEl.insertBefore(node, turn.el);
+                scrollToEnd();
+                return node;
+            }
+            return showNotice(text, "claude-notice-quiet claude-notice-settings");
+        }
+
+        // Changes of the model, effort and mode go to the CLI one at a time,
+        // in the order they were made; task(done) calls done when finished.
+        var settingsQueue = [];
+        var settingsBusy = false;
+        function queueSettings(task) {
+            settingsQueue.push(task);
+            if (!settingsBusy) nextSettings();
+        }
+        function nextSettings() {
+            var task = settingsQueue.shift();
+            settingsBusy = !!task;
+            if (!task) return;
+            var finished = false;
+            // a call that never answers (lost connection) does not block the rest
+            var guard = setTimeout(done, 20000);
+            function done() {
+                if (finished) return;
+                finished = true;
+                clearTimeout(guard);
+                nextSettings();
+            }
+            try {
+                task(done);
+            } catch (e) {
+                console.error("[claude]", e);
+                done();
+            }
+        }
+
+        // not running: the choice applies (and is confirmed) when claude starts
+        function notRunning(res) {
+            if (res && res.running) return false;
+            confirmNext = true;
+            updateSettingLabels();
+            return true;
+        }
 
         function onModelChange(value) {
             settings.set("user/claude/@model", value);
-            if (api && running) {
-                api.setModel(value, function(err) {
-                    if (err) showError("Could not change the model: " + err.message);
+            var note = checkEffort();
+            if (note) insertNotice(note);
+            updateSettingLabels();
+            queueSettings(function(done) {
+                if (!api || !running) return notRunning() && done();
+                api.setModel(value, function(err, res) {
+                    if (err) {
+                        showError("Could not change the model: " + (err.message || err));
+                        return done();
+                    }
+                    if (notRunning(res)) return done();
+                    if (!note) {
+                        confirmSettings(res.applied, true);
+                        return done();
+                    }
+                    // the model does not support the effort that was set
+                    api.setEffort("", function(err2, res2) {
+                        confirmSettings(!err2 && res2 && res2.applied || res.applied, true);
+                        done();
+                    });
                 });
-            }
+            });
+        }
+
+        function onEffortChange(value) {
+            settings.set("user/claude/@effort", value);
+            updateSettingLabels();
+            queueSettings(function(done) {
+                if (!api || !running) return notRunning() && done();
+                api.setEffort(value, function(err, res) {
+                    if (err) showError("Could not change the effort: " + (err.message || err));
+                    else if (!notRunning(res)) confirmSettings(res.applied, true);
+                    done();
+                });
+            });
         }
 
         function onModeChange(value) {
             settings.set("user/claude/@mode", value);
-            if (api && running && value) {
-                api.setMode(value, function(err) {
-                    if (err) showError("Could not change the permission mode: " + err.message);
+            queueSettings(function(done) {
+                if (!api || !running) {
+                    confirmModeNext = true;
+                    return done();
+                }
+                // the CLI cannot go back to "no mode": the next claude starts without one
+                if (!value) {
+                    insertNotice("The mode from Claude's settings applies when Claude starts again (New session).");
+                    return done();
+                }
+                api.setMode(value, function(err, res) {
+                    if (err) showError("Could not change the permission mode: " + (err.message || err));
+                    else if (res && res.running) insertNotice("Mode: " + modeCaption(value));
+                    else confirmModeNext = true;
+                    done();
                 });
-            }
+            });
+        }
+
+        // after each turn: what the CLI applies now (e.g. after a fallback)
+        function refreshApplied() {
+            queueSettings(function(done) {
+                if (!api || !running) return done();
+                api.getSettings({ models: false }, function(err, res) {
+                    if (!err && res && res.running && res.applied) confirmSettings(res.applied, false);
+                    done();
+                });
+            });
         }
 
         /***** Sessions *****/
@@ -2281,6 +2939,11 @@ define(function(require, exports, module) {
             hasMessages = false;
             hasSentInSession = false;
             queued = null;
+            elsewhereCard = null;
+            forkNext = null;
+            taskSummary = "";
+            contextUsed = 0;
+            updateHint();
             busy = false;
             stopDone();
             lastTotalCost = 0;
@@ -2332,11 +2995,47 @@ define(function(require, exports, module) {
                 notice.textContent = "Resumed " + name + (res.folder ? " (in " + res.folder + ")" : "")
                     + (res.truncated ? "; older messages are not shown" : "");
                 renderHistory(res.messages || []);
-                if (res.fork)
-                    showNotice("This session was active in the last 2 minutes, probably in a terminal. "
-                        + "It continues here in a copy, so the two do not mix.", "claude-notice-warn");
+                if (res.elsewhere) askElsewhere(id, res.elsewhere);
             });
             textarea.focus();
+        }
+
+        // The session is open in another process (a terminal): open a copy
+        // (--fork-session), open it here anyway, or cancel.
+        function askElsewhere(id, info) {
+            var shownAt = Date.now();
+            var detail = info.how == "recent" ? "It changed in the last two minutes."
+                : info.status == "busy" ? "Claude is working in it right now." : "";
+            var actions = el("div", { className: "claude-actions" });
+            var node = el("div", { className: "claude-perm claude-elsewhere" }, [
+                el("div", { className: "claude-perm-title" }, [
+                    icon("terminal", "claude-perm-icon"),
+                    el("span", { className: "claude-perm-text", text: "This conversation is still open somewhere else (e.g. a terminal)." })
+                ]),
+                detail ? el("div", { className: "claude-perm-desc", text: detail }) : null,
+                actions
+            ]);
+            function choose(how) {
+                if (Date.now() - shownAt < PROMPT_GUARD || elsewhereCard !== node) return;
+                elsewhereCard = null;
+                if (how == "cancel") return newSession();
+                forkNext = how == "copy" ? id : null;
+                var note = el("div", { className: "claude-notice claude-notice-quiet", text: how == "copy"
+                    ? "It continues here in a copy, so the two do not mix."
+                    : "Opened here as well: both places add to the same conversation." });
+                if (node.parentNode) node.parentNode.replaceChild(note, node);
+                updateStatus();
+                textarea.focus();
+            }
+            actions.appendChild(textButton("Open a copy", "claude-btn-primary", function() { choose("copy"); },
+                "Continue in a new copy of the conversation"));
+            actions.appendChild(textButton("Open here anyway", "claude-btn-secondary", function() { choose("here"); }));
+            actions.appendChild(textButton("Cancel", "claude-btn-secondary", function() { choose("cancel"); }));
+            elsewhereCard = node;
+            appendToLog(node);
+            autoScroll = true;
+            scrollToEnd(true);
+            updateStatus();
         }
 
         function renderHistory(messages) {
@@ -2353,10 +3052,7 @@ define(function(require, exports, module) {
                     console.error("[claude] could not render a message", e);
                 }
             });
-            finishTurn();
-            [].forEach.call(logEl.querySelectorAll(".claude-tool.claude-stopped"), function(n) {
-                n.classList.remove("claude-stopped");
-            });
+            finishTurn(true);
             autoScroll = true;
             scrollToEnd(true);
         }

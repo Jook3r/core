@@ -51,8 +51,14 @@ module.exports = function(vfs, options, register) {
     var SESSION_STAT_LIMIT = 5000;          // ... out of at most this many files looked at
     var SESSION_PEEK = 64 * 1024;           // bytes read at the head and the tail of each
     var RECENT_MS = 2 * 60 * 1000;          // written this recently: probably open elsewhere
+    var RECORD_LIMIT = 200;                 // live-process records read (<config>/sessions)
+    var RECORD_MAX_SIZE = 64 * 1024;
 
-    var MODELS = { opus: true, sonnet: true, haiku: true };
+    // model aliases and ids (list_models gives e.g. "sonnet", "claude-opus-4-8");
+    // a letter first, so that a value can never pass as an option
+    var MODEL_RE = /^[a-z][a-z0-9.\-]{0,63}(\[1m\])?$/i;
+    var EFFORTS = { low: true, medium: true, high: true, xhigh: true, max: true };
+    var CONTROL_TIMEOUT = 10000;
     // no mode: the CLI uses the user's own defaultMode (~/.claude/settings.json)
     var MODES = { "default": true, acceptEdits: true, plan: true };
     var IMAGE_TYPES = { "image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true };
@@ -69,8 +75,11 @@ module.exports = function(vfs, options, register) {
         "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_PID", "CLAUDE_AFTER_LAST_COMPACT",
         "CLAUDE_CODE_DEBUG", "AI_AGENT", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT",
         "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN",
-        "CLAUDE_CODE_TEE_SDK_STDOUT", "CLAUDE_CODE_DIAGNOSTICS_FILE"
+        "CLAUDE_CODE_TEE_SDK_STDOUT", "CLAUDE_CODE_DIAGNOSTICS_FILE",
+        // the server's own node options and trace context are not claude's
+        "NODE_OPTIONS", "TRACEPARENT", "TRACESTATE"
     ];
+    var LEAKED_ENV_RE = /^CLAUDE_CODE_RESUME_/;
 
     var home = process.env.HOME || os.homedir();
     var cwd = vfs.workspaceDir || options.workspaceDir || home;
@@ -85,7 +94,8 @@ module.exports = function(vfs, options, register) {
     var binCache = Object.create(null);     // "" -> the binary found by searching
     var versionCache = Object.create(null); // binary -> version string
     var nextRequestId = 1;
-    var resumePlans = Object.create(null);  // session id -> { cwd, fork } for its next spawn
+    var resumePlans = Object.create(null);  // session id -> { cwd, ... } for its next spawn
+    var ownPids = Object.create(null);      // this panel's CLI processes that have not exited
 
     /***** Client stream *****/
 
@@ -232,9 +242,12 @@ module.exports = function(vfs, options, register) {
     function cleanEnv(bin) {
         var env = {};
         Object.keys(process.env).forEach(function(key) {
-            if (LEAKED_ENV.indexOf(key) == -1)
+            if (LEAKED_ENV.indexOf(key) == -1 && !LEAKED_ENV_RE.test(key))
                 env[key] = process.env[key];
         });
+        // MCP servers connect in the background: the first answer does not
+        // wait for a slow one
+        env.MCP_CONNECTION_NONBLOCKING = "true";
         // systemd services get a minimal PATH; an npm-installed claude is a
         // script that starts with "#!/usr/bin/env node"
         var dirs = (env.PATH || "").split(path.delimiter).filter(Boolean);
@@ -290,7 +303,7 @@ module.exports = function(vfs, options, register) {
 
     /***** The CLI process *****/
 
-    // plan: { cwd, fork } decided by the service for a resumed session
+    // plan: { cwd } decided by the service for a resumed session
     function spawnCli(bin, opts, callback, plan) {
         plan = plan || {};
         var runCwd = plan.cwd || cwd;
@@ -307,13 +320,17 @@ module.exports = function(vfs, options, register) {
         var mode = has(MODES, opts.mode) ? opts.mode : null;
         if (mode)
             args.push("--permission-mode", mode);
-        if (has(MODELS, opts.model))
-            args.push("--model", opts.model);
+        var model = validModel(opts.model) ? opts.model : null;
+        if (model)
+            args.push("--model", model);
+        if (has(EFFORTS, opts.effort))
+            args.push("--effort", opts.effort);
         var resume = typeof opts.resume == "string" && UUID_RE.test(opts.resume) ? opts.resume : null;
         if (resume)
             args.push("--resume", resume);
-        // probably still open in a terminal: continue in a copy
-        if (resume && plan.fork)
+        // open elsewhere (e.g. a terminal) and the user asked for a copy
+        var fork = !!(resume && opts.fork === true);
+        if (fork)
             args.push("--fork-session");
 
         var child;
@@ -342,9 +359,11 @@ module.exports = function(vfs, options, register) {
             pid: child.pid,
             bin: bin,
             cwd: runCwd,
-            fork: !!(resume && plan.fork),
+            fork: fork,
             mode: mode,
-            model: has(MODELS, opts.model) ? opts.model : "default",
+            model: model || "default",
+            effort: has(EFFORTS, opts.effort) ? opts.effort : null,
+            controls: Object.create(null),  // our control requests waiting for an answer
             resume: resume,
             sessionId: resume,
             busy: false,
@@ -401,6 +420,8 @@ module.exports = function(vfs, options, register) {
             clearTimeout(state.killTimer);
             if (cli === state) cli = null;
             forgetProcess(state);
+            delete ownPids[String(state.pid)];
+            failControls(state);
             // 'exit' can come before the last stdout data: let it drain
             // (bounded, a tool child may hold the pipe open)
             if (state.stdoutEnded) return exited(code, signal);
@@ -436,6 +457,7 @@ module.exports = function(vfs, options, register) {
                         return send({ ev: "error", message: err.message });
                     sent.forEach(function(line) { writeLine(fresh, line, true); });
                     fresh.busy = true;
+                    reportSettings(fresh);
                 }, { cwd: state.cwd });
             }
 
@@ -453,6 +475,7 @@ module.exports = function(vfs, options, register) {
             });
         }
 
+        ownPids[String(child.pid)] = true;
         touch(state);
         send({ ev: "spawn", pid: child.pid, mode: mode, model: state.model, resume: resume,
             fork: state.fork, cwd: path.relative(cwd, runCwd) });
@@ -600,8 +623,13 @@ module.exports = function(vfs, options, register) {
                 }
                 if (msg.subtype == "status" && msg.permissionMode)
                     state.mode = msg.permissionMode;
-                if (msg.subtype == "thinking_tokens" || msg.subtype == "post_turn_summary")
-                    return;
+                // live activity: the estimated size of a (redacted) thinking block
+                if (msg.subtype == "thinking_tokens")
+                    return send({ ev: "msg", data: { type: "system", subtype: "thinking_tokens",
+                        estimated_tokens: msg.estimated_tokens, estimated_tokens_delta: msg.estimated_tokens_delta } });
+                if (msg.subtype == "post_turn_summary")
+                    return send({ ev: "msg", data: { type: "system", subtype: "post_turn_summary",
+                        status_category: msg.status_category, status_detail: msg.status_detail } });
                 return send({ ev: "msg", data: msg });
 
             case "stream_event":
@@ -632,6 +660,13 @@ module.exports = function(vfs, options, register) {
                     });
                 }
                 delete msg.wire_tool_inputs;
+                // the context the main agent uses now (the panel's context meter)
+                var usage = msg.message && msg.message.usage;
+                if (usage && typeof usage == "object" && !msg.parent_tool_use_id) {
+                    msg.context_tokens = (+usage.input_tokens || 0) + (+usage.cache_creation_input_tokens || 0)
+                        + (+usage.cache_read_input_tokens || 0) + (+usage.output_tokens || 0);
+                    if (typeof msg.message.model == "string") state.lastModel = msg.message.model;
+                }
                 if (msg.message) {
                     delete msg.message.usage;
                     delete msg.message.container;
@@ -684,6 +719,14 @@ module.exports = function(vfs, options, register) {
 
             case "control_response":
                 var response = msg.response || {};
+                // ours, with a callback (get_settings, list_models, ...)
+                if (has(state.controls, response.request_id)) {
+                    var waiting = state.controls[response.request_id];
+                    delete state.controls[response.request_id];
+                    clearTimeout(waiting.timer);
+                    return waiting.callback(response.subtype == "success" ? null
+                        : new Error(response.error || "claude refused the request"), response.response || {});
+                }
                 return send({ ev: "control", id: response.request_id, ok: response.subtype == "success",
                     error: response.error || null, response: response.response || null });
 
@@ -705,7 +748,8 @@ module.exports = function(vfs, options, register) {
                     stop_reason: msg.stop_reason,
                     terminal_reason: msg.terminal_reason,
                     permission_denials: msg.permission_denials,
-                    api_error_status: msg.api_error_status
+                    api_error_status: msg.api_error_status,
+                    context_window: contextWindow(state, msg.modelUsage)
                 };
                 // a failed --resume ends with a result before any init; the
                 // exit handler decides whether it is shown or replaced
@@ -729,6 +773,16 @@ module.exports = function(vfs, options, register) {
                 // does not know
                 return send({ ev: "msg", data: msg });
         }
+    }
+
+    // the context window of the main agent's model: { size, max_output }
+    function contextWindow(state, modelUsage) {
+        if (!modelUsage || typeof modelUsage != "object") return null;
+        var keys = Object.keys(modelUsage);
+        var key = state.lastModel && has(modelUsage, state.lastModel) ? state.lastModel : keys.length == 1 ? keys[0] : null;
+        var usage = key && modelUsage[key];
+        if (!usage || typeof usage.contextWindow != "number" || usage.contextWindow <= 0) return null;
+        return { size: usage.contextWindow, max_output: +usage.maxOutputTokens || 0 };
     }
 
     function turnCost(msg) {
@@ -837,6 +891,7 @@ module.exports = function(vfs, options, register) {
                 return callback(new Error("claude is not running"));
             state.busy = true;
             callback(null, { spawned: spawned, pid: state.pid, sessionId: state.sessionId });
+            if (spawned) reportSettings(state);
         }
 
         if (cli && !cli.exited)
@@ -900,18 +955,104 @@ module.exports = function(vfs, options, register) {
                 response.updatedPermissions = request.suggestions;
         }
         else {
-            var reason = typeof decision.message == "string" && decision.message.trim()
-                ? decision.message.trim().slice(0, MAX_TEXT) : "The user denied this.";
-            response = { behavior: "deny", message: reason };
+            // no reason: the turn stops (interrupt), the user says what next;
+            // with a reason (feedback), Claude goes on with it
+            var feedback = typeof decision.message == "string" && decision.message.trim()
+                ? decision.message.trim().slice(0, MAX_TEXT) : "";
+            response = {
+                behavior: "deny",
+                message: feedback || "The user declined this tool call and stopped. Wait for their next message.",
+                interrupt: decision.interrupt === true
+            };
         }
         answer(state, requestId, response);
         callback(null, { ok: true });
     }
 
-    function controlRequest(state, request) {
+    function controlRequest(state, request, callback) {
         var id = "c9-" + (nextRequestId++);
-        writeJson(state, { type: "control_request", request_id: id, request: request });
+        if (callback) {
+            state.controls[id] = {
+                callback: callback,
+                timer: setTimeout(function() {
+                    if (!has(state.controls, id)) return;
+                    delete state.controls[id];
+                    callback(new Error("claude did not answer"));
+                }, CONTROL_TIMEOUT)
+            };
+        }
+        if (!writeJson(state, { type: "control_request", request_id: id, request: request }) && callback) {
+            clearTimeout(state.controls[id].timer);
+            delete state.controls[id];
+            callback(new Error("claude is not running"));
+        }
         return id;
+    }
+
+    function failControls(state) {
+        Object.keys(state.controls).forEach(function(id) {
+            var waiting = state.controls[id];
+            delete state.controls[id];
+            clearTimeout(waiting.timer);
+            waiting.callback(new Error("claude exited"));
+        });
+    }
+
+    function validModel(model) {
+        return typeof model == "string" && model != "default" && MODEL_RE.test(model);
+    }
+
+    // what the CLI really applies (model id, effort), from get_settings
+    function applied(state, callback) {
+        controlRequest(state, { subtype: "get_settings" }, function(err, res) {
+            if (err) return callback(err);
+            var a = res && res.applied || {};
+            callback(null, {
+                model: typeof a.model == "string" ? a.model : null,
+                effort: typeof a.effort == "string" ? a.effort : null
+            });
+        });
+    }
+
+    // the CLI's model list, trimmed to what the panel shows
+    function models(state, callback) {
+        controlRequest(state, { subtype: "list_models" }, function(err, res) {
+            if (err) return callback(err);
+            var list = (res && Array.isArray(res.models) ? res.models : []).slice(0, 60).filter(function(m) {
+                return m && typeof m.value == "string" && (m.value == "default" || MODEL_RE.test(m.value));
+            }).map(function(m) {
+                return {
+                    value: m.value,
+                    resolvedModel: typeof m.resolvedModel == "string" ? m.resolvedModel : null,
+                    displayName: String(m.displayName || m.value).slice(0, 80),
+                    description: String(m.description || "").slice(0, 160),
+                    supportsEffort: !!m.supportsEffort,
+                    supportedEffortLevels: (Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels : [])
+                        .filter(function(l) { return has(EFFORTS, l); })
+                };
+            });
+            callback(null, list);
+        });
+    }
+
+    // after a spawn: the model list and the applied settings, for the header
+    function reportSettings(state) {
+        models(state, function(err, list) {
+            applied(state, function(err2, a) {
+                if (state.stopped || err && err2) return;
+                send({ ev: "cli-settings", pid: state.pid, models: err ? null : list, applied: err2 ? null : a });
+            });
+        });
+    }
+
+    // answer of a change: what is applied now
+    function changed(state, callback) {
+        return function(err) {
+            if (err) return callback(err);
+            applied(state, function(err, a) {
+                callback(null, { running: true, applied: err ? null : a });
+            });
+        };
     }
 
     function interrupt(callback) {
@@ -933,30 +1074,112 @@ module.exports = function(vfs, options, register) {
         if (!cli)
             return callback(null, { running: false });
         cli.mode = mode;
-        var id = controlRequest(cli, { subtype: "set_permission_mode", mode: mode });
-        callback(null, { running: true, id: id });
+        controlRequest(cli, { subtype: "set_permission_mode", mode: mode }, changed(cli, callback));
+    }
+
+    // effort: one of the levels the model supports, or "" for the user's own default
+    function setEffort(level, callback) {
+        callback = callback || function() {};
+        if (level !== "" && level != null && !has(EFFORTS, level))
+            return callback(new Error("Unknown effort level"));
+        if (!cli)
+            return callback(null, { running: false });
+        cli.effort = level || null;
+        controlRequest(cli, { subtype: "apply_flag_settings", settings: { effortLevel: level || null } },
+            changed(cli, callback));
+    }
+
+    // opts.models: false to skip the model list (after each turn)
+    function getSettings(opts, callback) {
+        if (typeof opts == "function") { callback = opts; opts = {}; }
+        callback = callback || function() {};
+        opts = opts || {};
+        var state = cli;
+        if (!state)
+            return callback(null, { running: false });
+        if (opts.models === false) {
+            return applied(state, function(err, a) {
+                callback(null, { running: true, applied: err ? null : a });
+            });
+        }
+        models(state, function(err, list) {
+            applied(state, function(err2, a) {
+                callback(null, { running: true, models: err ? null : list, applied: err2 ? null : a });
+            });
+        });
     }
 
     function setModel(model, callback) {
         callback = callback || function() {};
-        if (model != "default" && !has(MODELS, model))
+        if (model != "default" && !validModel(model))
             return callback(new Error("Unknown model"));
         if (!cli)
             return callback(null, { running: false });
         cli.model = model;
         // without a model the CLI goes back to its default model
-        var id = controlRequest(cli, model == "default"
+        controlRequest(cli, model == "default"
             ? { subtype: "set_model" }
-            : { subtype: "set_model", model: model });
-        callback(null, { running: true, id: id });
+            : { subtype: "set_model", model: model }, changed(cli, callback));
     }
 
     /***** Sessions: the CLI's transcripts *****/
 
     // Only files under <config>/projects are read, found by the service
     // itself: the client passes a session id (UUID), never a path.
+    function configDir() {
+        return process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
+    }
+
     function projectsDir() {
-        return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "projects");
+        return path.join(configDir(), "projects");
+    }
+
+    // The CLI keeps a record of each running process in
+    // <config>/sessions/<pid>.json: { pid, sessionId, cwd, status, kind,
+    // entrypoint, procStart }. Returns sessionId -> { pid, status } for the
+    // processes that still run and are not this panel's, or null when there
+    // are no records at all (an older CLI): then only the transcript's
+    // mtime can tell.
+    function liveSessions() {
+        var dir = path.join(configDir(), "sessions");
+        var names;
+        try { names = fs.readdirSync(dir); } catch (e) { return null; }
+        names = names.filter(function(n) { return /^[1-9]\d{0,9}\.json$/.test(n); }).slice(0, RECORD_LIMIT);
+        if (!names.length) return null;
+        var live = Object.create(null);
+        names.forEach(function(name) {
+            var pid = parseInt(name, 10);
+            var rec;
+            try {
+                var file = path.join(dir, name);
+                var st = fs.lstatSync(file);
+                if (!st.isFile() || st.size > RECORD_MAX_SIZE) return;
+                rec = JSON.parse(fs.readFileSync(file, "utf8"));
+            } catch (e) { return; }
+            if (!rec || typeof rec != "object" || +rec.pid !== pid) return;
+            if (typeof rec.sessionId != "string" || !UUID_RE.test(rec.sessionId)) return;
+            if (has(ownPids, String(pid)) || !processAlive(pid, rec.procStart)) return;
+            live[rec.sessionId.toLowerCase()] = {
+                pid: pid,
+                status: typeof rec.status == "string" ? rec.status.slice(0, 20) : ""
+            };
+        });
+        return live;
+    }
+
+    // alive, and the same process as the record's (not a reused pid)
+    function processAlive(pid, procStart) {
+        try {
+            process.kill(pid, 0);
+        } catch (e) {
+            if (e.code != "EPERM") return false;
+        }
+        if (procStart == null || process.platform != "linux") return true;
+        var stat;
+        try { stat = fs.readFileSync("/proc/" + pid + "/stat", "utf8"); } catch (e) { return true; }
+        // the fields after "(comm)": state is field 3, starttime field 22
+        var fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+        return fields[19] === String(procStart);
     }
 
     function realDir(dir) {
@@ -996,17 +1219,18 @@ module.exports = function(vfs, options, register) {
         var name = sessionId.toLowerCase() + ".jsonl";
         // the CLI names a project folder after its directory; if that naming
         // changes, look in every project folder
-        var dirs = listDirs(projects);
-        var first = cwd.replace(/[^a-zA-Z0-9]/g, "-");
-        dirs.sort(function(a, b) { return (b == first) - (a == first); });
-        for (var i = 0; i < dirs.length; i++) {
-            var file = path.join(projects, dirs[i], name);
+        // the newest copy, as in the session list
+        var found = null;
+        listDirs(projects).forEach(function(dir) {
+            var file = path.join(projects, dir, name);
             try {
                 var st = fs.lstatSync(file);
-                if (st.isFile()) return callback(null, file, st);
+                if (st.isFile() && (!found || st.mtimeMs > found.st.mtimeMs))
+                    found = { file: file, st: st };
             } catch (e) {}
-        }
-        callback(null, null, null);
+        });
+        if (!found) return callback(null, null, null);
+        callback(null, found.file, found.st);
     }
 
     // the first and last bytes of a transcript, as whole lines
@@ -1110,6 +1334,15 @@ module.exports = function(vfs, options, register) {
         } catch (e) {}
     }
 
+    // Open in another process (a terminal, another editor)? From the live
+    // records; without any, a transcript written in the last minutes.
+    // Returns null or { how: "process" | "recent", status }.
+    function openElsewhere(sessionId, mtimeMs, live) {
+        if (cli && cli.sessionId == sessionId && !cli.exited) return null;
+        if (live) return live[sessionId] ? { how: "process", status: live[sessionId].status } : null;
+        return inUseElsewhere(sessionId, mtimeMs) ? { how: "recent" } : null;
+    }
+
     // written in the last minutes, and not by a CLI of this panel that has
     // stopped since: probably still open (e.g. in a terminal)
     function inUseElsewhere(sessionId, mtimeMs) {
@@ -1124,7 +1357,7 @@ module.exports = function(vfs, options, register) {
     // where a resumed session runs, and whether it continues in a copy
     function resumePlan(sessionId, callback) {
         findTranscript(sessionId, function(err, file, stat) {
-            if (!file) return callback(null, { found: false, cwd: null, fork: false, folder: "" });
+            if (!file) return callback(null, { found: false, cwd: null, elsewhere: null, folder: "" });
             var recorded = recordedCwd(peek(file, stat.size).head);
             var dir = recorded && inWorkspace(recorded) ? realDir(recorded) : null;
             var plan = {
@@ -1132,7 +1365,7 @@ module.exports = function(vfs, options, register) {
                 file: file,
                 size: stat.size,
                 cwd: dir && fs.statSync(dir).isDirectory() ? dir : null,
-                fork: inUseElsewhere(sessionId, stat.mtimeMs),
+                elsewhere: openElsewhere(sessionId, stat.mtimeMs, liveSessions()),
                 folder: recorded ? folderOf(recorded) : ""
             };
             callback(null, plan);
@@ -1171,6 +1404,7 @@ module.exports = function(vfs, options, register) {
 
         var seen = Object.create(null);
         var list = [];
+        var live = liveSessions();
         files.slice(0, SESSION_SCAN).forEach(function(f) {
             if (seen[f.id]) return;
             seen[f.id] = true;
@@ -1184,7 +1418,7 @@ module.exports = function(vfs, options, register) {
                 title: title,
                 folder: folderOf(recorded),
                 mtime: Math.round(f.mtime),
-                recent: inUseElsewhere(f.id, f.mtime)
+                elsewhere: openElsewhere(f.id, f.mtime, live)
             });
         });
         callback(null, { sessions: list, now: Date.now() });
@@ -1201,7 +1435,7 @@ module.exports = function(vfs, options, register) {
             resumePlans[sessionId] = plan;
             readTranscript(plan.file, plan.size, function(err, res) {
                 if (err) return callback(err);
-                res.fork = plan.fork;
+                res.elsewhere = plan.elsewhere;
                 res.folder = plan.folder;
                 callback(null, res);
             });
@@ -1350,10 +1584,14 @@ module.exports = function(vfs, options, register) {
 
     function isOurCli(rec) {
         var p = procStat(rec.pid);
-        if (!p || p.state == "Z" || p.start !== rec.start || p.pgid !== rec.pid)
+        if (!p || p.start !== rec.start || p.pgid !== rec.pid)
             return false;
         if (typeof process.getuid == "function" && p.uid !== process.getuid())
             return false;
+        // exited but not reaped yet (its parent was killed): its pid cannot
+        // be reused meanwhile, and its tool processes may still run
+        if (p.state == "Z")
+            return true;
         var args;
         try { args = fs.readFileSync("/proc/" + rec.pid + "/cmdline", "utf8"); }
         catch (e) { return false; }
@@ -1456,6 +1694,8 @@ module.exports = function(vfs, options, register) {
         interrupt: interrupt,
         setMode: setMode,
         setModel: setModel,
+        setEffort: setEffort,
+        getSettings: getSettings,
         stop: stop,
         history: history,
         sessions: sessions,
