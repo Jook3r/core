@@ -309,6 +309,9 @@ define(function(require, exports, module) {
 
             root = el("div", { className: "claude-root" });
             e.html.appendChild(root);
+            // apf cancels mousedown (and so text selection) inside UI
+            // elements that don't allow it; let the chat be selected
+            e.aml.textselect = true;
             updateCodeFont();
 
             // header
