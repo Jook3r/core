@@ -1,5 +1,5 @@
 /**
- * code-server Light: Cloud9 editor theme with the colours of VS Code's
+ * Code Server Light: Cloud9 editor theme with the colours of VS Code's
  * "2026 Light" theme (MIT). Default editor theme of the code-server-light skin
  * (plugins/c9.ide.theme.codeserver/plugin.js); see code-server-light.css.
  */

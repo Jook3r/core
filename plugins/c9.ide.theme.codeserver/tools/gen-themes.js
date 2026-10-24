@@ -30,7 +30,7 @@ const dots = col => svg("<svg xmlns='http://www.w3.org/2000/svg' width='16' heig
 
 const V = {
     dark: {
-        name: "code-server-dark", title: "code-server Dark", src: "2026 Dark (2026-dark.json > dark_modern > dark_plus > dark_vs)",
+        name: "code-server-dark", title: "Code Server Dark", src: "2026 Dark (2026-dark.json > dark_modern > dark_plus > dark_vs)",
         bg: "#121314", fg: "#BBBEBF",                       // editor.background / editor.foreground
         panelBg: "#191A1B",                                 // panel.background (Immediate window, like the debug console)
         gutterBg: "#121314",                                // editorGutter.background
@@ -91,7 +91,7 @@ const V = {
         }
     },
     light: {
-        name: "code-server-light", title: "code-server Light", src: "2026 Light (2026-light.json > light_modern > light_plus > light_vs)",
+        name: "code-server-light", title: "Code Server Light", src: "2026 Light (2026-light.json > light_modern > light_plus > light_vs)",
         bg: "#FFFFFF", fg: "#202020",
         panelBg: "#FAFAFD",
         gutterBg: "#FFFFFF",

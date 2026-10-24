@@ -1,5 +1,5 @@
 /*
- * code-server Dark editor theme for Cloud9.
+ * Code Server Dark editor theme for Cloud9.
  * Colours from VS Code's 2026 Dark (2026-dark.json > dark_modern > dark_plus > dark_vs), MIT licensed.
  * Ace token types are mapped to the TextMate scopes they stand for and resolved the
  * way VS Code does (more specific scope wins). Where Ace uses one token type for

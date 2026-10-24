@@ -71,6 +71,21 @@
 .filetree-icon.dockerfile:before {
     -webkit-text-stroke: 0.5px currentColor;
 }
+/* JSON: icons.less writes "{}" as text, which the c9 icon font does not
+   have, so the braces came from the browser's fallback font (a different
+   one on every OS): taller than the other icons and sitting low. Draw them
+   as a mask instead, one em square like the font's glyph boxes (bottom at
+   the font's 0.0625em descent), in the icon colour. */
+.filetree-icon.json:before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.0625em;
+    background: currentColor !important; /* icons.less: background: none !important */
+    -webkit-mask: @cs-icon-json center / 1em 1em no-repeat content-box;
+    mask: @cs-icon-json center / 1em 1em no-repeat content-box;
+}
 
 /* ---- Terminal cursor ----------------------------------------------------- */
 /* The cursor is the reverse-video cell. VS Code 2026 terminalCursor colours,

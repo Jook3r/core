@@ -49,12 +49,26 @@
     color: @cs-list-active-fg;
 }
 
-/* the cells: chevron, icon, caption */
+/* The cells: indent, chevron, icon, caption.
+   The row is a flex line and every cell is a fixed 22px box centred on it.
+   The chevron and icon glyphs are blocks exactly one em tall (line-height =
+   font-size), placed at the middle of their cell by arithmetic, not by the
+   text baseline. So the glyphs sit on the row's centre line whatever the UI
+   font's metrics (Segoe UI, Inter, ...) are; only the caption's text uses
+   its font (see below). No cell shrinks (flex: none): the row lays out as
+   the inline-blocks did, and the cells keep their display (the Open Files
+   list hides its togglers, ".openfiles .ace_tree .toggler"). */
+.filetree.ace_tree .tree-row {
+    display: flex;
+    align-items: center;
+}
+.filetree.ace_tree .tree-row > * {
+    flex: none;
+}
 .filetree.ace_tree .tree-row > span {
     padding: 0;
     line-height: @tree-row-height;
     height: @tree-row-height;
-    vertical-align: top;
 }
 .filetree.ace_tree .tree-row > .tree-indent {
     height: 0;
@@ -65,34 +79,60 @@
     height: @tree-row-height;
     margin: 0 @cs-space-2 0 0;
     padding: 0;
-    line-height: @tree-row-height;
     text-align: center;
     color: @cs-fg-muted;
 }
+/* The c9 font's arrows are centred in their em box (\e90a exactly, \e90c
+   0.03em low), so a centred 1em block centres the ink. 10px, not 9: an even
+   box sits at a whole-pixel offset in the 22px cell, like the 16px icon
+   box, so both snap the same way when the tree sits at a fractional y
+   (the Save As dialog). */
 .filetree.ace_tree .tree-row .toggler:before,
 .filetree.ace_tree .tree-row .toggler.open:before,
 .filetree.ace_tree .tree-row .toggler.closed:before {
-    top: 0;
-    font-size: 9px;
-    line-height: @tree-row-height;
+    display: block;
+    top: ((@tree-row-height - 10px) / 2);
+    height: 10px;
+    font-size: 10px;
+    line-height: 10px;
 }
 .filetree.ace_tree .tree-row:hover .toggler,
 .filetree.ace_tree .tree-row.selected .toggler {
     color: @cs-fg;
 }
+/* One 16px box for every file and folder icon. The symlink / favourite
+   overlay keeps its icons.less place (a 12px image at 50% - 5px: 6px to
+   18px of the cell), so it sits at the bottom left of the icons' ink. */
 .filetree.ace_tree .tree-row .filetree-icon {
     width: 16px;
     height: @tree-row-height;
     margin: 0 @cs-space-6 0 0;
     line-height: @tree-row-height !important; /* icons.less sets 18px !important */
+}
+.filetree.ace_tree .tree-row .filetree-icon:before {
+    display: block;
+    position: relative;
+    top: ((@tree-row-height - 16px) / 2);
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 16px;
     text-align: center;
 }
+/* the folder glyph (\e90e) is drawn 1px above the centre of its em box */
 .filetree.ace_tree .tree-row .filetree-icon.folder:before {
+    top: ((@tree-row-height - 16px) / 2 + 1px);
     color: @cs-fg-muted;
     opacity: 0.7;
 }
+/* the caption keeps its 22px box (the rename box copies it); its text has
+   its cap-height band centred in it (Chrome 133+), so the name's middle
+   meets the icons' whatever the font's ascent and descent are. Older
+   browsers centre the 22px line box by the font's own metrics. */
 .filetree.ace_tree .tree-row > .caption {
     margin: 0;
+    text-box: trim-both cap alphabetic;
+    align-content: center;
 }
 .filetree.ace_tree .tree-row .extrainfo {
     color: @cs-fg-muted;
@@ -164,8 +204,29 @@
     color: @cs-fg-muted;
     font-size: @cs-font-size-label;
 }
+/* Navigate: the icon glyph is the :before of the name's span. As in the
+   tree: the glyph gets a 16px box over the name's whole 18px line (the
+   line-height icons.less sets with !important), so it is centred on the
+   line, and the name has its cap-height band centred on the same line
+   (Chrome 133+), whatever the font. Every name starts at the same x. */
+.searchresults .item > span.filetree-icon {
+    position: relative;
+    width: auto;
+    height: 18px;
+    padding-left: (@cs-space-2 + 16px + @cs-space-6);
+    text-box: trim-both cap alphabetic;
+    align-content: center;
+}
 div.navigate-list span.filetree-icon:before {
-    padding-right: @cs-space-6;
+    position: absolute;
+    top: 1px;      /* the span's padding-top (.searchresults .item > span) */
+    left: @cs-space-2;
+    width: 16px;
+    height: 18px;
+    padding-right: 0;
+    font-size: 16px;
+    line-height: 18px;
+    text-align: center;
 }
 
 /* ---- Outline and other ace_tree lists ----------------------------------- */

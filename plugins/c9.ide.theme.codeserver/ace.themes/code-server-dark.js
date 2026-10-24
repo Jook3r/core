@@ -1,5 +1,5 @@
 /**
- * code-server Dark: Cloud9 editor theme with the colours of VS Code's
+ * Code Server Dark: Cloud9 editor theme with the colours of VS Code's
  * "2026 Dark" theme (MIT). Default editor theme of the code-server-dark skin
  * (plugins/c9.ide.theme.codeserver/plugin.js); see code-server-dark.css.
  */

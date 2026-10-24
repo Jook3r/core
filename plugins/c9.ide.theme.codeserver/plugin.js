@@ -10,7 +10,7 @@ define(function(require, exports, module) {
     return main;
 
     /**
-     * code-server Dark / code-server Light skins.
+     * Code Server Dark / Code Server Light skins.
      * 
      * The look lives in less/ (built into the skin CSS by c9.static/build.js)
      * and in the shared Jett icon font; this plugin only registers the skins
@@ -29,16 +29,16 @@ define(function(require, exports, module) {
         
         var SKINS = [{
             name: "code-server-dark",
-            caption: "code-server Dark",
+            caption: "Code Server Dark",
             color: "#191A1B",
             aceTheme: "plugins/c9.ide.theme.codeserver/ace.themes/code-server-dark",
-            aceCaption: "code-server Dark"
+            aceCaption: "Code Server Dark"
         }, {
             name: "code-server-light",
-            caption: "code-server Light",
+            caption: "Code Server Light",
             color: "#FAFAFD",
             aceTheme: "plugins/c9.ide.theme.codeserver/ace.themes/code-server-light",
-            aceCaption: "code-server Light"
+            aceCaption: "Code Server Light"
         }];
         
         /**

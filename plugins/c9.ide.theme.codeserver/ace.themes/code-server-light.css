@@ -1,5 +1,5 @@
 /*
- * code-server Light editor theme for Cloud9.
+ * Code Server Light editor theme for Cloud9.
  * Colours from VS Code's 2026 Light (2026-light.json > light_modern > light_plus > light_vs), MIT licensed.
  * Ace token types are mapped to the TextMate scopes they stand for and resolved the
  * way VS Code does (more specific scope wins). Where Ace uses one token type for

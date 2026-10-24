@@ -209,8 +209,8 @@ define(function(require, exports, module) {
                                 { caption: "Cloud9 Classic Dark Theme", value: "dark" },
                                 { caption: "Cloud9 Flat Light Theme", value: "flat-light" },
                                 // { caption: "Cloud9 Flat Dark Theme", value: "flat-dark" }
-                                { caption: "code-server Light Theme", value: "code-server-light" },
-                                { caption: "code-server Dark Theme", value: "code-server-dark" }
+                                { caption: "Code Server Light Theme", value: "code-server-light" },
+                                { caption: "Code Server Dark Theme", value: "code-server-dark" }
                             ],
                             position: 100
                         },

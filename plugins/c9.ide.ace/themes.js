@@ -118,7 +118,7 @@ define(function(require, exports, module) {
                 },
                 {
                     type: "custom",
-                    title: "code-server Theme",
+                    title: "Code Server Theme",
                     position: 1,
                     node: new ui.hsplitbox({
                         height: 49,
@@ -127,7 +127,7 @@ define(function(require, exports, module) {
                         childNodes: [
                             new ui.label({ 
                                 width: 150, 
-                                caption: "code-server Theme:", 
+                                caption: "Code Server Theme:", 
                                 style: "padding-top:5px" 
                             }),
                             themeContainers["code-server"] = new ui.bar({})
