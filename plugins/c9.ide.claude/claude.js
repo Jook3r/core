@@ -11,7 +11,7 @@ define(function(require, exports, module) {
 
     main.consumes = [
         "Panel", "c9", "ui", "ext", "settings", "preferences", "tabManager",
-        "layout", "ace"
+        "layout", "ace", "commands", "tree", "dialog.file", "dialog.confirm"
     ];
     main.provides = ["claude"];
     return main;
@@ -26,6 +26,10 @@ define(function(require, exports, module) {
         var tabManager = imports.tabManager;
         var layout = imports.layout;
         var aceHandle = imports.ace;
+        var commands = imports.commands;
+        var tree = imports.tree;
+        var fileDialog = imports["dialog.file"];
+        var confirm = imports["dialog.confirm"].show;
 
         var markdown = require("./markdown");
         var images = require("./images");
@@ -64,6 +68,22 @@ define(function(require, exports, module) {
         // effort levels in the model menu's segmented control
         var SEGMENTS = { "": "Auto", low: "Low", medium: "Med", high: "High", xhigh: "Extra", max: "Max" };
         var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // an added account: the name of its config folder in the home folder
+        var ACCOUNT_RE = /^[A-Za-z0-9._-]{1,64}$/;
+        var DEFAULT_ACCOUNT_NAME = "Personal";
+        var MAX_ACCOUNTS = 20;
+        var RECENT_FOLDERS = 8;         // folders offered for a new chat
+        var HISTORY_PAGE = 50;          // sessions listed, and added by "Show older"
+        // what an added account can share with the default one
+        var SHARES = [
+            { key: "claudeMd", caption: "CLAUDE.md", desc: "your instructions (imported)" },
+            { key: "agents", caption: "agents" },
+            { key: "commands", caption: "commands" },
+            { key: "skills", caption: "skills" },
+            { key: "outputStyles", caption: "output styles" },
+            { key: "settings", caption: "settings.json",
+                desc: "read only from this account: Claude can't save settings through the link" }
+        ];
         var LOGIN_RE = /\/login\b|not logged in|invalid api key|authentication_error|oauth token|please run .{0,20}login/i;
         var BILLING_RE = /credit balance|billing|payment required|insufficient credit/i;
         var MAX_ATTACHMENTS = 10;
@@ -103,6 +123,8 @@ define(function(require, exports, module) {
             up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.8 8 6.3l3.5 3.5"/></svg>',
             archive: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5c0 .6.4 1 1 1h8c.6 0 1-.4 1-1V6M6.5 9h3"/></svg>',
             unarchive: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5c0 .6.4 1 1 1h8c.6 0 1-.4 1-1V6M8 12V8.2M6.4 9.6 8 8l1.6 1.6"/></svg>',
+            folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M1.8 4.2c0-.6.5-1 1-1h3.3l1.5 1.6h5.6c.6 0 1 .4 1 1v6.9c0 .6-.4 1-1 1H2.8c-.5 0-1-.4-1-1z"/></svg>',
+            user: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><circle cx="8" cy="5.6" r="2.7"/><path d="M2.8 13.8c.6-2.6 2.7-4.1 5.2-4.1s4.6 1.5 5.2 4.1"/></svg>',
             trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"><path d="M2.8 4.3h10.4M6.3 4.3V3c0-.4.3-.7.7-.7h2c.4 0 .7.3.7.7v1.3M4.2 4.3l.6 8.6c0 .5.5.9 1 .9h4.4c.5 0 1-.4 1-.9l.6-8.6M6.8 6.8v4.6M9.2 6.8v4.6"/></svg>'
         };
 
@@ -121,7 +143,7 @@ define(function(require, exports, module) {
         // UI elements
         var root, header, statusDot, statusText, titleEl, btnNew, btnHistory;
         var modelSelect, effortSelect, modeSelect;      // the choices (see choice())
-        var modelPill, modePill, modelPop, modePop, historyPop;
+        var modelPill, modePill, wherePill, modelPop, modePop, wherePop, historyPop;
         var pops = [];                                  // the popover menus
         var actEl, actText, actMeta, actHint;
         var logEl, welcomeEl, jumpBtn, composer, composerBox, noteEl, promptSlot, attachRow, chipPreview;
@@ -153,6 +175,13 @@ define(function(require, exports, module) {
         var taskSummary = "";           // the CLI's summary of the task (header)
         var debug = false;              // localStorage "claude-debug": log event times
 
+        // the account and folder of the chat (see "Accounts and folders")
+        var chatAccount = "";           // "" (the default account) or an added account's folder name
+        var chatFolder = "";            // the folder it runs in ("": the workspace)
+        var chatCwd = "";               // the folder the CLI reports (relative paths)
+        var acctInfo = {};              // account -> what the service knows (login, email, sharing)
+        var tabMemory = Object.create(null);    // account -> { effort, ultracode } in this tab
+
         // model and effort: the CLI's model list, and what it really applies
         var modelList = null;           // list_models (null: FALLBACK_MODELS)
         var applied = null;             // { model, effort } from get_settings
@@ -166,6 +195,8 @@ define(function(require, exports, module) {
         var lastTotalCost = 0;
         var lastResultError = false;    // the last turn ended with an error that is shown
 
+        var accountsBar = null;         // Preferences > Claude > Accounts
+
         var loaded = false;
         function load() {
             if (loaded) return false;
@@ -176,17 +207,23 @@ define(function(require, exports, module) {
                 hint: "show the Claude panel"
             });
 
+            // the CSS of the panel and of its preferences (Accounts)
+            ui.insertCss(require("text!./claude.less"), options.staticPrefix, plugin);
+
             settings.on("read", function() {
+                // model, effort and mode: the default account's; an added
+                // account keeps its own in user/claude/accounts
                 settings.setDefaults("user/claude", [
                     ["path", ""],
                     ["model", "default"],
                     ["effort", ""],
-                    ["ultracode", "false"],
                     ["mode", ""]
                 ]);
                 settings.setDefaults("state/claude", [
                     ["session", ""],
-                    ["title", ""]
+                    ["sessionAccount", ""],
+                    ["title", ""],
+                    ["account", ""]
                 ]);
                 updateButton();
             }, plugin);
@@ -195,14 +232,13 @@ define(function(require, exports, module) {
                 binChecked = false;
                 refreshStatus();
             }, plugin);
-            // changed elsewhere (another window, the settings file)
-            settings.on("user/claude/@ultracode", function() {
-                if (drawn) updateSettingLabels();
-            }, plugin);
+            // the default account's choices, changed elsewhere (another
+            // window, the settings file)
             ["model", "effort", "mode"].forEach(function(name) {
                 settings.on("user/claude/@" + name, function(value) {
+                    if (name == "effort" && tabMemory[""]) tabMemory[""].effort = value || "";
                     var node = { model: modelSelect, effort: effortSelect, mode: modeSelect }[name];
-                    if (!drawn || !node || node.value == (value || "") || name == "model" && !value) return;
+                    if (!drawn || chatAccount || !node || node.value == (value || "") || name == "model" && !value) return;
                     setSelect(node, value || "");
                     updateSettingLabels();
                 }, plugin);
@@ -216,10 +252,34 @@ define(function(require, exports, module) {
                             type: "textbox",
                             path: "user/claude/@path",
                             position: 100
+                        },
+                        "Accounts": {
+                            type: "custom",
+                            position: 200,
+                            node: accountsBar = new ui.bar({ "class": "claude-accounts-bar" })
                         }
                     }
                 }
             }, plugin);
+            accountsBar.on("DOMNodeInsertedIntoDocument", function() {
+                renderAccountsPrefs();
+                if (!api && c9.connected) loadRemote();
+                else refreshAccounts();
+            });
+
+            // the file tree: a new chat in the folder (of the file) picked
+            tree.getElement("mnuCtxTree", function(mnuCtxTree) {
+                ui.insertByIndex(mnuCtxTree, new ui.item({
+                    match: "",
+                    caption: "New Claude Chat Here",
+                    onclick: function() {
+                        var node = tree.selectedNode;
+                        if (!node) return;
+                        var folder = node.isFolder ? node.path : node.parent && node.parent.path;
+                        if (folder) newChatIn(folder);
+                    }
+                }), 1025, plugin);
+            });
 
             layout.on("themeChange", function() {
                 updateButton();
@@ -230,7 +290,7 @@ define(function(require, exports, module) {
             settings.on("user/ace", updateCodeFont, plugin);
 
             c9.on("connect", function() {
-                if (drawn) loadRemote();
+                if (drawn || accountsBar && accountsBar.$int) loadRemote();
             }, plugin);
             c9.on("disconnect", function() {
                 api = null;
@@ -295,6 +355,8 @@ define(function(require, exports, module) {
                     api = remote;
                     stream = meta.stream;
                     debug = debugOn();
+                    refreshAccounts();
+                    whenConnected.waiting.splice(0).forEach(function(fn) { fn(); });
                     stream.on("data", function(chunk) {
                         var events;
                         try {
@@ -319,6 +381,14 @@ define(function(require, exports, module) {
             });
         }
 
+        // fn runs once the service is connected (now, if it is)
+        function whenConnected(fn) {
+            if (api) return fn();
+            whenConnected.waiting.push(fn);
+            if (c9.connected) loadRemote();
+        }
+        whenConnected.waiting = [];
+
         var binChecked = false;
         function refreshStatus(callback) {
             if (!api) return callback && callback();
@@ -338,8 +408,6 @@ define(function(require, exports, module) {
             if (drawn) return;
             drawn = true;
 
-            ui.insertCss(require("text!./claude.less"), options.staticPrefix, plugin);
-
             root = el("div", { className: "claude-root" });
             e.html.appendChild(root);
             // apf cancels mousedown (and so text selection) inside UI
@@ -351,7 +419,8 @@ define(function(require, exports, module) {
             statusDot = el("span", { className: "claude-status-dot" });
             statusText = el("span", { className: "claude-status-text", text: "Claude" });
             titleEl = el("span", { className: "claude-title" });
-            restoreModelCache();
+            chatAccount = defaultAccount();
+            restoreModelCache(chatAccount);
             modelSelect = choice(modelItems);
             effortSelect = choice(effortItems);
             modeSelect = choice(MODES);
@@ -413,6 +482,9 @@ define(function(require, exports, module) {
             });
             btnSend = iconButton("send", "Send (Enter)", onSendButton);
             btnSend.classList.add("claude-send");
+            // where the chat runs (account and folder): a line above the input
+            wherePill = el("button", { type: "button", className: "claude-where-pill",
+                "aria-haspopup": "true", "aria-expanded": "false" });
             // the model (with its effort) and the mode, as pills in the footer
             modelPill = el("button", { type: "button", className: "claude-pill claude-model-pill",
                 "aria-haspopup": "true", "aria-expanded": "false" }, [
@@ -427,6 +499,7 @@ define(function(require, exports, module) {
             ]);
             noteEl = el("div", { className: "claude-composer-note", "aria-live": "polite" });
             composerBox = el("div", { className: "claude-composer-box" }, [
+                el("div", { className: "claude-where" }, [wherePill]),
                 attachRow,
                 textarea,
                 el("div", { className: "claude-composer-bar" }, [
@@ -447,6 +520,8 @@ define(function(require, exports, module) {
 
             modelPop = popover({ button: modelPill, className: "claude-pop-model", place: "up", build: buildModelPop });
             modePop = popover({ button: modePill, className: "claude-pop-mode", place: "up", build: buildModePop });
+            wherePop = popover({ button: wherePill, className: "claude-pop-where", place: "up", build: buildWherePop,
+                onopen: function() { refreshAccounts(); } });
             historyPop = popover({ button: btnHistory, className: "claude-pop-history", place: "down", align: "right",
                 build: buildHistoryPop, onopen: loadHistory });
 
@@ -508,10 +583,11 @@ define(function(require, exports, module) {
                 addFiles(files);
             });
 
-            setSelect(modelSelect, settings.get("user/claude/@model") || "default");
-            setSelect(effortSelect, settings.get("user/claude/@effort") || "");
-            setSelect(modeSelect, settings.get("user/claude/@mode") || "");
+            setSelect(modelSelect, acctPref("model") || "default");
+            setSelect(effortSelect, memory().effort);
+            setSelect(modeSelect, acctPref("mode"));
             updateSettingLabels();
+            renderWhere();
             fitWidth();
 
             renderWelcome();
@@ -994,6 +1070,556 @@ define(function(require, exports, module) {
             pops.forEach(function(pop) { if (pop.visible) pop.place(); });
         }
 
+        /***** Accounts and folders *****/
+
+        // An account is a Claude Code config folder: its login, settings and
+        // history. "" is the default one ("Personal": Claude Code as in a
+        // terminal); added ones are { dir, name, model, effort, mode } in
+        // user/claude/accounts, dir being the folder's name in the home
+        // folder (".claude-work"). A chat runs as one account in one folder,
+        // both fixed by its first message.
+
+        function addedAccounts() {
+            var list = settings.getJson("user/claude/accounts");
+            var seen = {};
+            return (Array.isArray(list) ? list : []).filter(function(a) {
+                var ok = a && typeof a.dir == "string" && ACCOUNT_RE.test(a.dir) && !/^\.+$/.test(a.dir)
+                    && a.dir != ".claude" && !seen[a.dir];
+                if (ok) seen[a.dir] = true;
+                return ok;
+            }).slice(0, MAX_ACCOUNTS);
+        }
+
+        function allAccounts() {
+            return [{ dir: "", name: DEFAULT_ACCOUNT_NAME }].concat(addedAccounts());
+        }
+
+        // more than the default account: the pill and the history name them
+        function several() {
+            return addedAccounts().length > 0;
+        }
+
+        function accountByKey(key) {
+            return allAccounts().filter(function(a) { return a.dir == key; })[0] || null;
+        }
+
+        function accountName(key) {
+            var a = accountByKey(key);
+            return a ? String(a.name || a.dir || DEFAULT_ACCOUNT_NAME) : String(key || DEFAULT_ACCOUNT_NAME);
+        }
+
+        // the account a new chat starts with: the one picked last
+        function defaultAccount() {
+            var key = settings.get("state/claude/@account") || "";
+            return accountByKey(key) ? key : "";
+        }
+
+        // "w@x.com", "Not logged in", ...: from the service
+        function accountStatus(key) {
+            var info = acctInfo[key];
+            if (!info) return "";
+            if (info.exists === false) return "Folder " + info.dir + " not found";
+            if (info.email) return info.email + (info.org ? " · " + info.org : "");
+            if (info.auth == "env") return "Key or token from the server's environment";
+            return info.loggedIn ? "Logged in" : "Not logged in";
+        }
+
+        // the model, effort and mode an account uses (as last chosen)
+        function acctPref(name, key) {
+            if (key === undefined) key = chatAccount;
+            if (!key) return settings.get("user/claude/@" + name) || "";
+            var a = accountByKey(key);
+            return a && typeof a[name] == "string" ? a[name] : "";
+        }
+
+        function setAcctPref(name, value, key) {
+            if (key === undefined) key = chatAccount;
+            if (!key) return settings.set("user/claude/@" + name, value);
+            var list = settings.getJson("user/claude/accounts");
+            if (!Array.isArray(list)) return;
+            list.forEach(function(a) { if (a && a.dir == key) a[name] = value; });
+            settings.setJson("user/claude/accounts", list);
+        }
+
+        // Effort and Ultracode as this tab left them. A tab starts with the
+        // effort last chosen, but not above High, and with Ultracode off.
+        function memory(key) {
+            if (key === undefined) key = chatAccount;
+            if (!tabMemory[key]) {
+                var effort = acctPref("effort", key);
+                tabMemory[key] = { effort: effort == "xhigh" || effort == "max" ? "high" : effort, ultracode: false };
+            }
+            return tabMemory[key];
+        }
+
+        // the model list and applied settings an account's claude reported
+        function cacheGet(name, key) {
+            if (!key) return settings.getJson("state/claude/" + name);
+            var all = settings.getJson("state/claude/cache");
+            return all && typeof all == "object" && all[key] && all[key][name] || null;
+        }
+
+        function cacheSet(name, value, key) {
+            if (key === undefined) key = chatAccount;
+            if (!key) return settings.setJson("state/claude/" + name, value);
+            var all = settings.getJson("state/claude/cache");
+            if (!all || typeof all != "object" || Array.isArray(all)) all = {};
+            Object.keys(all).forEach(function(k) { if (!accountByKey(k)) delete all[k]; });
+            all[key] = all[key] && typeof all[key] == "object" ? all[key] : {};
+            all[key][name] = value;
+            settings.setJson("state/claude/cache", all);
+        }
+
+        // For a new chat: its account, with that account's model, effort and mode
+        function useAccount(key) {
+            chatAccount = accountByKey(key) ? key : "";
+            if (!drawn) return;
+            restoreModelCache(chatAccount);
+            setSelect(modelSelect, acctPref("model") || "default");
+            setSelect(effortSelect, memory().effort);
+            setSelect(modeSelect, acctPref("mode"));
+            updateSettingLabels();
+            renderWhere();
+        }
+
+        function chatLocked() {
+            return !!sessionId || hasSentInSession;
+        }
+
+        function workspaceDir() {
+            return String(c9.workspaceDir || "/").replace(/(.)\/$/, "$1");
+        }
+
+        // the folder of the chat: the one the CLI reports, the chosen one, or the workspace
+        function currentFolder() {
+            return chatCwd || chatFolder || workspaceDir();
+        }
+
+        function tildePath(abs) {
+            var home = String(cliInfo && cliInfo.home || c9.home || "").replace(/\/$/, "");
+            if (home && abs == home) return "~";
+            if (home && abs.indexOf(home + "/") === 0) return "~" + abs.slice(home.length);
+            return abs;
+        }
+
+        // "~/IDM", "/var/www/html"; a long one as "…/www/html"
+        function shortFolder(abs) {
+            var t = tildePath(abs);
+            if (t.length <= 40) return t;
+            return "\u2026/" + t.replace(/\/$/, "").split("/").slice(-2).join("/");
+        }
+
+        // a path of the editor ("/IDM", "~/x", "/zoot/var/www") as an absolute path
+        function editorToAbsolute(p) {
+            p = String(p || "");
+            if (/^~(\/|$)/.test(p)) return String(c9.home || "").replace(/\/$/, "") + p.slice(1);
+            var ws = workspaceDir().replace(/\/$/, "");
+            return !p || p == "/" ? workspaceDir() : ws + (p.charAt(0) == "/" ? "" : "/") + p;
+        }
+
+        function recentFolders() {
+            var list = settings.getJson("state/claude/folders");
+            return (Array.isArray(list) ? list : []).filter(function(f) {
+                return typeof f == "string" && /^\//.test(f);
+            }).slice(0, RECENT_FOLDERS);
+        }
+
+        function rememberFolder(folder, on) {
+            var list = recentFolders().filter(function(f) { return f != folder; });
+            if (on) list.unshift(folder);
+            settings.setJson("state/claude/folders", list.slice(0, RECENT_FOLDERS));
+        }
+
+        // The folder of a new chat: a full path ("~/..." too); "" for the
+        // workspace. The service checks that it exists and gives its real path.
+        function setFolder(p, callback) {
+            callback = callback || function(err) {
+                if (err) flashHint(err.message || String(err));
+            };
+            if (chatLocked()) return callback(new Error("The folder of a chat is fixed once it has started"));
+            if (!p) {
+                chatFolder = "";
+                renderWhere();
+                return callback(null, workspaceDir());
+            }
+            // e.g. a chat started from the file tree in a panel that just opened
+            if (!api) return whenConnected(function() { setFolder(p, callback); });
+            api.checkFolder(p, function(err, res) {
+                if (err || !res || typeof res.path != "string") return callback(err || new Error("Could not check the folder"));
+                if (chatLocked()) return callback(new Error("The folder of a chat is fixed once it has started"));
+                chatFolder = res.workspace ? "" : res.path;
+                if (chatFolder) rememberFolder(chatFolder, true);
+                renderWhere();
+                callback(null, res.path);
+            });
+        }
+
+        function chooseFolder() {
+            var start = workspacePath(chatFolder || workspaceDir()) || "/";
+            fileDialog.show("Choose the folder for the chat", start, function(path, stat, done) {
+                done();
+                setFolder(editorToAbsolute(path));
+            }, null, { hideFileInput: true, chooseCaption: "Choose", showFilesCheckbox: false, createFolderButton: false });
+        }
+
+        // From the file tree: a new chat in that folder (a path of the editor)
+        function newChatIn(editorPath) {
+            function go() {
+                if (!drawn) return;
+                newSession();
+                setFolder(editorToAbsolute(editorPath));
+            }
+            function start() {
+                plugin.show();
+                if (drawn) go();
+                else plugin.once("draw", function() { setTimeout(go, 0); });
+            }
+            if (busy || stopping)
+                return confirm("New Claude chat", "Claude is still working in the current chat.",
+                    "Stop it and start a new chat in " + tildePath(editorToAbsolute(editorPath)) + "?", start, function() {});
+            start();
+        }
+
+        // the line above the input: [account] [folder] (the account only
+        // when there are several), a chevron while it can still change
+        function renderWhere() {
+            if (!wherePill) return;
+            var folder = chatFolder || workspaceDir();
+            var locked = chatLocked();
+            wherePill.textContent = "";
+            if (several()) {
+                wherePill.appendChild(icon("user", "claude-where-icon"));
+                wherePill.appendChild(el("span", { className: "claude-where-account", text: accountName(chatAccount) }));
+            }
+            wherePill.appendChild(icon("folder", "claude-where-icon"));
+            wherePill.appendChild(el("span", { className: "claude-where-folder", text: shortFolder(folder) }));
+            if (!locked) wherePill.appendChild(icon("chevron", "claude-where-chevron"));
+            wherePill.classList.toggle("claude-locked", locked);
+            var status = accountStatus(chatAccount);
+            wherePill.title = "Account: " + accountName(chatAccount) + (status ? " (" + status + ")" : "")
+                + "\nFolder: " + tildePath(folder)
+                + (locked ? "\nFixed for this chat; a new session can use another" : "\nClick to choose another for this chat");
+        }
+
+        function buildWherePop(pop) {
+            var folder = chatFolder || workspaceDir();
+            if (chatLocked()) {
+                pop.heading("This chat");
+                pop.info("Account: " + accountName(chatAccount) + (accountStatus(chatAccount) ? " · " + accountStatus(chatAccount) : ""));
+                pop.info("Folder: " + tildePath(folder));
+                pop.item({ label: "New session here", desc: "The same account and folder", icon: "plus", onpick: function() {
+                    var account = chatAccount, keep = chatFolder;
+                    pop.close(true);
+                    newSession();
+                    useAccount(account);
+                    if (keep && keep != workspaceDir()) setFolder(keep);
+                } });
+                return;
+            }
+            pop.heading("Account");
+            allAccounts().forEach(function(a) {
+                pop.item({ label: a.name || a.dir, desc: accountStatus(a.dir) || (a.dir ? "~/" + a.dir : ""), icon: "user",
+                    checked: a.dir == chatAccount, onpick: function() {
+                        pop.close(true);
+                        settings.set("state/claude/@account", a.dir);
+                        if (a.dir != chatAccount) useAccount(a.dir);
+                    } });
+            });
+            pop.item({ label: "Manage accounts…", icon: "gear", onpick: function() {
+                pop.close(false);
+                openAccountPrefs();
+            } });
+            pop.heading("Folder");
+            pop.item({ label: shortFolder(workspaceDir()), desc: "The workspace", icon: "folder", checked: !chatFolder,
+                title: tildePath(workspaceDir()), onpick: function() {
+                pop.close(true);
+                setFolder("");
+            } });
+            recentFolders().forEach(function(f) {
+                if (f == workspaceDir()) return;
+                pop.item({ label: shortFolder(f), icon: "folder", checked: chatFolder == f, title: tildePath(f), onpick: function() {
+                    pop.close(true);
+                    setFolder(f, function(err) {
+                        if (!err) return;
+                        rememberFolder(f, false);
+                        flashHint(err.message || String(err));
+                    });
+                }, actions: [{ icon: "close", title: "Remove from this list", run: function() {
+                    rememberFolder(f, false);
+                    pop.refresh();
+                } }] });
+            });
+            pop.item({ label: "Choose folder…", icon: "search", onpick: function() {
+                pop.close(false);
+                chooseFolder();
+            } });
+            pop.row(folderInput(pop));
+        }
+
+        // "Or type a full path": Enter uses it
+        function folderInput(pop) {
+            var input = el("input", { type: "text", className: "claude-folder-input", spellcheck: "false",
+                placeholder: "Or type a full path, e.g. /var/www/html", "aria-label": "Folder path" });
+            var error = el("div", { className: "claude-folder-error", role: "alert" });
+            input.addEventListener("keydown", function(e) {
+                if (e.keyCode == 27 || e.keyCode == 9) return;  // the menu closes
+                e.stopPropagation();
+                if (e.keyCode != 13) return;
+                e.preventDefault();
+                var value = input.value.trim();
+                if (!value) return;
+                setFolder(value, function(err) {
+                    if (!err) return pop.close(true);
+                    error.textContent = err.message || String(err);
+                    pop.place();
+                });
+            });
+            return { el: el("div", { className: "claude-folder-row" }, [input, error]), onpick: function() { input.focus(); } };
+        }
+
+        // what the service knows about each account (login, email, sharing)
+        function refreshAccounts(callback) {
+            if (!api) return callback && callback();
+            api.accounts(allAccounts().map(function(a) { return a.dir; }), function(err, res) {
+                if (!err && res && res.accounts && typeof res.accounts == "object") acctInfo = res.accounts;
+                renderWhere();
+                if (wherePop && wherePop.visible) wherePop.refresh();
+                renderAccountsPrefs();
+                callback && callback(err);
+            });
+        }
+
+        function openAccountPrefs() {
+            commands.exec("openpreferences", null, { panel: "general", section: "Claude" });
+        }
+
+        // A terminal that runs claude with the account's folder, to log in
+        // (/login) the way Claude Code does it
+        function loginAccount(key) {
+            var bin = settings.get("user/claude/@path") || "claude";
+            var command = (key ? "CLAUDE_CONFIG_DIR=\"$HOME/" + key + "\" " : "")
+                + (/^[A-Za-z0-9_\/.~+-]+$/.test(bin) ? bin : "'" + bin.replace(/'/g, "'\\''") + "'");
+            tabManager.open({ focus: true, active: true, editorType: "terminal",
+                document: { terminal: { cwd: c9.home || workspaceDir() } } }, function(err, tab) {
+                if (err || !tab || !tab.editor || !tab.editor.write) return;
+                tab.editor.write(command + "\n");
+            });
+        }
+
+        /***** Preferences > Claude > Accounts *****/
+
+        var acctUi = { adding: null, removing: null, error: "", notes: {} };
+
+        function renderAccountsPrefs() {
+            var host = accountsBar && accountsBar.$int;
+            if (!host) return;
+            var box = el("div", { className: "claude-accounts" });
+            box.appendChild(el("div", { className: "claude-acct-intro", text: "Each account is a Claude Code "
+                + "folder with its own login, settings and chats. A chat uses the account chosen when it starts "
+                + "(above the input in the Claude panel)." }));
+            allAccounts().forEach(function(a) { box.appendChild(accountRow(a)); });
+            box.appendChild(addAccountForm());
+            if (!api) box.appendChild(el("div", { className: "claude-acct-note", text: "Connecting to the server…" }));
+            host.textContent = "";
+            host.appendChild(box);
+        }
+
+        function accountRow(a) {
+            var key = a.dir;
+            var info = acctInfo[key] || {};
+            var row = el("div", { className: "claude-acct" + (key == chatAccount ? " claude-acct-current" : "") });
+            var name = key
+                ? el("input", { type: "text", className: "claude-acct-name", value: a.name || key, "aria-label": "Name of the account" })
+                : el("span", { className: "claude-acct-name claude-acct-fixed", text: DEFAULT_ACCOUNT_NAME });
+            if (key) name.addEventListener("change", function() {
+                var value = name.value.trim().slice(0, 40) || key;
+                var list = settings.getJson("user/claude/accounts");
+                (Array.isArray(list) ? list : []).forEach(function(x) { if (x && x.dir == key) x.name = value; });
+                settings.setJson("user/claude/accounts", list);
+                renderWhere();
+            });
+            var status = accountStatus(key);
+            row.appendChild(el("div", { className: "claude-acct-head" }, [
+                name,
+                el("span", { className: "claude-acct-dir", text: info.dir || (key ? "~/" + key : "~/.claude") }),
+                el("span", { className: "claude-acct-status" + (info.loggedIn ? " claude-acct-ok" : ""), text: status || "…" })
+            ]));
+            row.appendChild(el("div", { className: "claude-acct-buttons" }, [
+                textButton(info.loggedIn ? "Log in again…" : "Log in…", "claude-btn-secondary", function() {
+                    acctUi.notes[key] = "In the terminal, type /login and follow the steps; then press Check.";
+                    loginAccount(key);
+                    renderAccountsPrefs();
+                }, "Opens a terminal with claude for this account"),
+                textButton("Check", "claude-btn-secondary", function() { refreshAccounts(); }, "Check the login again"),
+                key ? textButton("Remove…", "claude-btn-secondary", function() {
+                    acctUi.removing = key;
+                    renderAccountsPrefs();
+                }) : null
+            ]));
+            if (key && info.share) {
+                var shares = el("div", { className: "claude-acct-share" }, [
+                    el("span", { className: "claude-acct-label", text: "Shares with " + DEFAULT_ACCOUNT_NAME + ":" })
+                ]);
+                SHARES.forEach(function(item) {
+                    var state = info.share[item.key];
+                    var box = el("input", { type: "checkbox" });
+                    box.checked = state === true;
+                    box.disabled = state == "own";
+                    box.addEventListener("change", function() {
+                        var share = {};
+                        share[item.key] = box.checked;
+                        setShare(key, share);
+                    });
+                    shares.appendChild(el("label", { className: "claude-acct-check", title: state == "own"
+                        ? "This account has its own " + item.caption + "; it is left as it is"
+                        : item.desc || "" }, [box, item.caption + (state == "own" ? " (its own)" : "")]));
+                });
+                row.appendChild(shares);
+            }
+            if (acctUi.notes[key])
+                row.appendChild(el("div", { className: "claude-acct-note", text: acctUi.notes[key] }));
+            if (acctUi.removing == key) {
+                row.appendChild(el("div", { className: "claude-acct-confirm" }, [
+                    el("span", { text: "Remove " + (a.name || key) + " from this list? Its folder ~/" + key
+                        + " (login, settings, chats) stays on the server." }),
+                    textButton("Remove", "claude-btn-danger", function() { removeAccount(key); }),
+                    textButton("Cancel", "claude-btn-secondary", function() {
+                        acctUi.removing = null;
+                        renderAccountsPrefs();
+                    })
+                ]));
+            }
+            return row;
+        }
+
+        function addAccountForm() {
+            var form = acctUi.adding;
+            if (!form) {
+                return el("div", { className: "claude-acct-add" }, [
+                    textButton("Add an account…", "claude-btn-secondary", function() {
+                        acctUi.adding = { name: "", dir: "", dirEdited: false, share: {}, busy: false };
+                        acctUi.error = "";
+                        renderAccountsPrefs();
+                        var input = accountsBar.$int.querySelector(".claude-acct-new-name");
+                        if (input) input.focus();
+                    })
+                ]);
+            }
+            var nameEl = el("input", { type: "text", className: "claude-acct-new-name", value: form.name,
+                placeholder: "Name, e.g. Work", "aria-label": "Name of the new account" });
+            var dirEl = el("input", { type: "text", className: "claude-acct-new-dir", value: form.dir,
+                placeholder: ".claude-work", spellcheck: "false", "aria-label": "Folder of the new account" });
+            nameEl.addEventListener("input", function() {
+                form.name = nameEl.value;
+                if (!form.dirEdited) {
+                    var slug = form.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+                    form.dir = slug ? ".claude-" + slug.slice(0, 40) : "";
+                    dirEl.value = form.dir;
+                }
+            });
+            dirEl.addEventListener("input", function() {
+                form.dir = dirEl.value;
+                form.dirEdited = true;
+            });
+            var checks = el("div", { className: "claude-acct-share" }, [
+                el("span", { className: "claude-acct-label", text: "Share with " + DEFAULT_ACCOUNT_NAME + ":" })
+            ]);
+            SHARES.forEach(function(item) {
+                var box = el("input", { type: "checkbox" });
+                box.checked = !!form.share[item.key];
+                box.addEventListener("change", function() { form.share[item.key] = box.checked; });
+                checks.appendChild(el("label", { className: "claude-acct-check", title: item.desc || "" }, [box, item.caption]));
+            });
+            var add = textButton(form.busy ? "Adding…" : "Add account", "claude-btn-primary", function() { addAccount(form); });
+            add.disabled = form.busy;
+            [nameEl, dirEl].forEach(function(input) {
+                input.addEventListener("keydown", function(e) {
+                    if (e.keyCode == 13) {
+                        e.preventDefault();
+                        addAccount(form);
+                    }
+                });
+            });
+            return el("div", { className: "claude-acct-add claude-acct-form" }, [
+                el("div", { className: "claude-acct-fields" }, [
+                    el("label", { className: "claude-acct-field" }, [el("span", { text: "Name" }), nameEl]),
+                    el("label", { className: "claude-acct-field" }, [el("span", { text: "Folder  ~/" }), dirEl])
+                ]),
+                checks,
+                el("div", { className: "claude-acct-note", text: "Nothing is shared unless ticked; you can change it later. "
+                    + "settings.json can only be read through the link: Claude can't save settings from this account." }),
+                acctUi.error ? el("div", { className: "claude-acct-error", role: "alert", text: acctUi.error }) : null,
+                el("div", { className: "claude-acct-buttons" }, [
+                    add,
+                    textButton("Cancel", "claude-btn-secondary", function() {
+                        acctUi.adding = null;
+                        acctUi.error = "";
+                        renderAccountsPrefs();
+                    })
+                ])
+            ]);
+        }
+
+        function addAccount(form) {
+            if (form.busy) return;
+            var name = form.name.trim().slice(0, 40);
+            var dir = form.dir.trim().replace(/^~\//, "");
+            var error = !name ? "Give the account a name"
+                : !ACCOUNT_RE.test(dir) || /^\.+$/.test(dir) ? "The folder is a name in your home folder, e.g. .claude-work (letters, digits, . _ -)"
+                : dir == ".claude" ? "~/.claude is the folder of " + DEFAULT_ACCOUNT_NAME
+                : accountByKey(dir) ? "~/" + dir + " is already in the list"
+                : addedAccounts().length >= MAX_ACCOUNTS ? "At most " + MAX_ACCOUNTS + " accounts"
+                : !api ? "Not connected to the server" : "";
+            acctUi.error = error;
+            if (error) return renderAccountsPrefs();
+            form.busy = true;
+            renderAccountsPrefs();
+            api.setupAccount({ account: dir, create: true, share: form.share }, function(err, res) {
+                form.busy = false;
+                if (err) {
+                    acctUi.error = err.message || String(err);
+                    return renderAccountsPrefs();
+                }
+                var list = settings.getJson("user/claude/accounts");
+                list = Array.isArray(list) ? list : [];
+                list.push({ dir: dir, name: name });
+                settings.setJson("user/claude/accounts", list);
+                acctUi.adding = null;
+                acctUi.notes[dir] = "Added. Press “Log in…” to sign in to this account."
+                    + (res && res.warnings && res.warnings.length ? " " + res.warnings.join(" ") : "");
+                renderWhere();
+                refreshAccounts();
+            });
+        }
+
+        function removeAccount(key) {
+            var list = settings.getJson("user/claude/accounts");
+            settings.setJson("user/claude/accounts", (Array.isArray(list) ? list : []).filter(function(a) {
+                return !(a && a.dir == key);
+            }));
+            acctUi.removing = null;
+            delete acctUi.notes[key];
+            delete acctInfo[key];
+            delete tabMemory[key];
+            if (settings.get("state/claude/@account") == key) settings.set("state/claude/@account", "");
+            if (chatAccount == key && !chatLocked()) useAccount("");
+            renderWhere();
+            renderAccountsPrefs();
+        }
+
+        function setShare(key, share) {
+            if (!api) return;
+            api.setupAccount({ account: key, share: share }, function(err, res) {
+                if (err) acctUi.notes[key] = err.message || String(err);
+                else {
+                    if (acctInfo[key]) acctInfo[key].share = res.share;
+                    acctUi.notes[key] = res.warnings && res.warnings.length ? res.warnings.join(" ")
+                        : "Saved; it applies to chats that start from now on.";
+                }
+                renderAccountsPrefs();
+            });
+        }
+
         /***** Session history *****/
 
         function relativeTime(ms, now) {
@@ -1017,6 +1643,7 @@ define(function(require, exports, module) {
         var historyConfirm = null;      // the session whose deletion is being confirmed
         var historyError = "";
         var historyBusy = false;
+        var historyLimit = HISTORY_PAGE;
         var ARCHIVE_MAX = 500;
 
         function archivedIds() {
@@ -1032,16 +1659,25 @@ define(function(require, exports, module) {
             settings.setJson("state/claude/archived", ids.slice(-ARCHIVE_MAX));
         }
 
-        function loadHistory(pop) {
-            historyData = { loading: true };
-            historyView = "list";
+        // keep: reload with more sessions ("Show older"), on the same view
+        function loadHistory(pop, keep) {
+            if (!keep) {
+                historyData = { loading: true };
+                historyView = "list";
+                historyLimit = HISTORY_PAGE;
+            }
             historyConfirm = null;
             historyError = "";
             if (!api) return;
-            api.sessions({ archived: archivedIds() }, function(err, res) {
+            api.sessions({
+                archived: archivedIds(),
+                accounts: allAccounts().map(function(a) { return a.dir; }),
+                limit: historyLimit
+            }, function(err, res) {
                 historyData = err ? { error: err.message || String(err) } : {
                     list: res && Array.isArray(res.sessions) ? res.sessions : [],
                     archived: res && Array.isArray(res.archived) ? res.archived : [],
+                    more: !!(res && res.more),
                     now: res && res.now || Date.now()
                 };
                 pop.refresh();
@@ -1066,7 +1702,7 @@ define(function(require, exports, module) {
             historyBusy = true;
             historyError = "";
             pop.refresh();
-            api.deleteSession(item.id, function(err) {
+            api.deleteSession(item.id, item.account || "", function(err) {
                 historyBusy = false;
                 if (err) {
                     historyError = err.message || String(err);
@@ -1100,17 +1736,21 @@ define(function(require, exports, module) {
             var list = (archivedView ? historyData.archived : historyData.list).filter(function(item) {
                 return item && UUID_RE.test(item.id || "");
             });
-            if (!list.length && !archivedView) pop.info("No Claude Code sessions in this workspace yet.");
+            if (!list.length && !archivedView) pop.info("No Claude Code sessions yet.");
+            var named = several();
             list.forEach(function(item) {
                 var title = String(item.title || "Untitled");
                 var open = item.elsewhere && typeof item.elsewhere == "object";
                 var current = item.id == sessionId;
-                var meta = [item.folder, relativeTime(item.mtime, historyData.now), open ? "open elsewhere" : ""].filter(Boolean).join(" · ");
+                var folder = typeof item.cwd == "string" ? tildePath(item.cwd) : "";
+                var account = accountName(item.account || "");
+                var meta = [named ? account : "", folder && shortFolder(item.cwd), relativeTime(item.mtime, historyData.now), open ? "open elsewhere" : ""]
+                    .filter(Boolean).join(" · ");
                 pop.item({
                     label: title.length > 100 ? title.slice(0, 99) + "…" : title,
                     desc: meta,
                     checked: current,
-                    title: title + "\n" + (item.folder ? "Folder: " + item.folder + "\n" : "")
+                    title: title + "\nAccount: " + account + "\n" + (folder ? "Folder: " + folder + "\n" : "")
                         + "Last activity: " + new Date(item.mtime).toLocaleString()
                         + (open ? item.elsewhere.how == "process" ? "\nOpen in another process (e.g. a terminal)"
                             : "\nIt may still be open elsewhere" : ""),
@@ -1131,6 +1771,11 @@ define(function(require, exports, module) {
                     ]
                 });
             });
+            if (!archivedView && historyData.more)
+                pop.item({ label: "Show older sessions", icon: "down", onpick: function() {
+                    historyLimit += HISTORY_PAGE;
+                    loadHistory(pop, true);
+                } });
             if (archivedView)
                 pop.item({ label: "Back to the sessions", icon: "history", onpick: function() {
                     historyView = "list";
@@ -1148,7 +1793,8 @@ define(function(require, exports, module) {
             pop.heading("Delete this conversation?");
             pop.info(firstLine(item.title || "Untitled", 100));
             pop.el.lastChild.classList.add("claude-pop-title");
-            pop.info("Its transcript will be removed from ~/.claude/projects. This can't be undone.");
+            pop.info("Its transcript will be removed from " + ((acctInfo[item.account || ""] || {}).dir || "~/.claude")
+                + "/projects. This can't be undone.");
             if (historyError) node(el("div", { className: "claude-pop-error", role: "alert", text: historyError }));
             var cancel = el("button", { type: "button", tabindex: "-1", className: "claude-btn claude-btn-secondary", text: "Cancel" });
             var del = el("button", { type: "button", tabindex: "-1", className: "claude-btn claude-btn-danger", text: historyBusy ? "Deleting…" : "Delete" });
@@ -1200,32 +1846,60 @@ define(function(require, exports, module) {
 
         /***** Paths *****/
 
-        function workspacePath(file) {
+        // A path from Claude (absolute, ~/..., or relative to the chat's
+        // folder) as an absolute path, or null
+        function absolutePath(file) {
             if (!file) return null;
             file = String(file);
-            var ws = c9.workspaceDir.replace(/\/$/, "");
-            if (file == ws) return "/";
-            if (file.indexOf(ws + "/") === 0)
-                return file.slice(ws.length);
             var home = (c9.home || "").replace(/\/$/, "");
-            if (home && file.indexOf(home + "/") === 0)
-                return "~" + file.slice(home.length);
-            if (/^~\//.test(file))
-                return file;
-            if (!/^\//.test(file)) {
-                // relative to the workspace (the CLI's cwd)
-                var rel = file.replace(/^\.\//, "");
-                if (/(^|\/)\.\.(\/|$)/.test(rel)) return null;
-                return "/" + rel;
-            }
-            return null;
+            if (/^~\//.test(file)) return home ? home + file.slice(1) : null;
+            if (/^\//.test(file)) return file;
+            var rel = file.replace(/^\.\//, "");
+            if (/(^|\/)\.\.(\/|$)/.test(rel)) return null;
+            return currentFolder().replace(/\/$/, "") + "/" + rel;
         }
 
+        // The path the editor opens a file by: in the workspace ("/src/a.js"),
+        // in the home folder ("~/notes.md"), or through a link at the top of
+        // the workspace to a folder elsewhere (e.g. zoot -> /:
+        // "/zoot/var/www/html/index.php"). null: the editor can't open it.
+        function workspacePath(file) {
+            var abs = absolutePath(file);
+            if (!abs) return null;
+            var ws = c9.workspaceDir.replace(/\/$/, "");
+            if (abs == ws) return "/";
+            if (abs.indexOf(ws + "/") === 0)
+                return abs.slice(ws.length);
+            var home = (c9.home || "").replace(/\/$/, "");
+            if (home && abs.indexOf(home + "/") === 0)
+                return "~" + abs.slice(home.length);
+            // the link with the longest target wins (www -> /var/www over zoot -> /)
+            var best = null;
+            workspaceLinks().forEach(function(link) {
+                var target = String(link.target).replace(/\/$/, "");
+                if ((abs == target || abs.indexOf(target + "/") === 0) && (!best || target.length > best.target.length))
+                    best = { name: link.name, target: target };
+            });
+            return best ? "/" + best.name + abs.slice(best.target.length) : null;
+        }
+
+        function workspaceLinks() {
+            return cliInfo && Array.isArray(cliInfo.links) ? cliInfo.links.filter(function(link) {
+                return link && typeof link.name == "string" && typeof link.target == "string"
+                    && link.name.indexOf("/") == -1 && /^\//.test(link.target);
+            }) : [];
+        }
+
+        // relative to the chat's folder, else to the workspace; else "~/..." or absolute
         function displayPath(file) {
-            var wsPath = workspacePath(file);
-            if (wsPath && wsPath.charAt(0) == "/" && wsPath != "/")
-                return wsPath.slice(1);
-            return wsPath || String(file || "");
+            var abs = absolutePath(file);
+            if (!abs) return String(file || "");
+            var bases = [currentFolder(), c9.workspaceDir];
+            for (var i = 0; i < bases.length; i++) {
+                var base = String(bases[i] || "").replace(/\/$/, "");
+                if (base && abs.indexOf(base + "/") === 0) return abs.slice(base.length + 1);
+            }
+            return tildePath(abs);
         }
 
         function fileLink(file, line) {
@@ -1265,7 +1939,7 @@ define(function(require, exports, module) {
                     // data-wspath: built by the panel; data-path: a link in model output
                     var wsPath = target.getAttribute("data-wspath") || workspacePath(target.getAttribute("data-path"));
                     if (wsPath) openFile(wsPath, line);
-                    else flashHint("Only files in the workspace or the home folder can be opened");
+                    else flashHint("Only files in the workspace, the home folder or a folder linked at the top of the workspace can be opened");
                     return;
                 }
                 target = target.parentNode;
@@ -1290,12 +1964,14 @@ define(function(require, exports, module) {
             statusText.classList.toggle("claude-summary", busy && !!taskSummary && !pending && !stopping);
             statusDot.className = "claude-status-dot claude-dot-" + state;
             titleEl.textContent = sessionTitle || "New session";
-            titleEl.title = sessionTitle || "";
+            titleEl.title = (sessionTitle ? sessionTitle + "\n" : "") + "Account: " + accountName(chatAccount)
+                + "\nFolder: " + tildePath(chatFolder || workspaceDir());
             titleEl.classList.toggle("claude-untitled", !sessionTitle);
             textarea.placeholder = busy || stopping ? "Queue another message…" : "Ask Claude…";
 
             btnHistory.disabled = !api;
             btnNew.disabled = !hasMessages && !sessionId;
+            renderWhere();
 
             var showStop = busy || stopping;
             btnSend.innerHTML = "";
@@ -1478,7 +2154,7 @@ define(function(require, exports, module) {
                 if (UUID_RE.test(saved || "") && saved != sessionId) {
                     var title = settings.get("state/claude/@title");
                     var resume = textButton("Resume last session", "claude-btn-secondary claude-resume-btn", function() {
-                        resumeSession(saved);
+                        resumeSession(saved, { account: settings.get("state/claude/@sessionAccount") || "" });
                     }, saved);
                     welcomeEl.appendChild(el("div", { className: "claude-welcome-resume" }, [
                         resume,
@@ -2647,6 +3323,7 @@ define(function(require, exports, module) {
             switch (m.type) {
                 case "system":
                     if (m.subtype == "init") {
+                        if (typeof m.cwd == "string" && /^\//.test(m.cwd)) chatCwd = m.cwd;
                         if (m.session_id) setSession(m.session_id);
                         if (m.permissionMode) syncMode(m.permissionMode);
                         if (confirmModeNext && m.permissionMode) {
@@ -2926,6 +3603,7 @@ define(function(require, exports, module) {
             if (sessionId == id) return;
             sessionId = id;
             settings.set("state/claude/@session", id);
+            settings.set("state/claude/@sessionAccount", chatAccount);
             if (pendingTitle) {
                 settings.set("state/claude/@title", pendingTitle);
                 pendingTitle = null;
@@ -3184,7 +3862,9 @@ define(function(require, exports, module) {
                     effort: effortForModel(effortSelect.value, modelSelect.value),
                     ultracode: ultracodeWanted(),
                     // only a mode the user picked; the label may show the CLI's
-                    mode: settings.get("user/claude/@mode") || "",
+                    mode: acctPref("mode"),
+                    account: chatAccount,
+                    cwd: chatFolder,
                     resume: sessionId,
                     fork: !!(sessionId && forkNext == sessionId),
                     path: settings.get("user/claude/@path")
@@ -3331,11 +4011,14 @@ define(function(require, exports, module) {
             });
         }
 
-        // the last list and settings the CLI reported (state settings)
-        function restoreModelCache() {
-            var list = cleanModels(settings.getJson("state/claude/models"));
+        // the last list and settings the account's CLI reported (state settings)
+        function restoreModelCache(key) {
+            modelList = null;
+            applied = appliedFor = null;
+            ultraAvail = {};
+            var list = cleanModels(cacheGet("models", key));
             if (list.length) modelList = list;
-            var last = settings.getJson("state/claude/applied");
+            var last = cacheGet("applied", key);
             if (last && last.applied && last.appliedFor) {
                 applied = { model: str(last.applied.model), effort: str(last.applied.effort),
                     ultracode: last.applied.ultracode === true, ultracodeRequested: last.applied.ultracodeRequested === true,
@@ -3378,7 +4061,7 @@ define(function(require, exports, module) {
                 var list = cleanModels(event.models);
                 if (list.length) {
                     modelList = list;
-                    settings.setJson("state/claude/models", list);
+                    cacheSet("models", list);
                 }
             }
             var note = checkEffort();
@@ -3398,7 +4081,8 @@ define(function(require, exports, module) {
         function checkEffort() {
             var level = effortSelect.value;
             if (!level || !modelList || effortForModel(level, modelSelect.value)) return null;
-            settings.set("user/claude/@effort", "");
+            memory().effort = "";
+            setAcctPref("effort", "");
             setSelect(effortSelect, "");
             var entry = modelEntry(modelSelect.value);
             var name = entry && entry.value != "default" ? entry.displayName : "The default model";
@@ -3420,7 +4104,7 @@ define(function(require, exports, module) {
             };
             appliedFor = { model: modelSelect.value, effort: effortSelect.value, ultracode: ultracodeWanted() };
             if (typeof a.ultracodeAvailable == "boolean") ultraAvail[modelSelect.value] = a.ultracodeAvailable;
-            settings.setJson("state/claude/applied", { applied: applied, appliedFor: appliedFor, ultraAvail: ultraAvail });
+            cacheSet("applied", { applied: applied, appliedFor: appliedFor, ultraAvail: ultraAvail });
             updateSettingLabels();
             var ultraChanged = !before ? applied.ultracodeRequested
                 : before.ultracode != applied.ultracode || before.ultracodeRequested != applied.ultracodeRequested;
@@ -3436,8 +4120,9 @@ define(function(require, exports, module) {
             insertNotice(text, atStart, unavailable);
         }
 
+        // until the tab reloads (see memory())
         function ultracodeWanted() {
-            return settings.getBool("user/claude/@ultracode") === true;
+            return memory().ultracode === true;
         }
 
         // ultracode as the pill and the switch show it: "on", "off" or
@@ -3450,7 +4135,7 @@ define(function(require, exports, module) {
         }
 
         function onUltracodeChange(on) {
-            settings.set("user/claude/@ultracode", on ? "true" : "false");
+            memory().ultracode = on;
             ultraToggled = true;
             updateSettingLabels();
             queueSettings(function(done) {
@@ -3513,7 +4198,7 @@ define(function(require, exports, module) {
         }
 
         function onModelChange(value) {
-            settings.set("user/claude/@model", value);
+            setAcctPref("model", value);
             var note = checkEffort();
             if (note) insertNotice(note);
             updateSettingLabels();
@@ -3539,7 +4224,8 @@ define(function(require, exports, module) {
         }
 
         function onEffortChange(value) {
-            settings.set("user/claude/@effort", value);
+            memory().effort = value;
+            setAcctPref("effort", value);
             updateSettingLabels();
             queueSettings(function(done) {
                 if (!api || !running) return notRunning() && done();
@@ -3552,7 +4238,7 @@ define(function(require, exports, module) {
         }
 
         function onModeChange(value) {
-            settings.set("user/claude/@mode", value);
+            setAcctPref("mode", value);
             queueSettings(function(done) {
                 if (!api || !running) {
                     confirmModeNext = true;
@@ -3595,6 +4281,7 @@ define(function(require, exports, module) {
             });
             hasMessages = false;
             hasSentInSession = false;
+            chatCwd = "";
             queued = null;
             elsewhereCard = null;
             forkNext = null;
@@ -3617,34 +4304,42 @@ define(function(require, exports, module) {
             cliPid = null;
         }
 
+        // a new chat: the account picked last, in the workspace
         function newSession() {
             stopProcess();
             clearChat();
             sessionId = null;
             pendingTitle = null;
-            setSelect(modeSelect, settings.get("user/claude/@mode") || "");
+            chatFolder = "";
+            useAccount(defaultAccount());
             renderWelcome();
             updateStatus();
             textarea.focus();
         }
 
-        // info: the entry of the session list, when picked there
+        // info: the entry of the session list, when picked there ({ account, cwd, title })
         function resumeSession(id, info) {
             if (!UUID_RE.test(id || "")) return;
+            info = info || {};
             stopProcess();
             clearChat();
+            chatFolder = typeof info.cwd == "string" ? info.cwd : "";
+            useAccount(info.account || "");
             sessionId = id;
             hasSentInSession = true;
-            setSelect(modeSelect, settings.get("user/claude/@mode") || "");
-            var title = info && info.title ? String(info.title)
+            var title = info.title ? String(info.title)
                 : id == settings.get("state/claude/@session") ? settings.get("state/claude/@title") || "" : "";
             var name = title ? "\u201c" + (title.length > 60 ? title.slice(0, 59) + "\u2026" : title) + "\u201d"
                 : "session " + id.slice(0, 8);
             sessionTitle = title ? firstLine(title, 80) : "";
+            // the chat open now is the one "Resume last session" offers
+            settings.set("state/claude/@session", id);
+            settings.set("state/claude/@sessionAccount", chatAccount);
+            settings.set("state/claude/@title", sessionTitle);
             var notice = showNotice("Resuming " + name + "\u2026", "claude-notice-quiet");
             updateStatus();
             if (!api) return;
-            api.history(id, function(err, res) {
+            api.history(id, chatAccount, function(err, res) {
                 if (sessionId != id) return;
                 if (err || !res || !res.found) {
                     sessionTitle = sessionTitle || "Session " + id.slice(0, 8);
@@ -3653,11 +4348,19 @@ define(function(require, exports, module) {
                         + ". Its earlier messages are not available here; Claude still remembers them.";
                     return;
                 }
-                notice.textContent = "Resumed " + name + (res.folder ? " (in " + res.folder + ")" : "")
+                // the folder it ran in (null: gone; it continues in the workspace)
+                chatFolder = typeof res.cwd == "string" ? res.cwd : "";
+                renderWhere();
+                notice.textContent = "Resumed " + name + (several() ? " as " + accountName(chatAccount) : "")
+                    + " in " + tildePath(chatFolder || workspaceDir())
+                    + (res.folder && !res.cwd ? " (its folder " + tildePath(res.folder) + " is gone)" : "")
                     + (res.truncated ? "; older messages are not shown" : "");
                 renderHistory(res.messages || []);
                 // no title from the list: the first prompt
-                if (!sessionTitle) sessionTitle = firstPrompt(res.messages || []) || "Session " + id.slice(0, 8);
+                if (!sessionTitle) {
+                    sessionTitle = firstPrompt(res.messages || []) || "Session " + id.slice(0, 8);
+                    settings.set("state/claude/@title", sessionTitle);
+                }
                 updateStatus();
                 if (res.elsewhere) askElsewhere(id, res.elsewhere);
             });
@@ -3809,9 +4512,29 @@ define(function(require, exports, module) {
              * Resumes a session by id (default: the last one).
              * @param {String} [id]
              */
-            resume: function(id) {
-                resumeSession(id || settings.get("state/claude/@session"));
+            resume: function(id, account) {
+                var saved = settings.get("state/claude/@session");
+                resumeSession(id || saved, { account: account != null ? account
+                    : !id || id == saved ? settings.get("state/claude/@sessionAccount") || "" : "" });
             },
+            /**
+             * The account of the current chat: "" (the default account) or
+             * the folder name of an added account.
+             * @property {String} account
+             * @readonly
+             */
+            get account() { return chatAccount; },
+            /**
+             * The folder of the current chat ("" for the workspace).
+             * @property {String} folder
+             * @readonly
+             */
+            get folder() { return chatFolder; },
+            /**
+             * Starts a new chat in a folder (a path of the editor, e.g. "/src").
+             * @param {String} path
+             */
+            newChatIn: newChatIn,
             /**
              * Checks again where claude is installed.
              */

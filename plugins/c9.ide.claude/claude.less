@@ -1844,3 +1844,232 @@
     top: 0;
     opacity: 0;
 }
+
+/* ---- The chat's account and folder (the line above the input) ---------- */
+
+.claude-where {
+    display: flex;
+    min-width: 0;
+    margin: -2px 0 2px -4px;
+}
+.claude-root .claude-where-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    height: 20px;
+    margin: 0;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: @claude-radius-small;
+    background: transparent;
+    color: fade(@textbox-color, 62%);
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+}
+.claude-root .claude-where-pill:hover,
+.claude-root .claude-where-pill.claude-open {
+    background: fade(@textbox-color, 9%);
+    color: @textbox-color;
+}
+.claude-root .claude-where-pill:focus-visible {
+    border-color: @spinner-focus-border-color;
+}
+.claude-where-icon,
+.claude-where-icon svg {
+    width: 13px;
+    height: 13px;
+}
+.claude-where-icon {
+    flex: none;
+    opacity: 0.85;
+}
+.claude-where-account {
+    flex: 0 0 auto;
+    margin-right: 6px;
+    font-weight: 600;
+}
+.claude-where-folder {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.claude-where-chevron,
+.claude-where-chevron svg {
+    width: 11px;
+    height: 11px;
+}
+.claude-where-chevron {
+    flex: none;
+    transform: rotate(90deg);
+    opacity: 0.7;
+}
+/* fixed once the chat has started: it only tells */
+.claude-root .claude-where-pill.claude-locked {
+    color: fade(@textbox-color, 50%);
+}
+.claude-folder-row {
+    padding: 4px 8px 6px;
+}
+.claude-root .claude-folder-input {
+    display: block;
+    width: 100%;
+    height: 26px;
+    margin: 0;
+    padding: 2px 8px;
+    border: 1px solid rgba(128, 128, 128, 0.45);
+    border-radius: @claude-radius-small;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+    box-shadow: none;
+}
+.claude-root .claude-folder-input:focus {
+    border-color: @spinner-focus-border-color;
+}
+.claude-folder-error {
+    margin-top: 4px;
+    font-size: 11px;
+    color: @claude-del;
+    white-space: normal;
+}
+.claude-folder-error:empty {
+    display: none;
+}
+
+/* ---- Preferences > Claude > Accounts --------------------------------------
+   Outside the panel: neutral tints that suit the light and dark
+   preference pages of every skin. */
+
+.claude-accounts {
+    padding: 2px 0 12px;
+    color: @preferences-form-label-color;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: normal;
+    user-select: text;
+    cursor: default;
+}
+.claude-accounts * {
+    box-sizing: border-box;
+}
+.claude-acct-intro {
+    margin: 0 0 8px;
+    opacity: 0.75;
+}
+.claude-acct,
+.claude-acct-form {
+    margin: 0 0 6px;
+    padding: 8px 10px;
+    border: 1px solid fade(@preferences-form-label-color, 22%);
+    border-radius: 6px;
+}
+.claude-acct.claude-acct-current {
+    border-color: fade(@preferences-form-label-color, 45%);
+}
+.claude-acct-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+.claude-acct-name {
+    font-weight: 600;
+}
+.claude-acct-fixed {
+    min-width: 130px;
+}
+.claude-accounts input.claude-acct-name {
+    width: 130px;
+}
+.claude-acct-dir {
+    font-family: @claude-mono;
+    font-size: 11.5px;
+    opacity: 0.75;
+}
+.claude-acct-status {
+    opacity: 0.7;
+}
+.claude-acct-status.claude-acct-ok {
+    opacity: 1;
+}
+.claude-acct-status.claude-acct-ok:before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin: 0 5px 1px 0;
+    border-radius: 50%;
+    background: @claude-add;
+}
+.claude-acct-share {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
+    margin-top: 7px;
+}
+.claude-acct-label {
+    opacity: 0.75;
+}
+.claude-acct-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+.claude-acct-check input {
+    margin: 0;
+}
+.claude-acct-note {
+    margin-top: 6px;
+    opacity: 0.75;
+}
+.claude-acct-error {
+    margin-top: 6px;
+    color: @claude-del;
+}
+.claude-acct-confirm,
+.claude-acct-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    margin-top: 8px;
+}
+.claude-acct-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+}
+.claude-acct-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.claude-accounts input[type=text] {
+    height: 24px;
+    margin: 0;
+    padding: 2px 6px;
+    border: 1px solid @spinner-border-color;
+    border-radius: 4px;
+    background: @spinner-background;
+    color: @spinner-color;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+}
+.claude-accounts input[type=text]:focus {
+    border-color: @spinner-focus-border-color;
+}
+.claude-accounts .claude-btn-danger {
+    background: @claude-del;
+    color: #fff;
+}

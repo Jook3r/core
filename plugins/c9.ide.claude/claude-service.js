@@ -15,10 +15,18 @@
  * away. The next message after a kill resumes the conversation with
  * --resume <session id>.
  *
+ * A chat runs as one account and in one folder, both fixed when it starts.
+ * An account is a Claude Code config folder (its login, settings and
+ * history): the default one, as in a terminal, or a folder in the home
+ * folder that the user named (e.g. ~/.claude-work), passed to the CLI as
+ * CLAUDE_CONFIG_DIR. The folder is the CLI's working directory: the
+ * workspace, or any existing folder the user picked.
+ *
  * Nothing from the client reaches the command line except values picked from
  * whitelists (model alias, permission mode) or validated (session UUID, the
- * path of the claude binary from the user's settings). The CLI is spawned
- * with an argument array, never through a shell.
+ * path of the claude binary from the user's settings, an account folder
+ * name, a chat folder). The CLI is spawned with an argument array, never
+ * through a shell.
  */
 "use strict";
 
@@ -47,9 +55,13 @@ module.exports = function(vfs, options, register) {
     var HISTORY_MESSAGES = 400;             // and send at most this many messages
     var HISTORY_BYTES = 3 * 1024 * 1024;
     var HISTORY_RESULT_TEXT = 4000;
-    var SESSION_SCAN = 50;                  // session list: the most recent transcripts read
-    var SESSION_STAT_LIMIT = 5000;          // ... out of at most this many files looked at
+    var SESSION_SCAN = 50;                  // session list: sessions listed by default
+    var SESSION_LIST_MAX = 1000;            // ... and at most ("Show older")
+    var SESSION_FILE_LIMIT = 100000;        // transcripts looked at (dates only) per list
     var SESSION_PEEK = 64 * 1024;           // bytes read at the head and the tail of each
+    var TITLE_CACHE_MAX = 20000;            // transcripts whose title and folder are kept
+    var CONFIG_MAX_SIZE = 32 * 1024 * 1024; // an account's .claude.json read for its email
+    var LINK_LIMIT = 50;                    // workspace links reported to the panel
     var RECENT_MS = 2 * 60 * 1000;          // written this recently: probably open elsewhere
     var RECORD_LIMIT = 200;                 // live-process records read (<config>/sessions)
     var RECORD_MAX_SIZE = 64 * 1024;
@@ -64,6 +76,17 @@ module.exports = function(vfs, options, register) {
     var MODES = { "default": true, acceptEdits: true, plan: true };
     var IMAGE_TYPES = { "image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true };
     var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    var TRANSCRIPT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i;
+    // the name of an account's folder in the home folder (".claude-work")
+    var ACCOUNT_RE = /^[A-Za-z0-9._-]{1,64}$/;
+    // A login the server was started with (an API key, a token) would win
+    // over an added account's own login: those accounts run without it.
+    var AUTH_ENV = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
+    // what an added account can take from the default one: folders and
+    // settings.json as links to the default account's; CLAUDE.md through an
+    // import line (see share())
+    var SHARE_LINKS = { agents: "agents", commands: "commands", skills: "skills",
+        outputStyles: "output-styles", settings: "settings.json" };
     var LOGIN_HINT_RE = /\/login|not logged in|api key|authentication|oauth/i;
     var BASE64_RE = /^[A-Za-z0-9+\/]*={0,2}$/;
 
@@ -95,8 +118,10 @@ module.exports = function(vfs, options, register) {
     var binCache = Object.create(null);     // "" -> the binary found by searching
     var versionCache = Object.create(null); // binary -> version string
     var nextRequestId = 1;
-    var resumePlans = Object.create(null);  // session id -> { cwd, ... } for its next spawn
+    var resumePlans = Object.create(null);  // "<account>/<session id>" -> { cwd, ... } for its next spawn
     var ownPids = Object.create(null);      // this panel's CLI processes that have not exited
+    var titleCache = Object.create(null);   // transcript -> { mtime, size, title, cwd }
+    var titleCacheSize = 0;
 
     /***** Client stream *****/
 
@@ -280,9 +305,9 @@ module.exports = function(vfs, options, register) {
         opts = opts || {};
         findClaude(opts.path, function(err, bin, tried) {
             if (err)
-                return callback(null, { found: false, error: err.message, tried: tried });
+                return callback(null, { found: false, error: err.message, tried: tried, cwd: cwd, home: home });
             if (!bin)
-                return callback(null, { found: false, tried: tried, custom: !!checkUserPathSafe(opts.path) });
+                return callback(null, { found: false, tried: tried, custom: !!checkUserPathSafe(opts.path), cwd: cwd, home: home });
             getVersion(bin, function(err, version) {
                 callback(null, {
                     found: true,
@@ -292,7 +317,9 @@ module.exports = function(vfs, options, register) {
                     running: !!cli,
                     busy: !!(cli && cli.busy),
                     sessionId: cli && cli.sessionId || null,
-                    cwd: cwd
+                    cwd: cwd,
+                    home: home,
+                    links: workspaceLinks()
                 });
             });
         });
@@ -302,12 +329,260 @@ module.exports = function(vfs, options, register) {
         try { return checkUserPath(userPath); } catch (e) { return null; }
     }
 
+    /***** Accounts and folders *****/
+
+    // The default account, as in a terminal: ~/.claude (its .claude.json is
+    // ~/.claude.json), or the server's own CLAUDE_CONFIG_DIR. It runs with the
+    // environment as it is: setting CLAUDE_CONFIG_DIR=~/.claude would make the
+    // CLI look for ~/.claude/.claude.json instead.
+    function defaultConfigDir() {
+        return process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
+    }
+
+    // An account: "" (the default one) or the name of its folder in the home
+    // folder. Throws for anything else.
+    function accountKey(account) {
+        if (account == null || account === "") return "";
+        if (typeof account != "string" || !ACCOUNT_RE.test(account) || /^\.+$/.test(account))
+            throw refusal("Invalid account folder: " + String(account).slice(0, 80), "EINVAL");
+        if (path.join(home, account) == path.normalize(defaultConfigDir()))
+            throw refusal("~/" + account + " is the folder of the default account", "EINVAL");
+        return account;
+    }
+
+    function accountKeys(list) {
+        var keys = [];
+        (Array.isArray(list) && list.length ? list : [""]).slice(0, 20).forEach(function(account) {
+            var key = accountKey(account);
+            if (keys.indexOf(key) == -1) keys.push(key);
+        });
+        return keys;
+    }
+
+    // An added account keeps everything in its folder, its .claude.json too
+    function configDir(account) {
+        return account ? path.join(home, account) : defaultConfigDir();
+    }
+
+    function globalConfigFile(account) {
+        if (account) return path.join(configDir(account), ".claude.json");
+        return process.env.CLAUDE_CONFIG_DIR ? path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json")
+            : path.join(home, ".claude.json");
+    }
+
+    function statSafe(p) {
+        try { return fs.statSync(p); } catch (e) { return null; }
+    }
+
+    function lstatSafe(p) {
+        try { return fs.lstatSync(p); } catch (e) { return null; }
+    }
+
+    // "~/.claude-work" for a path in the home folder
+    function tilde(p) {
+        var h = home.replace(/\/$/, "");
+        return p == h ? "~" : p.indexOf(h + "/") === 0 ? "~" + p.slice(h.length) : p;
+    }
+
+    // The folder a chat runs in, as its real path: an existing folder
+    // anywhere (absolute, or ~/...). "" or null: the workspace.
+    function chatFolder(dir) {
+        if (dir == null || dir === "") return null;
+        if (typeof dir != "string" || dir.length > 4096 || dir.indexOf("\0") != -1)
+            throw refusal("Invalid folder", "EINVAL");
+        if (/^~(\/|$)/.test(dir)) dir = path.join(home, dir.slice(1));
+        if (!path.isAbsolute(dir))
+            throw refusal("The folder must be a full path: " + dir, "EINVAL");
+        var real = realDir(dir);
+        var st = real && statSafe(real);
+        if (!st) throw refusal("The folder does not exist: " + dir, "ENOENT");
+        if (!st.isDirectory()) throw refusal("Not a folder: " + dir, "ENOTDIR");
+        return real;
+    }
+
+    function checkFolder(dir, callback) {
+        callback = callback || function() {};
+        var real;
+        try { real = chatFolder(dir) || realDir(cwd) || cwd; } catch (e) { return callback(e); }
+        callback(null, { path: real, workspace: real == (realDir(cwd) || cwd) });
+    }
+
+    // Links at the top of the workspace to folders elsewhere (e.g. "zoot" ->
+    // "/"): the panel opens files outside the workspace through them.
+    function workspaceLinks() {
+        var names;
+        try { names = fs.readdirSync(cwd); } catch (e) { return []; }
+        var links = [];
+        names.forEach(function(name) {
+            if (links.length >= LINK_LIMIT) return;
+            var p = path.join(cwd, name);
+            var st = lstatSafe(p);
+            if (!st || !st.isSymbolicLink()) return;
+            var real = realDir(p);
+            var target = real && statSafe(real);
+            if (target && target.isDirectory()) links.push({ name: name, target: real });
+        });
+        return links;
+    }
+
+    // What the panel shows about each account: its folder, whether it is
+    // logged in (and as whom), and for an added account what it shares.
+    function accounts(list, callback) {
+        if (typeof list == "function") { callback = list; list = null; }
+        callback = callback || function() {};
+        var keys;
+        try { keys = accountKeys(list); } catch (e) { return callback(e); }
+        var out = {};
+        keys.forEach(function(key) {
+            var dir = configDir(key);
+            var st = statSafe(dir);
+            var info = { dir: tilde(dir), exists: !!(st && st.isDirectory()), loggedIn: false, auth: null,
+                email: null, org: null, share: null };
+            var creds = lstatSafe(path.join(dir, ".credentials.json"));
+            if (creds && creds.isFile()) {
+                info.loggedIn = true;
+                info.auth = "login";
+            }
+            else if (!key && AUTH_ENV.some(function(name) { return process.env[name]; })) {
+                info.loggedIn = true;
+                info.auth = "env";
+            }
+            var config = readJson(globalConfigFile(key), CONFIG_MAX_SIZE);
+            var account = config && config.oauthAccount;
+            if (account && typeof account == "object") {
+                if (typeof account.emailAddress == "string") info.email = account.emailAddress.slice(0, 200);
+                if (typeof account.organizationName == "string") info.org = account.organizationName.slice(0, 200);
+            }
+            if (key && info.exists) info.share = shareState(key);
+            out[key] = info;
+        });
+        callback(null, { accounts: out, home: home, defaultDir: tilde(defaultConfigDir()) });
+    }
+
+    function readJson(file, max) {
+        var st = lstatSafe(file);
+        if (!st || !st.isFile() || st.size > max) return null;
+        try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return null; }
+    }
+
+    // CLAUDE.md of an added account imports the default account's
+    function importLine() {
+        return "@" + tilde(path.join(defaultConfigDir(), "CLAUDE.md"));
+    }
+
+    // For each shareable item: true (shared), false, or "own" (the account
+    // has its own, which is left alone)
+    function shareState(key) {
+        var dir = configDir(key);
+        var state = {};
+        var md = lstatSafe(path.join(dir, "CLAUDE.md"));
+        state.claudeMd = false;
+        if (md && md.isFile()) {
+            try {
+                state.claudeMd = fs.readFileSync(path.join(dir, "CLAUDE.md"), "utf8").split("\n").some(function(line) {
+                    return line.trim() == importLine();
+                });
+            } catch (e) {}
+        }
+        Object.keys(SHARE_LINKS).forEach(function(item) {
+            var p = path.join(dir, SHARE_LINKS[item]);
+            var st = lstatSafe(p);
+            if (!st) state[item] = false;
+            else if (st.isSymbolicLink() && readLink(p) == path.join(defaultConfigDir(), SHARE_LINKS[item])) state[item] = true;
+            else state[item] = "own";
+        });
+        return state;
+    }
+
+    function readLink(p) {
+        try { return path.resolve(path.dirname(p), fs.readlinkSync(p)); } catch (e) { return null; }
+    }
+
+    // Sets up an added account: its folder (opts.create: made when missing)
+    // and what it shares (opts.share: { claudeMd, agents, ... }: true or
+    // false; items not given are left as they are). Only links and the
+    // import line this made are ever removed; an account's own files are
+    // never changed or deleted.
+    function setupAccount(opts, callback) {
+        callback = callback || function() {};
+        opts = opts || {};
+        var key;
+        try { key = accountKey(opts.account); } catch (e) { return callback(e); }
+        if (!key) return callback(refusal("The default account is set up by Claude Code itself", "EINVAL"));
+        var dir = configDir(key);
+        var st = lstatSafe(dir);
+        if (st && !st.isDirectory() && !(st.isSymbolicLink() && statSafe(dir) && statSafe(dir).isDirectory()))
+            return callback(refusal(tilde(dir) + " exists and is not a folder", "ENOTDIR"));
+        if (!st) {
+            if (!opts.create) return callback(refusal(tilde(dir) + " does not exist", "ENOENT"));
+            try { fs.mkdirSync(dir, { mode: 448 /* 0700 */ }); }
+            catch (e) { return callback(new Error("Could not create " + tilde(dir) + ": " + e.message)); }
+        }
+        var warnings = [];
+        var share = opts.share && typeof opts.share == "object" ? opts.share : {};
+        try {
+            if (typeof share.claudeMd == "boolean") shareClaudeMd(dir, share.claudeMd, warnings);
+            Object.keys(SHARE_LINKS).forEach(function(item) {
+                if (typeof share[item] == "boolean") shareLink(dir, SHARE_LINKS[item], share[item], warnings);
+            });
+        } catch (e) {
+            return callback(new Error("Could not change what " + tilde(dir) + " shares: " + e.message));
+        }
+        callback(null, { ok: true, dir: tilde(dir), share: shareState(key), warnings: warnings });
+    }
+
+    function shareClaudeMd(dir, on, warnings) {
+        var file = path.join(dir, "CLAUDE.md");
+        var st = lstatSafe(file);
+        if (st && !st.isFile()) {
+            warnings.push(tilde(file) + " is not a plain file; it was left as it is.");
+            return;
+        }
+        var line = importLine();
+        var text = st ? fs.readFileSync(file, "utf8") : "";
+        var lines = text.split("\n");
+        var has = lines.some(function(l) { return l.trim() == line; });
+        if (on && !has)
+            fs.writeFileSync(file, line + "\n" + (text ? "\n" + text : ""), { mode: 384 });
+        else if (!on && has) {
+            var rest = lines.filter(function(l) { return l.trim() != line; }).join("\n").replace(/^\n+/, "");
+            if (rest.trim()) fs.writeFileSync(file, rest);
+            else fs.unlinkSync(file);
+        }
+    }
+
+    function shareLink(dir, name, on, warnings) {
+        var p = path.join(dir, name);
+        var source = path.join(defaultConfigDir(), name);
+        var st = lstatSafe(p);
+        var ours = st && st.isSymbolicLink() && readLink(p) == source;
+        if (on && !st) fs.symlinkSync(source, p);
+        else if (on && !ours) warnings.push(tilde(p) + " already exists; it was left as it is.");
+        else if (!on && ours) fs.unlinkSync(p);
+    }
+
     /***** The CLI process *****/
 
     // plan: { cwd } decided by the service for a resumed session
     function spawnCli(bin, opts, callback, plan) {
         plan = plan || {};
-        var runCwd = plan.cwd || cwd;
+        var account, folder;
+        try {
+            account = accountKey(opts.account);
+            folder = chatFolder(opts.cwd);
+        } catch (e) {
+            return callback(e);
+        }
+        var env = cleanEnv(bin);
+        if (account) {
+            var st = statSafe(configDir(account));
+            if (!st || !st.isDirectory())
+                return callback(refusal("The account folder " + tilde(configDir(account))
+                    + " does not exist. Set the account up in Preferences > Claude.", "ENOACCOUNT"));
+            env.CLAUDE_CONFIG_DIR = configDir(account);
+            AUTH_ENV.forEach(function(name) { delete env[name]; });
+        }
+        var runCwd = plan.cwd || folder || cwd;
         var args = [
             "-p",
             "--input-format", "stream-json",
@@ -341,7 +616,7 @@ module.exports = function(vfs, options, register) {
         try {
             child = childProcess.spawn(bin, args, {
                 cwd: runCwd,
-                env: cleanEnv(bin),
+                env: env,
                 stdio: ["pipe", "pipe", "pipe"],
                 // own process group, so that a kill also reaches the commands
                 // the CLI runs (Bash tool)
@@ -363,6 +638,7 @@ module.exports = function(vfs, options, register) {
             pid: child.pid,
             bin: bin,
             cwd: runCwd,
+            account: account,
             fork: fork,
             mode: mode,
             model: model || "default",
@@ -456,7 +732,7 @@ module.exports = function(vfs, options, register) {
                 send({ ev: "notice", kind: "resume-failed", sessionId: state.resume,
                     text: "Could not resume the previous session; started a new one." });
                 var sent = state.sent;
-                return spawnCli(bin, { mode: state.mode, model: state.model }, function(err, fresh) {
+                return spawnCli(bin, { mode: state.mode, model: state.model, account: state.account }, function(err, fresh) {
                     if (err)
                         return send({ ev: "error", message: err.message });
                     sent.forEach(function(line) { writeLine(fresh, line, true); });
@@ -482,7 +758,7 @@ module.exports = function(vfs, options, register) {
         ownPids[String(child.pid)] = true;
         touch(state);
         send({ ev: "spawn", pid: child.pid, mode: mode, model: state.model, resume: resume,
-            fork: state.fork, cwd: path.relative(cwd, runCwd) });
+            fork: state.fork, cwd: runCwd, account: account });
         callback(null, state);
     }
 
@@ -574,6 +850,8 @@ module.exports = function(vfs, options, register) {
         cli = null;
         state.reason = reason || "stopped";
         state.stopped = true;
+        // from now on its transcript changes are ours (not "open elsewhere")
+        markStopped(state);
         clearTimeout(state.idleTimer);
         // deny what is still waiting, so the CLI does not run anything more
         Object.keys(state.pending).forEach(function(id) {
@@ -910,6 +1188,8 @@ module.exports = function(vfs, options, register) {
                 return callback(e);
             }
             var resume = typeof opts.resume == "string" && UUID_RE.test(opts.resume) ? opts.resume.toLowerCase() : null;
+            var account;
+            try { account = accountKey(opts.account); } catch (e) { return callback(e); }
             var go = function(plan) {
                 spawnCli(bin, opts, function(err, state) {
                     if (err) return callback(err);
@@ -918,10 +1198,10 @@ module.exports = function(vfs, options, register) {
             };
             if (!resume) return go(null);
             // decided when the session was picked, or now (e.g. after an idle stop)
-            var plan = resumePlans[resume];
-            delete resumePlans[resume];
+            var plan = resumePlans[account + "/" + resume];
+            delete resumePlans[account + "/" + resume];
             if (plan) return go(plan);
-            resumePlan(resume, function(err, fresh) { go(fresh); });
+            resumePlan(resume, account, function(err, fresh) { go(fresh); });
         });
     }
 
@@ -1142,14 +1422,11 @@ module.exports = function(vfs, options, register) {
 
     /***** Sessions: the CLI's transcripts *****/
 
-    // Only files under <config>/projects are read, found by the service
-    // itself: the client passes a session id (UUID), never a path.
-    function configDir() {
-        return process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
-    }
-
-    function projectsDir() {
-        return path.join(configDir(), "projects");
+    // Only files under <account's config>/projects are read, found by the
+    // service itself: the client passes a session id (UUID) and an account
+    // (checked by accountKey), never a path.
+    function projectsDir(account) {
+        return path.join(configDir(account), "projects");
     }
 
     // The CLI keeps a record of each running process in
@@ -1158,8 +1435,8 @@ module.exports = function(vfs, options, register) {
     // processes that still run and are not this panel's, or null when there
     // are no records at all (an older CLI): then only the transcript's
     // mtime can tell.
-    function liveSessions() {
-        var dir = path.join(configDir(), "sessions");
+    function liveSessions(account) {
+        var dir = path.join(configDir(account), "sessions");
         var names;
         try { names = fs.readdirSync(dir); } catch (e) { return null; }
         names = names.filter(function(n) { return /^[1-9]\d{0,9}\.json$/.test(n); }).slice(0, RECORD_LIMIT);
@@ -1204,24 +1481,6 @@ module.exports = function(vfs, options, register) {
         try { return fs.realpathSync(dir); } catch (e) { return null; }
     }
 
-    // is dir the workspace or inside it?
-    function inWorkspace(dir) {
-        if (typeof dir != "string" || !path.isAbsolute(dir)) return false;
-        var inside = function(p, root) {
-            return p == root || p.indexOf(root.replace(/\/$/, "") + path.sep) === 0;
-        };
-        var ws = path.normalize(cwd), wsReal = realDir(cwd) || ws;
-        var p = path.normalize(dir), pReal = realDir(dir);
-        return inside(p, ws) || inside(p, wsReal) || !!pReal && (inside(pReal, ws) || inside(pReal, wsReal));
-    }
-
-    function folderOf(dir) {
-        var ws = path.normalize(cwd), wsReal = realDir(cwd) || ws;
-        var p = path.normalize(dir), pReal = realDir(dir) || p;
-        var rel = p == ws || p.indexOf(ws + path.sep) === 0 ? path.relative(ws, p) : path.relative(wsReal, pReal);
-        return rel && rel.indexOf("..") !== 0 ? rel : "";
-    }
-
     // project folders, regular files only (no symlinks)
     function listDirs(projects) {
         var dirs;
@@ -1232,8 +1491,8 @@ module.exports = function(vfs, options, register) {
         });
     }
 
-    function findTranscript(sessionId, callback) {
-        var projects = projectsDir();
+    function findTranscript(sessionId, account, callback) {
+        var projects = projectsDir(account);
         var name = sessionId.toLowerCase() + ".jsonl";
         // the CLI names a project folder after its directory; if that naming
         // changes, look in every project folder
@@ -1372,85 +1631,102 @@ module.exports = function(vfs, options, register) {
         return !(stopped && mtimeMs <= stopped + 5000);
     }
 
-    // where a resumed session runs, and whether it continues in a copy
-    function resumePlan(sessionId, callback) {
-        findTranscript(sessionId, function(err, file, stat) {
-            if (!file) return callback(null, { found: false, cwd: null, elsewhere: null, folder: "" });
-            var recorded = recordedCwd(peek(file, stat.size).head);
-            var dir = recorded && inWorkspace(recorded) ? realDir(recorded) : null;
-            var plan = {
+    // where a resumed session runs (the folder it ran in, wherever that is),
+    // and whether it continues in a copy
+    function resumePlan(sessionId, account, callback) {
+        findTranscript(sessionId, account, function(err, file, stat) {
+            if (!file) return callback(null, { found: false, cwd: null, elsewhere: null, folder: null });
+            var parts = peek(file, stat.size);
+            var recorded = recordedCwd(parts.head) || recordedCwd(parts.tail);
+            var dir = recorded ? realDir(recorded) : null;
+            var st = dir && statSafe(dir);
+            callback(null, {
                 found: true,
                 file: file,
                 size: stat.size,
-                cwd: dir && fs.statSync(dir).isDirectory() ? dir : null,
-                elsewhere: openElsewhere(sessionId, stat.mtimeMs, liveSessions()),
-                folder: recorded ? folderOf(recorded) : ""
-            };
-            callback(null, plan);
+                cwd: st && st.isDirectory() ? dir : null,
+                elsewhere: openElsewhere(sessionId, stat.mtimeMs, liveSessions(account)),
+                folder: recorded
+            });
         });
     }
 
-    // opts.archived: ids the panel hides; they are listed apart
+    // the title and folder of a transcript, read once per version of it
+    function transcriptInfo(f) {
+        var cached = titleCache[f.file];
+        if (cached && cached.mtime == f.mtime && cached.size == f.size) return cached;
+        var parts = peek(f.file, f.size);
+        var info = { mtime: f.mtime, size: f.size, title: sessionTitle(parts),
+            cwd: recordedCwd(parts.head) || recordedCwd(parts.tail) };
+        if (!cached && ++titleCacheSize > TITLE_CACHE_MAX) {
+            titleCache = Object.create(null);
+            titleCacheSize = 1;
+        }
+        titleCache[f.file] = info;
+        return info;
+    }
+
+    // The sessions of the accounts (opts.accounts, default: the default
+    // account) in any folder, newest first: the panel's and the terminal's.
+    // The dates of all transcripts are looked at, so that none is missed;
+    // only the newest opts.limit (and as many archived ones) are read, and
+    // what is read is kept until the transcript changes. opts.archived: ids
+    // the panel hides; they are listed apart.
     function sessions(opts, callback) {
         if (typeof opts == "function") { callback = opts; opts = {}; }
         callback = callback || function() {};
         opts = opts || {};
+        var keys;
+        try { keys = accountKeys(opts.accounts); } catch (e) { return callback(e); }
+        var limit = Math.max(1, Math.min(SESSION_LIST_MAX, Math.floor(+opts.limit) || SESSION_SCAN));
         var archived = Object.create(null);
         (Array.isArray(opts.archived) ? opts.archived : []).slice(0, ARCHIVE_LIMIT).forEach(function(id) {
             if (typeof id == "string" && UUID_RE.test(id)) archived[id.toLowerCase()] = true;
         });
-        var projects = projectsDir();
-        var dirs = listDirs(projects);
-        // folders named after the workspace or a folder in it come first;
-        // the cwd recorded in each transcript decides
-        var prefixes = [cwd, realDir(cwd) || cwd].map(function(p) { return p.replace(/[^a-zA-Z0-9]/g, "-"); });
-        var matching = dirs.filter(function(name) {
-            return prefixes.some(function(pre) { return name == pre || name.indexOf(pre + "-") === 0; });
-        });
         var files = [];
-        var looked = 0;
-        (matching.length ? matching : dirs).some(function(dir) {
-            var names;
-            try { names = fs.readdirSync(path.join(projects, dir)); } catch (e) { return false; }
-            names.some(function(name) {
-                if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i.test(name)) return false;
-                if (++looked > SESSION_STAT_LIMIT) return true;
-                var file = path.join(projects, dir, name);
-                try {
-                    var st = fs.lstatSync(file);
-                    if (st.isFile() && st.size > 0)
-                        files.push({ id: name.slice(0, 36).toLowerCase(), file: file, size: st.size, mtime: st.mtimeMs });
-                } catch (e) {}
-                return false;
+        keys.forEach(function(key) {
+            var projects = projectsDir(key);
+            listDirs(projects).forEach(function(dir) {
+                if (files.length >= SESSION_FILE_LIMIT) return;
+                var names;
+                try { names = fs.readdirSync(path.join(projects, dir)); } catch (e) { return; }
+                names.forEach(function(name) {
+                    if (files.length >= SESSION_FILE_LIMIT || !TRANSCRIPT_RE.test(name)) return;
+                    var file = path.join(projects, dir, name);
+                    var st = lstatSafe(file);
+                    if (st && st.isFile() && st.size > 0)
+                        files.push({ id: name.slice(0, 36).toLowerCase(), account: key, file: file, size: st.size, mtime: st.mtimeMs });
+                });
             });
-            return looked > SESSION_STAT_LIMIT;
         });
         files.sort(function(a, b) { return b.mtime - a.mtime; });
 
+        var live = {};
+        keys.forEach(function(key) { live[key] = liveSessions(key); });
         var seen = Object.create(null);
-        var list = [], hidden = [];
-        var scanned = 0, scannedHidden = 0;
-        var live = liveSessions();
-        files.forEach(function(f) {
-            if (seen[f.id]) return;
-            seen[f.id] = true;
-            var isArchived = archived[f.id];
-            // at most SESSION_SCAN transcripts are read, and as many archived ones
-            if (isArchived ? ++scannedHidden > SESSION_SCAN : ++scanned > SESSION_SCAN) return;
-            var parts = peek(f.file, f.size);
-            var recorded = recordedCwd(parts.head) || recordedCwd(parts.tail);
-            if (!recorded || !inWorkspace(recorded)) return;
-            var title = sessionTitle(parts);
-            if (!title) return; // nothing was ever asked in it
-            (isArchived ? hidden : list).push({
+        var list = [], hidden = [], more = false;
+        for (var i = 0; i < files.length; i++) {
+            var f = files[i];
+            if (seen[f.account + "/" + f.id]) continue;
+            seen[f.account + "/" + f.id] = true;
+            var into = archived[f.id] ? hidden : list;
+            if (into.length >= limit) {
+                if (into === list) more = true;
+                if (list.length >= limit && hidden.length >= limit) break;
+                continue;
+            }
+            var info = transcriptInfo(f);
+            if (!info.title || !info.cwd) continue; // nothing was ever asked in it
+            into.push({
                 id: f.id,
-                title: title,
-                folder: folderOf(recorded),
+                account: f.account,
+                title: info.title,
+                cwd: info.cwd,
                 mtime: Math.round(f.mtime),
-                elsewhere: openElsewhere(f.id, f.mtime, live)
+                elsewhere: openElsewhere(f.id, f.mtime, live[f.account])
             });
-        });
-        callback(null, { sessions: list, archived: hidden, now: Date.now() });
+        }
+        callback(null, { sessions: list, archived: hidden, more: more, now: Date.now() });
     }
 
     // Deletes a conversation: <projects>/<dir>/<id>.jsonl and its <id>/
@@ -1458,14 +1734,16 @@ module.exports = function(vfs, options, register) {
     // nothing is followed through a symbolic link and nothing outside the
     // projects folder is touched. Refused for the panel's running session
     // and for one open in another process.
-    function deleteSession(sessionId, callback) {
+    function deleteSession(sessionId, account, callback) {
+        if (typeof account == "function") { callback = account; account = ""; }
         callback = callback || function() {};
         if (typeof sessionId != "string" || !UUID_RE.test(sessionId))
             return callback(new Error("Invalid session id"));
+        try { account = accountKey(account); } catch (e) { return callback(e); }
         var id = sessionId.toLowerCase();
         if (cli && !cli.exited && cli.sessionId && cli.sessionId.toLowerCase() == id)
             return callback(refusal("This conversation is open in the panel. Start a new session first.", "ECURRENT"));
-        var projects = projectsDir();
+        var projects = projectsDir(account);
         var found = [];
         listDirs(projects).forEach(function(dir) {
             var file = path.join(projects, dir, id + ".jsonl");
@@ -1476,7 +1754,7 @@ module.exports = function(vfs, options, register) {
         });
         if (!found.length)
             return callback(refusal("This conversation was not found.", "ENOENT"));
-        var live = liveSessions();
+        var live = liveSessions(account);
         if (live && live[id])
             return callback(refusal("This conversation is open in another process (pid " + live[id].pid + "), e.g. a terminal. Close it there first.", "EBUSY"));
         if (!live && found.some(function(f) { return inUseElsewhere(id, f.mtime); }))
@@ -1497,7 +1775,7 @@ module.exports = function(vfs, options, register) {
         } catch (e) {
             return callback(new Error("Could not delete the conversation: " + e.message));
         }
-        delete resumePlans[id];
+        delete resumePlans[account + "/" + id];
         try { fs.unlinkSync(markerFile(id)); } catch (e) {}
         callback(null, { deleted: true, files: removed.files, dirs: removed.dirs });
     }
@@ -1524,18 +1802,21 @@ module.exports = function(vfs, options, register) {
     }
 
     // the earlier messages of a session, and how it will be resumed
-    function history(sessionId, callback) {
+    function history(sessionId, account, callback) {
+        if (typeof account == "function") { callback = account; account = ""; }
         callback = callback || function() {};
         if (typeof sessionId != "string" || !UUID_RE.test(sessionId))
             return callback(new Error("Invalid session id"));
+        try { account = accountKey(account); } catch (e) { return callback(e); }
         sessionId = sessionId.toLowerCase();
-        resumePlan(sessionId, function(err, plan) {
+        resumePlan(sessionId, account, function(err, plan) {
             if (!plan.found) return callback(null, { found: false });
-            resumePlans[sessionId] = plan;
+            resumePlans[account + "/" + sessionId] = plan;
             readTranscript(plan.file, plan.size, function(err, res) {
                 if (err) return callback(err);
                 res.elsewhere = plan.elsewhere;
                 res.folder = plan.folder;
+                res.cwd = plan.cwd;
                 callback(null, res);
             });
         });
@@ -1797,6 +2078,9 @@ module.exports = function(vfs, options, register) {
         getSettings: getSettings,
         setUltracode: setUltracode,
         deleteSession: deleteSession,
+        accounts: accounts,
+        setupAccount: setupAccount,
+        checkFolder: checkFolder,
         stop: stop,
         history: history,
         sessions: sessions,

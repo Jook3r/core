@@ -24,9 +24,10 @@ terminal.
 - While Claude works, a row above the input says what it does now (Thinking
   with the token estimate, Running `cmd`, Reading/Editing/Writing a file,
   Searching, Waiting for your approval, Retrying, Compacting...), with the
-  elapsed time and "Esc to stop". Thinking shows as "Thinking... · 1.2k
-  tokens", then "Thought for 6s". Set `localStorage["claude-debug"] = 1` in the
-  browser console to log when each event arrives.
+  elapsed time and "Esc to stop". While Claude thinks that row says
+  "Thinking... 1.2k tokens"; when it is done the chat shows "Thought for 6s".
+  Set `localStorage["claude-debug"] = 1` in the browser console to log when
+  each event arrives.
 - Tool calls show as cards (Read, Edit with an inline diff, Write, Bash, ...)
   with a spinner while they run; errors open with the output under the card's
   title. Click a file name to open it in the editor.
@@ -43,22 +44,26 @@ terminal.
   with their descriptions and ends with the effort: Auto, or a level the model
   supports (none for a model without effort levels), and, where the model
   supports it, the **Ultracode** switch (multi-agent workflows for big tasks;
-  it uses many more tokens). Ultracode is off by default; when on, the pill
-  shows an "Ultracode" badge (struck through when the model does not support
-  it). A short note in the chat
+  it uses many more tokens). Ultracode is off by default and stays on only
+  until the page is reloaded; when on, the pill shows an "Ultracode" badge
+  (struck through when the model does not support it). Each account
+  remembers its model, mode and effort; after a reload an effort above High
+  (Extra high, Max) starts at High again. A short note in the chat
   confirms a change; one made while Claude is not running applies when it
   starts. All menus open inside the panel. The header shows the status, the
   session's title, **New session** and **Session history**.
 - Once half of the context is used, a line above the input shows how much is
   left before the CLI compacts the conversation; a compaction shows as a
   divider.
-- **Session history** lists the recent Claude Code sessions of this workspace,
-  newest first, including the ones started with `claude` in a terminal, in the
-  workspace or in a folder inside it (read from `~/.claude/projects`). Picking
-  one resumes it in the folder it was started in and shows its earlier
-  messages. Each entry can be archived (hidden from the list, in this panel
-  only; "Show archived" lists them again) or deleted: after a confirmation the
-  service removes its transcript and its folder from `~/.claude/projects`. It
+- **Session history** lists the recent Claude Code sessions of every account,
+  in any folder, newest first, including the ones started with `claude` in a
+  terminal (read from each account's `projects` folder), with the account
+  and the folder of each. "Show older sessions" lists more. Picking one
+  resumes it as its account, in the folder it was started in, and shows its
+  earlier messages. Each entry can be archived (hidden from the list, in this
+  panel only; "Show archived" lists them again) or deleted: after a
+  confirmation the service removes its transcript and its folder from the
+  account's `projects` folder. It
   refuses for the session open in the panel and for one open in another
   process, and it never follows a symbolic link. If the session is still open
   in another process (the CLI's
@@ -67,6 +72,37 @@ terminal.
   here anyway** or **Cancel**. The welcome screen still offers "Resume last
   session".
 - Each answer ends with its cost and duration.
+
+### Accounts and folders
+
+A line above the input shows where the next chat runs: its **account** (once
+there is more than one) and its **folder**. Click it to change them; both are
+fixed once the chat's first message is sent ("New session here" starts another
+chat with the same ones).
+
+- **Accounts** (Preferences > User Settings > Claude > Accounts). *Personal* is
+  Claude Code as in a terminal (`~/.claude`, with `~/.claude.json`). **Add an
+  account...** asks for a name and a folder in your home folder
+  (`.claude-work`, `.claude-anything`): Claude Code keeps that account's
+  login, settings, `.claude.json` and chats inside it (`CLAUDE_CONFIG_DIR`).
+  **Log in...** opens a terminal running `claude` for that account: type
+  `/login` there, then press **Check**. An account shares nothing unless you
+  tick it: `CLAUDE.md` (an import line, `@~/.claude/CLAUDE.md`), `agents`,
+  `commands`, `skills`, `output styles` (links to Personal's folders) and
+  `settings.json` (a link: Claude reads it, but can't save settings through
+  it from that account). Anything the account already has of its own is left
+  alone. Removing an account from the list keeps its folder. An API key or
+  token in the server's environment applies to Personal only.
+- **Folders**: the workspace by default; a recent folder, **Choose folder...**
+  (the folder dialog, which reaches folders outside the workspace through a
+  link like `~/zoot -> /`), or a full path typed in. Right-click a folder in
+  the file tree for **New Claude Chat Here**. Claude runs in that folder, so
+  its `CLAUDE.md`, `.claude/settings.json` and "always allow" rules apply, and
+  edits outside it need your approval.
+- File names in the chat open in the editor when they are in the workspace,
+  in the home folder, or under a link at the top of the workspace (the most
+  specific link wins: `~/www -> /var/www` over `~/zoot -> /`).
+- Two browser tabs on the same IDE each run their own chat at the same time.
 
 If `claude` is not on the server's `PATH` (systemd services get a minimal one),
 the panel also looks in `~/.local/bin`, `~/.claude/local`, `/usr/local/bin`,
@@ -89,6 +125,9 @@ Preferences > User Settings > Claude.
   (`list_models`) and the applied settings (`get_settings`) use the CLI's
   control messages. Changes are sent one at a
   time, in order.
+- The account is passed as `CLAUDE_CONFIG_DIR` (not for Personal) and the
+  folder as the working directory; the service checks both (a folder name in
+  the home folder; an existing directory, by its real path).
 - One CLI process per chat, started by the first message. It is stopped after
   20 minutes without activity (never in the middle of a turn), on New session,
   and when the IDE connection goes away; the next message resumes it with
