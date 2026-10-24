@@ -1399,8 +1399,10 @@ define(function(require, exports, module) {
             var bin = settings.get("user/claude/@path") || "claude";
             var command = (key ? "CLAUDE_CONFIG_DIR=\"$HOME/" + key + "\" " : "")
                 + (/^[A-Za-z0-9_\/.~+-]+$/.test(bin) ? bin : "'" + bin.replace(/'/g, "'\\''") + "'");
+            // the terminal's cwd is relative to the workspace unless it
+            // starts with "~" (the server expands that to the home folder)
             tabManager.open({ focus: true, active: true, editorType: "terminal",
-                document: { terminal: { cwd: c9.home || workspaceDir() } } }, function(err, tab) {
+                document: { terminal: { cwd: "~" } } }, function(err, tab) {
                 if (err || !tab || !tab.editor || !tab.editor.write) return;
                 tab.editor.write(command + "\n");
             });
@@ -1446,7 +1448,11 @@ define(function(require, exports, module) {
             ]));
             row.appendChild(el("div", { className: "claude-acct-buttons" }, [
                 textButton(info.loggedIn ? "Log in again…" : "Log in…", "claude-btn-secondary", function() {
-                    acctUi.notes[key] = "In the terminal, type /login and follow the steps; then press Check.";
+                    acctUi.notes[key] = info.loggedIn
+                        ? "In the terminal, type /login in Claude Code and follow the steps; then press Check."
+                        : "In the terminal, Claude Code starts for this account: on a first start it asks for a text "
+                            + "style and how to log in (your Claude account), then shows a link to open and a code to "
+                            + "paste back. Otherwise type /login. Then press Check.";
                     loginAccount(key);
                     renderAccountsPrefs();
                 }, "Opens a terminal with claude for this account"),
