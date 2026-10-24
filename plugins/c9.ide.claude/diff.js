@@ -49,7 +49,8 @@ define(function(require, exports, module) {
                 if (p < n && q < m && mx[p] === my[q]) {
                     out.push({ type: " ", text: mx[p] }); p++; q++;
                 }
-                else if (q < m && (p >= n || table[p][q + 1] >= table[p + 1][q])) {
+                // on a tie the removed line comes first: "- old" above "+ new"
+                else if (q < m && (p >= n || table[p][q + 1] > table[p + 1][q])) {
                     out.push({ type: "+", text: my[q] }); q++;
                 }
                 else {

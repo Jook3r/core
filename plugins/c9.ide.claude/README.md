@@ -15,9 +15,11 @@ terminal.
    `npm install -g @anthropic-ai/claude-code`), then run `claude`.
 2. Open the **Claude** panel (right edge of the window, or Window > Claude).
 3. Type a message. Enter sends, Shift+Enter adds a line, Esc (anywhere in the
-   panel, except in a prompt or a menu) stops Claude. Paste, drop or attach
-   (paperclip) images; large images are downscaled in the browser to at most
-   1568 px on the long edge.
+   panel, except in an open menu) stops Claude, and Shift+Tab switches the
+   permission mode. While Claude works the input queues the next message.
+   Paste, drop or attach (paperclip) images: each shows as a chip (thumbnail,
+   name, size; a larger preview on hover). Large images are downscaled in the
+   browser to at most 1568 px on the long edge.
 
 - While Claude works, a row above the input says what it does now (Thinking
   with the token estimate, Running `cmd`, Reading/Editing/Writing a file,
@@ -28,21 +30,24 @@ terminal.
 - Tool calls show as cards (Read, Edit with an inline diff, Write, Bash, ...)
   with a spinner while they run; errors open with the output under the card's
   title. Click a file name to open it in the editor.
-- When Claude needs permission, the panel asks: **Allow**, the option the CLI
-  offers (for example "Allow all edits this session"), or **Deny**, which stops
-  the turn. Write in "Tell Claude what to do instead" to deny and let Claude go
-  on with your note (typing in the message box while a prompt is open does the
-  same). Clicks in the first half second of a prompt are ignored.
-- The header has the model (the list the CLI reports, with descriptions), the
-  effort (Auto, or a level the model supports; hidden for a model without
-  effort levels) and the permission mode (Ask before edits, Accept edits, Plan,
-  or "Mode from Claude's settings", the default), as Cloud9 menus, then **New
-  session** and **Session history**. The model and effort buttons show what
-  the CLI really applies (`get_settings`), and a short note in the chat
-  confirms a change. A change made while Claude is not running applies when it
-  starts.
-- Once half of the context is used, the input's hint shows how much is left
-  before the CLI compacts the conversation; a compaction shows as a divider.
+- When Claude needs permission, the prompt takes the place of the input box
+  (the conversation dims): **1 Yes**, **2 Yes, ...** with the option the CLI
+  offers (for example "allow all edits this session"), **3 No**. Keys 1-3,
+  Up/Down and Enter work; Esc (or No) denies and stops the turn. Write in "Tell
+  Claude what to do instead" and press Enter to deny and let Claude go on with
+  your note. Several requests come one at a time ("1 of 2"). Clicks and keys
+  in the first half second of a prompt are ignored.
+- The input's footer has the model pill (the model and effort the CLI really
+  applies, e.g. "Haiku 5.5 · Medium") and the mode button (Ask, Accept edits,
+  Plan, or "From settings", the default). The model menu lists the CLI's models
+  with their descriptions and ends with the effort: Auto, or a level the model
+  supports (none for a model without effort levels). A short note in the chat
+  confirms a change; one made while Claude is not running applies when it
+  starts. All menus open inside the panel. The header shows the status, the
+  session's title, **New session** and **Session history**.
+- Once half of the context is used, a line above the input shows how much is
+  left before the CLI compacts the conversation; a compaction shows as a
+  divider.
 - **Session history** lists the recent Claude Code sessions of this workspace,
   newest first, including the ones started with `claude` in a terminal, in the
   workspace or in a folder inside it (read from `~/.claude/projects`). Picking

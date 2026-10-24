@@ -106,18 +106,41 @@
     padding: 4px 6px 4px 12px;
     border-bottom: 1px solid @claude-line;
 }
+/* the status keeps its room ("Waiting for your approval"); the title
+   gets what is left */
 .claude-status {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
+    max-width: 100%;
     font-weight: 600;
 }
 .claude-status-text {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+}
+/* the CLI's summary of the task: long, so it may shorten */
+.claude-status-text.claude-summary {
+    max-width: 180px;
+}
+.claude-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: @claude-muted;
+}
+.claude-title:before {
+    content: "·";
+    margin-right: 6px;
+    color: @claude-faint;
+}
+.claude-title.claude-untitled {
+    color: @claude-faint;
 }
 .claude-status-dot {
     flex: none;
@@ -159,65 +182,151 @@
     gap: 2px;
 }
 
-.claude-select {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    flex: none;
-    height: 24px;
-    max-width: 120px;
-    margin: 0;
-    padding: 0 19px 0 7px;
-    border: 1px solid transparent;
-    border-radius: @claude-radius-small;
-    background-color: transparent;
-    background-image: linear-gradient(45deg, transparent 50%, @claude-muted 50%), linear-gradient(135deg, @claude-muted 50%, transparent 50%);
-    background-position: right 10px top 10px, right 6px top 10px;
-    background-size: 4px 4px, 4px 4px;
-    background-repeat: no-repeat;
-    color: @claude-muted;
-    font-family: inherit;
-    font-size: 12px;
-    line-height: 22px;
-    white-space: nowrap;
-    cursor: pointer;
-    outline: none;
-}
-.claude-select-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.claude-select:hover,
-.claude-select.claude-open {
-    background-color: @claude-fill-strong;
-    color: @claude-fg;
-}
-.claude-select:focus-visible {
-    border-color: @spinner-focus-border-color;
-}
 .claude-icon-btn.claude-open {
     background: @claude-fill-strong;
     color: @claude-fg;
 }
 
-/* The model, mode and history menus are Cloud9 menus (.c9menu), styled by
-   the skin; only the history entries need a width limit and a quieter
-   folder/time column. */
-.c9menu.claude-history-menu > div.menu_item > a {
-    display: block;
-    max-width: 380px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+/* ---- Popover menus (model, mode, sessions): inside the panel ------------- */
+
+.claude-pop {
+    position: absolute;
+    z-index: 20;
+    box-sizing: border-box;
+    min-width: 180px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid @menu-border-color;
+    border-radius: @claude-radius;
+    background: @menu-background;
+    color: @menu-color;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    font-size: 12px;
+    line-height: 1.35;
+    outline: none;
+    user-select: none;
+    cursor: default;
 }
-.c9menu.claude-history-menu > div.menu_item > span,
-.c9menu.claude-choice-menu > div.menu_item > span {
+.claude-pop-model { width: 300px; }
+.claude-pop-mode { width: 300px; }
+.claude-pop-history { width: 360px; }
+.claude-pop-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px 4px;
+    font-size: 11px;
+    opacity: 0.65;
+}
+.claude-pop-hint {
+    white-space: nowrap;
+}
+.claude-pop-info {
+    padding: 6px 8px 8px;
     opacity: 0.75;
+    white-space: normal;
 }
-/* model descriptions */
-.c9menu.claude-model-menu > div.menu_item > span {
-    max-width: 300px;
+.claude-pop-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: @claude-radius-small;
+}
+.claude-pop-item.claude-active,
+.claude-pop-item:hover {
+    background: @menu-item-hover-background;
+    color: @menu-item-hover-color;
+}
+.claude-pop-icon {
+    margin-top: 1px;
+    opacity: 0.8;
+}
+.claude-pop-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.claude-pop-label {
+    overflow-wrap: anywhere;
+}
+/* descriptions wrap below the name */
+.claude-pop-desc {
+    margin-top: 1px;
+    font-size: 11px;
+    opacity: 0.68;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.claude-pop-check {
+    margin-top: 1px;
+    visibility: hidden;
+}
+.claude-pop-item.claude-checked .claude-pop-check {
+    visibility: visible;
+}
+
+/* effort, at the bottom of the model menu */
+.claude-effort {
+    margin: 4px 0 0;
+    padding: 7px 8px 6px;
+    border-top: 1px solid fade(@menu-color, 14%);
+    border-radius: @claude-radius-small;
+}
+.claude-effort.claude-active {
+    background: fade(@menu-color, 6%);
+}
+.claude-effort-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+.claude-effort-value {
+    font-weight: 600;
+}
+.claude-seg {
+    display: flex;
+    padding: 2px;
+    border: 1px solid fade(@menu-color, 18%);
+    border-radius: @claude-radius-small;
+    background: fade(@menu-color, 5%);
+}
+.claude-root .claude-seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 22px;
+    margin: 0;
+    padding: 0 2px;
+    border: 0;
+    border-radius: @claude-radius-small;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    opacity: 0.75;
+    cursor: pointer;
+    box-shadow: none;
+}
+.claude-root .claude-seg-btn:hover {
+    background: fade(@menu-color, 9%);
+    opacity: 1;
+}
+.claude-root .claude-seg-btn.claude-on,
+.claude-root .claude-seg-btn.claude-on:hover {
+    background: @menu-item-hover-background;
+    color: @menu-item-hover-color;
+    opacity: 1;
+}
+.claude-effort-note {
+    margin-top: 5px;
+    font-size: 11px;
+    opacity: 0.7;
 }
 
 .claude-icon-btn {
@@ -885,7 +994,7 @@
     background: @claude-add;
 }
 
-/* ---- Permission prompts ---------------------------------------------------- */
+/* ---- Questions in the conversation (a session open elsewhere) ------------ */
 
 .claude-perm {
     margin: 6px 0 10px;
@@ -913,13 +1022,6 @@
     margin: 4px 0 0 24px;
     font-size: 12px;
     color: @claude-muted;
-}
-.claude-perm-preview {
-    margin: 8px 0 0;
-}
-.claude-perm-preview .claude-code,
-.claude-perm-preview .claude-diff {
-    margin: 0;
 }
 .claude-perm .claude-actions {
     margin-top: 10px;
@@ -953,39 +1055,6 @@
 .claude-perm.claude-elsewhere {
     border-color: fade(@claude-warn, 55%);
     background: fade(@claude-warn, 7%);
-}
-.claude-perm-state {
-    display: none;
-    font-size: 12px;
-    color: @claude-muted;
-}
-.claude-perm.claude-resolved {
-    padding: 6px 10px;
-    border-color: @claude-line;
-    background: transparent;
-}
-.claude-perm.claude-resolved .claude-perm-preview,
-.claude-perm.claude-resolved .claude-perm-desc,
-.claude-perm.claude-resolved .claude-questions {
-    display: none;
-}
-.claude-perm.claude-resolved .claude-perm-title {
-    font-weight: normal;
-    color: @claude-muted;
-}
-.claude-perm.claude-resolved .claude-perm-icon {
-    color: @claude-faint;
-}
-.claude-perm.claude-resolved .claude-perm-state {
-    display: block;
-    margin: 2px 0 0 24px;
-}
-.claude-perm-deny .claude-perm-state,
-.claude-perm-stopped .claude-perm-state {
-    color: @claude-del;
-}
-.claude-perm-allow .claude-perm-state {
-    color: @claude-add;
 }
 .claude-plan {
     max-height: 360px;
@@ -1207,6 +1276,129 @@
     }
 }
 
+/* ---- Permission prompt, in place of the input box ------------------------ */
+
+.claude-log {
+    transition: opacity 0.15s ease;
+}
+.claude-prompting .claude-log {
+    opacity: 0.62;
+}
+.claude-prompt {
+    padding: 9px 10px 8px;
+    border: 1px solid fade(@claude-accent, 60%);
+    border-radius: @claude-radius;
+    background: @panel-background;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.claude-prompt.claude-answering {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.claude-prompt-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 600;
+}
+.claude-prompt-icon {
+    margin-top: 1px;
+    color: @claude-accent;
+}
+.claude-prompt-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.claude-prompt-count {
+    flex: none;
+    font-size: 11px;
+    font-weight: normal;
+    color: @claude-faint;
+}
+.claude-root .claude-prompt-toggle {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: -2px -2px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: @claude-radius-small;
+    background: transparent;
+    color: @claude-muted;
+    cursor: pointer;
+    box-shadow: none;
+}
+.claude-root .claude-prompt-toggle:hover {
+    background: @claude-fill-strong;
+}
+.claude-prompt-toggle .claude-icon {
+    transform: rotate(90deg);
+    transition: transform 0.12s ease;
+}
+.claude-folded .claude-prompt-toggle .claude-icon {
+    transform: rotate(0deg);
+}
+.claude-prompt-desc {
+    margin: 3px 0 0 24px;
+    font-size: 12px;
+    color: @claude-muted;
+}
+.claude-prompt-body {
+    max-height: 32vh;
+    margin: 8px 0 0;
+    overflow: auto;
+}
+.claude-folded .claude-prompt-body {
+    display: none;
+}
+.claude-prompt-body .claude-code,
+.claude-prompt-body .claude-diff {
+    margin: 0;
+}
+.claude-choices {
+    margin: 8px 0 0;
+    outline: none;
+}
+.claude-choice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    margin: 0 0 4px;
+    padding: 4px 8px;
+    border: 1px solid @claude-line;
+    border-radius: @claude-radius-small;
+    cursor: pointer;
+    user-select: none;
+}
+.claude-choice:hover {
+    background: @claude-fill;
+}
+/* the choice that Enter picks */
+.claude-choice.claude-active {
+    border-color: fade(@claude-accent, 65%);
+    background: fade(@claude-accent, 13%);
+}
+.claude-choice-key {
+    flex: none;
+    min-width: 10px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+}
+.claude-choice-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.claude-prompt .claude-perm-feedback {
+    margin-top: 2px;
+}
+.claude-prompt-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: @claude-faint;
+}
+
 /* ---- Composer ------------------------------------------------------------- */
 
 .claude-composer {
@@ -1257,23 +1449,94 @@
     background: fade(@textbox-color, 10%);
     color: @textbox-color;
 }
-.claude-composer-hint {
+.claude-composer-gap {
     flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    align-self: stretch;
+    min-width: 4px;
+    cursor: text;
+}
+/* a short message, or the context left, above the input */
+.claude-composer-note {
+    display: none;
+    margin: 0 2px 4px;
     font-size: 11px;
-    color: fade(@textbox-color, 45%);
-}
-.claude-composer-hint.claude-hint-alert {
-    color: @claude-warn;
-}
-.claude-composer-hint.claude-hint-context {
+    color: @claude-faint;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-variant-numeric: tabular-nums;
 }
-.claude-composer-hint.claude-hint-low {
+.claude-composer-note.claude-show {
+    display: block;
+}
+.claude-composer-note.claude-hint-alert,
+.claude-composer-note.claude-hint-low {
     color: @claude-warn;
+}
+
+/* the model (and effort) and the mode, in the input's footer */
+.claude-root .claude-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 24px;
+    margin: 0;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: fade(@textbox-color, 7%);
+    color: fade(@textbox-color, 78%);
+    font-family: inherit;
+    font-size: 11.5px;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+}
+.claude-root .claude-pill:hover,
+.claude-root .claude-pill.claude-open {
+    background: fade(@textbox-color, 13%);
+    color: @textbox-color;
+}
+.claude-root .claude-pill:focus-visible {
+    border-color: @spinner-focus-border-color;
+}
+.claude-model-pill {
+    overflow: hidden;
+}
+.claude-pill-name,
+.claude-pill-effort {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.claude-pill-effort {
+    flex: 0 0 auto;
+    opacity: 0.8;
+}
+.claude-root .claude-mode-pill {
+    flex: 0 0 auto;
+    background: transparent;
+}
+.claude-pill-icon,
+.claude-pill-icon .claude-icon,
+.claude-pill-icon svg {
+    width: 14px;
+    height: 14px;
+}
+.claude-pill-icon .claude-icon {
+    display: block;
+}
+/* a narrow panel: the mode as an icon, then the model without its effort */
+.claude-narrow .claude-mode-pill .claude-pill-label {
+    display: none;
+}
+.claude-root.claude-narrow .claude-mode-pill {
+    padding: 0 5px;
+}
+.claude-tiny .claude-pill-effort {
+    display: none;
 }
 .claude-composer-bar .claude-send,
 .claude-composer-bar .claude-send:hover {
@@ -1298,61 +1561,91 @@
 .claude-attachments {
     display: flex;
     flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 6px 0;
+}
+/* an attached image: thumbnail, name, size, remove */
+.claude-chip {
+    display: inline-flex;
+    align-items: center;
     gap: 6px;
-    padding: 8px 8px 0;
-}
-.claude-thumb {
-    position: relative;
-    width: 52px;
-    height: 52px;
-    border: 1px solid fade(@textbox-color, 18%);
+    max-width: 100%;
+    height: 26px;
+    padding: 0 2px 0 3px;
+    border: 1px solid fade(@textbox-color, 16%);
     border-radius: @claude-radius-small;
-    background: fade(@textbox-color, 6%);
+    background: fade(@textbox-color, 5%);
+    font-size: 11.5px;
+    cursor: default;
 }
-.claude-thumb img {
+.claude-chip-thumb {
+    flex: none;
+    position: relative;
+    width: 20px;
+    height: 20px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: fade(@textbox-color, 10%);
+}
+.claude-chip-thumb img {
     display: block;
     width: 100%;
     height: 100%;
-    border-radius: inherit;
     object-fit: cover;
 }
-.claude-thumb.claude-loading:after {
+.claude-chip.claude-loading .claude-chip-thumb:after {
     content: "";
     position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 16px;
-    height: 16px;
-    margin: -8px 0 0 -8px;
+    left: 3px;
+    top: 3px;
+    width: 10px;
+    height: 10px;
     border: 2px solid fade(@textbox-color, 25%);
     border-top-color: @claude-accent;
     border-radius: 50%;
     animation: claude-spin 0.8s linear infinite;
 }
-.claude-root .claude-thumb-remove,
-.claude-root .claude-thumb-remove:hover {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 18px;
-    height: 18px;
-    border: 1px solid @panel-background;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.72);
-    color: #fff;
-    opacity: 0;
-    transition: opacity 0.12s ease;
+.claude-chip-name {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 600;
 }
-.claude-thumb:hover .claude-thumb-remove,
-.claude-thumb-remove:focus-visible {
-    opacity: 1;
+.claude-chip-size {
+    flex: none;
+    color: fade(@textbox-color, 55%);
+    font-variant-numeric: tabular-nums;
 }
-.claude-thumb-remove .claude-icon,
-.claude-thumb-remove .claude-icon svg {
+.claude-root .claude-chip-remove {
+    width: 20px;
+    height: 20px;
+}
+.claude-chip-remove .claude-icon,
+.claude-chip-remove .claude-icon svg {
     width: 12px;
     height: 12px;
 }
-
+.claude-chip-preview {
+    position: absolute;
+    z-index: 20;
+    display: none;
+    padding: 3px;
+    border: 1px solid @claude-line;
+    border-radius: @claude-radius;
+    background: @panel-background;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    pointer-events: none;
+}
+.claude-chip-preview.claude-show {
+    display: block;
+}
+.claude-chip-preview img {
+    display: block;
+    max-width: 220px;
+    max-height: 160px;
+    border-radius: 3px;
+}
 .claude-drop {
     position: absolute;
     left: 6px;

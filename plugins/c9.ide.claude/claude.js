@@ -50,11 +50,19 @@ define(function(require, exports, module) {
         // (defaultMode in ~/.claude/settings.json); the label then shows the
         // mode the CLI reports
         var MODES = [
-            { value: "", caption: "Mode from Claude's settings", short: "Mode" },
-            { value: "default", caption: "Ask before edits", short: "Ask" },
-            { value: "acceptEdits", caption: "Accept edits", short: "Accept edits" },
-            { value: "plan", caption: "Plan mode", short: "Plan" }
+            { value: "", caption: "Mode from Claude's settings", short: "From settings", icon: "gear",
+                desc: "The default mode in your Claude settings" },
+            { value: "default", caption: "Ask before edits", short: "Ask", icon: "shield",
+                desc: "Claude asks before it edits files or runs commands" },
+            { value: "acceptEdits", caption: "Accept edits", short: "Accept edits", icon: "edit",
+                desc: "Claude edits files without asking; it still asks for commands" },
+            { value: "plan", caption: "Plan mode", short: "Plan", icon: "plan",
+                desc: "Claude looks around and proposes a plan; it changes nothing" }
         ];
+        // Shift+Tab in the input goes through these
+        var MODE_CYCLE = ["default", "acceptEdits", "plan"];
+        // effort levels in the model menu's segmented control
+        var SEGMENTS = { "": "Auto", low: "Low", medium: "Med", high: "High", xhigh: "X-High", max: "Max" };
         var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         var LOGIN_RE = /\/login\b|not logged in|invalid api key|authentication_error|oauth token|please run .{0,20}login/i;
         var BILLING_RE = /credit balance|billing|payment required|insufficient credit/i;
@@ -90,7 +98,9 @@ define(function(require, exports, module) {
             plan: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="11.5" rx="1.5"/><path d="M5.6 6h4.8M5.6 8.6h4.8M5.6 11.2h2.8" stroke-linecap="round"/></svg>',
             question: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.2-.8.6-.8 1.1v.4M8 11.3v.2"/></svg>',
             shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M8 1.8 13 3.7v4c0 3.2-2.1 5.4-5 6.5-2.9-1.1-5-3.3-5-6.5v-4z"/></svg>',
-            thinking: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M5.5 12.5h5M6.3 14.3h3.4M8 1.8a4.4 4.4 0 0 0-2.6 8c.4.3.6.7.6 1.2v.3h4v-.3c0-.5.2-.9.6-1.2A4.4 4.4 0 0 0 8 1.8z"/></svg>'
+            thinking: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M5.5 12.5h5M6.3 14.3h3.4M8 1.8a4.4 4.4 0 0 0-2.6 8c.4.3.6.7.6 1.2v.3h4v-.3c0-.5.2-.9.6-1.2A4.4 4.4 0 0 0 8 1.8z"/></svg>',
+            gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1.8l1 1.6 1.8-.5.5 1.8 1.6 1-.8 1.6.8 1.6-1.6 1-.5 1.8-1.8-.5-1 1.6-1-1.6-1.8.5-.5-1.8-1.6-1 .8-1.6-.8-1.6 1.6-1 .5-1.8 1.8.5z"/></svg>',
+            up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.8 8 6.3l3.5 3.5"/></svg>'
         };
 
         /***** Initialization *****/
@@ -106,9 +116,13 @@ define(function(require, exports, module) {
         });
 
         // UI elements
-        var root, header, statusDot, statusText, modelSelect, effortSelect, modeSelect, btnNew, btnHistory, historyMenu;
+        var root, header, statusDot, statusText, titleEl, btnNew, btnHistory;
+        var modelSelect, effortSelect, modeSelect;      // the choices (see choice())
+        var modelPill, modePill, modelPop, modePop, historyPop;
+        var pops = [];                                  // the popover menus
         var actEl, actText, actMeta, actHint;
-        var logEl, welcomeEl, jumpBtn, composer, attachRow, textarea, btnAttach, btnSend, fileInput, dropOverlay;
+        var logEl, welcomeEl, jumpBtn, composer, composerBox, noteEl, promptSlot, attachRow, chipPreview;
+        var textarea, btnAttach, btnSend, fileInput, dropOverlay;
 
         // connection with claude-service.js
         var api = null;
@@ -143,6 +157,7 @@ define(function(require, exports, module) {
         var confirmNext = false;        // a choice made while claude was not running
         var confirmModeNext = false;
         var hasMessages = false;
+        var sessionTitle = "";          // the first prompt of the chat (header)
         var lastTotalCost = 0;
         var lastResultError = false;    // the last turn ended with an error that is shown
 
@@ -174,6 +189,15 @@ define(function(require, exports, module) {
                 binChecked = false;
                 refreshStatus();
             }, plugin);
+            // changed elsewhere (another window, the settings file)
+            ["model", "effort", "mode"].forEach(function(name) {
+                settings.on("user/claude/@" + name, function(value) {
+                    var node = { model: modelSelect, effort: effortSelect, mode: modeSelect }[name];
+                    if (!drawn || !node || node.value == (value || "") || name == "model" && !value) return;
+                    setSelect(node, value || "");
+                    updateSettingLabels();
+                }, plugin);
+            });
 
             prefs.add({
                 "General": {
@@ -314,20 +338,21 @@ define(function(require, exports, module) {
             e.aml.textselect = true;
             updateCodeFont();
 
-            // header
+            // header: status, the session's title, New and History
             statusDot = el("span", { className: "claude-status-dot" });
             statusText = el("span", { className: "claude-status-text", text: "Claude" });
+            titleEl = el("span", { className: "claude-title" });
             restoreModelCache();
-            modelSelect = select("claude-model", modelItems, "Model", onModelChange);
-            effortSelect = select("claude-effort", effortItems, "Effort", onEffortChange);
-            modeSelect = select("claude-mode", MODES, "Permission mode", onModeChange);
+            modelSelect = choice(modelItems);
+            effortSelect = choice(effortItems);
+            modeSelect = choice(MODES);
             btnNew = iconButton("plus", "New session", newSession);
-            btnHistory = iconButton("history", "Session history", function() {});
-            btnHistory.setAttribute("aria-haspopup", "true");
-            attachMenu(btnHistory, buildHistoryMenu);
+            btnHistory = el("button", { className: "claude-icon-btn", title: "Session history", type: "button",
+                "aria-haspopup": "true", "aria-expanded": "false" }, [icon("history")]);
             header = el("div", { className: "claude-header" }, [
                 el("div", { className: "claude-status" }, [statusDot, statusText]),
-                el("div", { className: "claude-header-tools" }, [modelSelect.wrapper, effortSelect.wrapper, modeSelect.wrapper, btnNew, btnHistory])
+                titleEl,
+                el("div", { className: "claude-header-tools" }, [btnNew, btnHistory])
             ]);
             root.appendChild(header);
 
@@ -358,6 +383,7 @@ define(function(require, exports, module) {
 
             // composer
             attachRow = el("div", { className: "claude-attachments" });
+            attachRow.style.display = "none";
             textarea = el("textarea", {
                 className: "claude-input",
                 rows: "1",
@@ -378,32 +404,66 @@ define(function(require, exports, module) {
             });
             btnSend = iconButton("send", "Send (Enter)", onSendButton);
             btnSend.classList.add("claude-send");
-            composer = el("div", { className: "claude-composer" }, [
-                el("div", { className: "claude-composer-box" }, [
-                    attachRow,
-                    textarea,
-                    el("div", { className: "claude-composer-bar" }, [
-                        btnAttach,
-                        el("span", { className: "claude-composer-hint", text: "Enter to send, Shift+Enter for a new line" }),
-                        btnSend
-                    ])
-                ]),
-                fileInput
+            // the model (with its effort) and the mode, as pills in the footer
+            modelPill = el("button", { type: "button", className: "claude-pill claude-model-pill",
+                "aria-haspopup": "true", "aria-expanded": "false" }, [
+                el("span", { className: "claude-pill-name" }),
+                el("span", { className: "claude-pill-effort" })
             ]);
+            modePill = el("button", { type: "button", className: "claude-pill claude-mode-pill",
+                "aria-haspopup": "true", "aria-expanded": "false" }, [
+                el("span", { className: "claude-pill-icon" }),
+                el("span", { className: "claude-pill-label" })
+            ]);
+            noteEl = el("div", { className: "claude-composer-note", "aria-live": "polite" });
+            composerBox = el("div", { className: "claude-composer-box" }, [
+                attachRow,
+                textarea,
+                el("div", { className: "claude-composer-bar" }, [
+                    btnAttach,
+                    modelPill,
+                    modePill,
+                    el("span", { className: "claude-composer-gap" }),
+                    btnSend
+                ])
+            ]);
+            // a permission prompt takes the place of the input box
+            promptSlot = el("div", { className: "claude-prompt-slot" });
+            promptSlot.style.display = "none";
+            composer = el("div", { className: "claude-composer" }, [noteEl, composerBox, promptSlot, fileInput]);
             root.appendChild(composer);
-            // Esc stops Claude from anywhere in the panel, except in a prompt
+            chipPreview = el("div", { className: "claude-chip-preview" });
+            root.appendChild(chipPreview);
+
+            modelPop = popover({ button: modelPill, className: "claude-pop-model", place: "up", build: buildModelPop });
+            modePop = popover({ button: modePill, className: "claude-pop-mode", place: "up", build: buildModePop });
+            historyPop = popover({ button: btnHistory, className: "claude-pop-history", place: "down", align: "right",
+                build: buildHistoryPop, onopen: loadHistory });
+
+            // Esc stops Claude from anywhere in the panel (in a prompt: denies
+            // it), except in an open menu
             root.addEventListener("keydown", function(e) {
-                if (e.keyCode != 27 || !(busy || stopping) || e.defaultPrevented) return;
-                if (e.target && e.target.closest && e.target.closest(".claude-perm")) return;
-                if (menuOpen()) return;
+                if (e.keyCode != 27 || e.defaultPrevented || menuOpen()) return;
+                if (promptShown) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return promptShown.escape();
+                }
+                if (!(busy || stopping)) return;
                 e.preventDefault();
                 e.stopPropagation();
                 interrupt();
             });
             composer.addEventListener("click", function(e) {
-                if (e.target == composer || e.target.classList.contains("claude-composer-box"))
+                if (e.target == composer || e.target == composerBox || e.target.classList.contains("claude-composer-gap"))
                     textarea.focus();
             });
+            // narrow panel: the pills lose their labels
+            if (typeof window.ResizeObserver == "function") {
+                new window.ResizeObserver(fitWidth).observe(root);
+            }
+            window.addEventListener("resize", closePops);
+            plugin.addOther(function() { window.removeEventListener("resize", closePops); });
 
             // drag and drop of images anywhere on the panel
             dropOverlay = el("div", { className: "claude-drop", text: "Drop images to attach them" });
@@ -442,6 +502,7 @@ define(function(require, exports, module) {
             setSelect(effortSelect, settings.get("user/claude/@effort") || "");
             setSelect(modeSelect, settings.get("user/claude/@mode") || "");
             updateSettingLabels();
+            fitWidth();
 
             renderWelcome();
             updateStatus();
@@ -495,157 +556,195 @@ define(function(require, exports, module) {
             return button;
         }
 
-        /***** Menus: Cloud9's own, so that every skin styles them *****/
+        /***** Popover menus: inside the panel, never wider than it *****/
 
-        function newMenu(className) {
-            var menu = new ui.menu({ "class": "claude-menu " + className });
-            plugin.addElement(menu);
-            menu.claudeMeta = [];
-            menu.on("display", function() { applyMeta(menu); });
-            return menu;
-        }
+        var popIds = 0;
 
-        // secondary text (a model's description; a session's folder and
-        // time) goes in the item's right-hand (shortcut) column
-        function applyMeta(menu) {
-            (menu.claudeMeta || []).forEach(function(m) {
-                if (m.item.$hotkey) m.item.$hotkey.textContent = m.text;
-                if (m.item.$ext && m.tip) m.item.$ext.title = m.tip;
-            });
-        }
+        // A menu that opens above (the footer's pills) or below (the
+        // header's buttons) its button, inside the panel and at most as wide
+        // as it. opts: { button, className, place: "up" | "down", align:
+        // "right", build(pop), onopen() }. build fills the menu with
+        // pop.heading(), pop.item() and pop.row(). Keyboard: Enter or Space
+        // on the button opens it on the current choice; Up, Down, Home, End
+        // move; Enter picks; Escape closes and gives the focus back.
+        function popover(opts) {
+            var node = el("div", { className: "claude-pop " + opts.className, role: "menu", tabindex: "-1" });
+            node.style.display = "none";
+            root.appendChild(node);
+            var button = opts.button;
+            var pop = { el: node, button: button, visible: false, rows: [], active: -1 };
 
-        function clearMenu(menu) {
-            menu.childNodes.slice().forEach(function(node) {
-                node.destroy(true, true);
-            });
-        }
-
-        function infoItem(menu, caption) {
-            return menu.appendChild(new ui.item({ caption: caption, disabled: true }));
-        }
-
-        // Opens the menu that build() returns under the button. Keyboard: the
-        // button opens it with Enter or Space, the arrows move, Enter picks,
-        // Escape closes and gives the focus back to the button.
-        function attachMenu(button, build) {
-            var lastHide = 0;
-            var byKeyboard = false;
-            var menu = null;
-            var closedByThisClick = false;
-            button.addEventListener("mousedown", function() {
-                // a mousedown outside an open menu closes it (before or after
-                // this handler, depending on the phase): no reopening on click
-                closedByThisClick = !!(menu && menu.visible) || Date.now() - lastHide < 100;
+            pop.clear = function() {
+                node.textContent = "";
+                pop.rows = [];
+                pop.active = -1;
+            };
+            pop.heading = function(text, hint) {
+                node.appendChild(el("div", { className: "claude-pop-heading" }, [
+                    el("span", { text: text }),
+                    hint ? el("span", { className: "claude-pop-hint", text: hint }) : null
+                ]));
+            };
+            pop.info = function(text) {
+                node.appendChild(el("div", { className: "claude-pop-info", text: text }));
+            };
+            // a row the keyboard reaches: { el, onpick(), onKey(e) -> handled }
+            pop.row = function(row) {
+                var index = pop.rows.length;
+                row.el.id = row.el.id || "claude-pop-" + (++popIds);
+                pop.rows.push(row);
+                row.el.addEventListener("mousemove", function() {
+                    if (pop.active != index) pop.highlight(index);
+                });
+                node.appendChild(row.el);
+                return row;
+            };
+            // { label, desc, icon, checked, title, onpick }
+            pop.item = function(item) {
+                var row = el("div", { className: "claude-pop-item" + (item.checked ? " claude-checked" : ""),
+                    role: "menuitemradio", "aria-checked": item.checked ? "true" : "false", title: item.title || null }, [
+                    item.icon ? icon(item.icon, "claude-pop-icon") : null,
+                    el("span", { className: "claude-pop-text" }, [
+                        el("span", { className: "claude-pop-label", text: item.label }),
+                        item.desc ? el("span", { className: "claude-pop-desc", text: item.desc }) : null
+                    ]),
+                    icon("check", "claude-pop-check")
+                ]);
+                row.addEventListener("click", function(e) {
+                    e.preventDefault();
+                    item.onpick();
+                });
+                return pop.row({ el: row, onpick: item.onpick, checked: !!item.checked });
+            };
+            pop.highlight = function(i) {
+                var old = pop.rows[pop.active];
+                if (old) old.el.classList.remove("claude-active");
+                pop.active = i;
+                var row = pop.rows[i];
+                if (!row) return node.removeAttribute("aria-activedescendant");
+                row.el.classList.add("claude-active");
+                node.setAttribute("aria-activedescendant", row.el.id);
+                var top = row.el.offsetTop, bottom = top + row.el.offsetHeight;
+                if (top < node.scrollTop) node.scrollTop = top;
+                else if (bottom > node.scrollTop + node.clientHeight) node.scrollTop = bottom - node.clientHeight;
+            };
+            pop.open = function(byKeyboard) {
+                if (pop.visible) return;
+                closePops();
+                pop.visible = true;
+                if (opts.onopen) opts.onopen(pop);
+                pop.clear();
+                opts.build(pop);
+                node.style.display = "";
+                button.classList.add("claude-open");
+                button.setAttribute("aria-expanded", "true");
+                pop.place();
+                var current = 0;
+                pop.rows.forEach(function(row, i) { if (row.checked) current = i; });
+                if (byKeyboard) pop.highlight(current);
+                try { node.focus({ preventScroll: true }); } catch (e) {}
+                document.addEventListener("mousedown", onOutside, true);
+            };
+            pop.close = function(refocus) {
+                if (!pop.visible) return;
+                pop.visible = false;
+                node.style.display = "none";
+                button.classList.remove("claude-open");
+                button.setAttribute("aria-expanded", "false");
+                document.removeEventListener("mousedown", onOutside, true);
+                if (refocus) button.focus();
+            };
+            // rebuilt while open (e.g. when the sessions have loaded)
+            pop.refresh = function() {
+                if (!pop.visible) return;
+                var keep = pop.active;
+                pop.clear();
+                opts.build(pop);
+                pop.place();
+                if (keep >= 0) pop.highlight(Math.min(keep, pop.rows.length - 1));
+            };
+            pop.place = function() {
+                var r = root.getBoundingClientRect();
+                var b = button.getBoundingClientRect();
+                node.style.maxWidth = Math.max(120, r.width - 16) + "px";
+                var w = node.offsetWidth;
+                var left = opts.align == "right" ? b.right - r.left - w : b.left - r.left;
+                node.style.left = Math.max(8, Math.min(left, r.width - w - 8)) + "px";
+                if (opts.place == "up") {
+                    node.style.top = "";
+                    node.style.bottom = (r.bottom - b.top + 4) + "px";
+                    node.style.maxHeight = Math.max(100, b.top - r.top - header.offsetHeight - 8) + "px";
+                }
+                else {
+                    node.style.bottom = "";
+                    node.style.top = (b.bottom - r.top + 4) + "px";
+                    node.style.maxHeight = Math.max(100, r.bottom - b.bottom - 12) + "px";
+                }
+            };
+            function onOutside(e) {
+                if (node.contains(e.target) || button.contains(e.target)) return;
+                pop.close(false);
+            }
+            function move(step) {
+                var n = pop.rows.length;
+                if (!n) return;
+                var i = pop.active < 0 ? (step > 0 ? -1 : n) : pop.active;
+                pop.highlight(Math.max(0, Math.min(n - 1, i + step)));
+            }
+            node.addEventListener("keydown", function(e) {
+                var row = pop.rows[pop.active];
+                if (row && row.onKey && row.onKey(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                switch (e.keyCode) {
+                    case 40: move(1); break;
+                    case 38: move(-1); break;
+                    case 36: pop.highlight(0); break;
+                    case 35: pop.highlight(pop.rows.length - 1); break;
+                    case 13:
+                    case 32: if (row && row.onpick) row.onpick(); break;
+                    case 27: pop.close(true); break;
+                    case 9: pop.close(true); break;
+                    default: return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
             });
             button.addEventListener("click", function(e) {
                 e.preventDefault();
                 if (button.disabled) return;
-                if (closedByThisClick && e.detail !== 0) {
-                    closedByThisClick = false;
-                    return;
-                }
-                byKeyboard = e.detail === 0;
-                menu = build();
-                if (!menu.claudeButton) {
-                    menu.claudeButton = button;
-                    menu.on("prop.visible", function(ev) {
-                        button.classList.toggle("claude-open", !!ev.value);
-                        button.setAttribute("aria-expanded", ev.value ? "true" : "false");
-                        if (!ev.value) {
-                            lastHide = Date.now();
-                            if (byKeyboard) setTimeout(function() { button.focus(); }, 0);
-                        }
-                    });
-                }
-                var r = button.getBoundingClientRect();
-                menu.display(r.left, r.bottom + 2);
-                placeMenu(menu);
-                if (byKeyboard) highlightCurrent(menu);
+                if (pop.visible) pop.close(e.detail === 0);
+                else pop.open(e.detail === 0);
             });
+            pops.push(pop);
+            return pop;
+        }
+
+        function closePops() {
+            pops.forEach(function(pop) { pop.close(false); });
         }
 
         function menuOpen() {
-            return [modelSelect, effortSelect, modeSelect].some(function(n) { return n && n.menu && n.menu.visible; })
-                || !!(historyMenu && historyMenu.visible);
+            return pops.some(function(pop) { return pop.visible; });
         }
 
-        // keyboard opening: the current choice is highlighted, as in a list
-        function highlightCurrent(menu) {
-            var items = menu.childNodes.filter(function(n) {
-                return n.localName == "item" && !n.disabled;
-            });
-            var current = items.filter(function(n) { return n.checked; })[0] || items[0];
-            if (current && current.$ext) {
-                menu.$selected = current;
-                ui.setStyleClass(current.$ext, "hover");
-            }
-        }
-
-        // under its button, kept inside the window
-        function placeMenu(menu) {
-            var ext = menu.$ext;
-            var button = menu.claudeButton;
-            if (!ext || !button) return;
-            var r = button.getBoundingClientRect();
-            // natural width: at its old place near the window edge the
-            // (shrink-to-fit) menu would be squeezed
-            ext.style.left = "0px";
-            var w = ext.offsetWidth;
-            var left = r.left;
-            if (left + w > window.innerWidth - 6)
-                left = Math.max(6, Math.min(r.right, window.innerWidth - 6) - w);
-            ext.style.left = left + "px";
-        }
-
-        // A header button with a menu of choices (model, effort, permission
-        // mode). source: the items, or a function that returns them (the
-        // model list and the effort levels change). An item: { value,
-        // caption, short (the button label), desc (secondary text), info
-        // (a disabled line) }. node.label and node.tip override the button's
-        // label and tooltip (what the CLI really applies).
-        function select(className, source, title, onchange) {
-            var label = el("span", { className: "claude-select-label" });
-            var button = el("button", { type: "button", className: "claude-select " + className,
-                title: title, "aria-haspopup": "true" }, [label]);
-            var node = { value: "", items: [], extra: [], wrapper: button, menu: null, label: null, tip: null };
+        // A choice (model, effort, mode). source: the items, or a function
+        // that returns them (the model list and the effort levels change).
+        // An item: { value, caption, short (the label), desc, icon }.
+        // node.label and node.tip: what the CLI really applies.
+        function choice(source) {
+            var node = { value: "", items: [], extra: [], label: null, tip: "" };
             node.refresh = function() {
                 var items = typeof source == "function" ? source() : source;
                 node.items = items.concat(node.extra.filter(function(x) {
-                    return !items.some(function(i) { return !i.info && i.value == x.value; });
+                    return !items.some(function(i) { return i.value == x.value; });
                 }));
             };
             node.find = function(value) {
-                return node.items.filter(function(i) { return !i.info && i.value == value; })[0];
+                return node.items.filter(function(i) { return i.value == value; })[0];
             };
-            node.syncLabel = function() {
-                var item = node.find(node.value);
-                label.textContent = node.label || (item ? item.short || item.caption : node.value);
-                button.title = node.tip || title + (item ? ": " + item.caption : node.value ? ": " + node.value : "");
-            };
-            attachMenu(button, function() {
-                if (!node.menu) node.menu = newMenu("claude-choice-menu " + className + "-menu");
-                // rebuilt each time: the model list, the levels of the model
-                // and the modes the CLI reports change
-                node.refresh();
-                clearMenu(node.menu);
-                node.menu.claudeMeta = [];
-                node.items.forEach(function(item) {
-                    if (item.info) return infoItem(node.menu, item.caption);
-                    var mi = node.menu.appendChild(new ui.item({
-                        type: "check",
-                        caption: item.caption,
-                        checked: item.value == node.value,
-                        onclick: function() {
-                            if (item.value == node.value) return;
-                            node.value = item.value;
-                            node.syncLabel();
-                            onchange(item.value);
-                        }
-                    }));
-                    if (item.desc) node.menu.claudeMeta.push({ item: mi, text: item.desc, tip: item.caption + "\n" + item.desc });
-                });
-                return node.menu;
-            });
             node.refresh();
             return node;
         }
@@ -656,11 +755,134 @@ define(function(require, exports, module) {
             // a value the panel does not offer (e.g. bypassPermissions from
             // the user's settings, a model id): show it as it is
             if (value && !node.find(value)) {
-                node.extra.push({ value: value, caption: value });
+                node.extra.push({ value: value, caption: value, short: value, icon: "tool" });
                 node.refresh();
             }
             node.value = node.find(value) ? value : node.items[0].value;
-            node.syncLabel();
+            renderPills();
+        }
+
+        // the model menu: the CLI's models, then the effort of the chosen one
+        function buildModelPop(pop) {
+            pop.heading("Select a model");
+            modelSelect.refresh();
+            modelSelect.items.forEach(function(item) {
+                pop.item({ label: item.caption, desc: item.desc, checked: item.value == modelSelect.value, onpick: function() {
+                    pop.close(true);
+                    if (item.value == modelSelect.value) return;
+                    modelSelect.value = item.value;
+                    onModelChange(item.value);
+                } });
+            });
+            var levels = effortLevels(modelSelect.value);
+            if (levels.length) pop.row(effortControl(pop, [""].concat(levels)));
+        }
+
+        // Effort as a segmented control at the bottom of the model menu:
+        // Auto (Claude's settings decide) and the levels the model supports.
+        // Left and Right change it when its row is highlighted.
+        function effortControl(pop, values) {
+            var valueEl = el("span", { className: "claude-effort-value" });
+            var seg = el("div", { className: "claude-seg", role: "radiogroup", "aria-label": "Effort" });
+            var note = el("div", { className: "claude-effort-note", text: "Max may use many tokens and respond slowly" });
+            var buttons = values.map(function(value) {
+                var b = el("button", { type: "button", tabindex: "-1", className: "claude-seg-btn", role: "radio",
+                    title: value ? effortCaption(value) : "Auto: Claude's settings decide", text: SEGMENTS[value] || value });
+                b.addEventListener("click", function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    set(value);
+                });
+                seg.appendChild(b);
+                return b;
+            });
+            var box = el("div", { className: "claude-effort" }, [
+                el("div", { className: "claude-effort-head" }, [el("span", { text: "Effort" }), valueEl]),
+                seg,
+                note
+            ]);
+            function render() {
+                var current = effortSelect.value;
+                valueEl.textContent = current ? effortCaption(current) : "Auto";
+                box.setAttribute("aria-label", "Effort: " + valueEl.textContent);
+                buttons.forEach(function(b, i) {
+                    var on = values[i] == current;
+                    b.classList.toggle("claude-on", on);
+                    b.setAttribute("aria-checked", on ? "true" : "false");
+                });
+                note.style.display = current == "max" ? "" : "none";
+            }
+            function set(value) {
+                if (value == effortSelect.value) return;
+                effortSelect.value = value;
+                onEffortChange(value);
+                render();
+                pop.place();
+            }
+            render();
+            return {
+                el: box,
+                onpick: function() { pop.close(true); },
+                onKey: function(e) {
+                    if (e.keyCode != 37 && e.keyCode != 39) return false;
+                    var i = Math.max(0, values.indexOf(effortSelect.value)) + (e.keyCode == 39 ? 1 : -1);
+                    set(values[Math.max(0, Math.min(values.length - 1, i))]);
+                    return true;
+                }
+            };
+        }
+
+        function buildModePop(pop) {
+            pop.heading("Mode", "Shift+Tab switches");
+            modeSelect.refresh();
+            modeSelect.items.forEach(function(item) {
+                pop.item({ label: item.caption, desc: item.desc, icon: item.icon || "tool", checked: item.value == modeSelect.value,
+                    onpick: function() {
+                        pop.close(true);
+                        if (item.value == modeSelect.value) return;
+                        setSelect(modeSelect, item.value);
+                        onModeChange(item.value);
+                    } });
+            });
+        }
+
+        // the next mode, from the input (Shift+Tab)
+        function cycleMode() {
+            var i = MODE_CYCLE.indexOf(modeSelect.value || "default");
+            var next = MODE_CYCLE[(i + 1) % MODE_CYCLE.length];
+            setSelect(modeSelect, next);
+            onModeChange(next);
+            flashHint("Mode: " + modeCaption(next) + " (Shift+Tab switches)", true);
+        }
+
+        // the footer's pills: the model (and its effort) and the mode
+        function renderPills() {
+            if (!modelPill || !modelSelect || !effortSelect || !modeSelect) return;
+            var entry = modelSelect.find(modelSelect.value);
+            var name = modelSelect.label || (entry ? entry.short || entry.caption : modelSelect.value);
+            var effort = "";
+            if (effortLevels(modelSelect.value).length)
+                effort = effortSelect.label || (effortSelect.value ? effortCaption(effortSelect.value) : "");
+            modelPill.querySelector(".claude-pill-name").textContent = name;
+            modelPill.querySelector(".claude-pill-effort").textContent = effort ? " · " + effort : "";
+            modelPill.title = (modelSelect.tip || "Model: " + name) + (effortSelect.tip && effortLevels(modelSelect.value).length
+                ? "\n" + effortSelect.tip : "");
+            var mode = modeSelect.find(modeSelect.value) || { caption: modeSelect.value, short: modeSelect.value, icon: "tool" };
+            var iconEl = modePill.querySelector(".claude-pill-icon");
+            iconEl.textContent = "";
+            iconEl.appendChild(icon(mode.icon || "tool"));
+            modePill.querySelector(".claude-pill-label").textContent = mode.short || mode.caption;
+            modePill.title = "Permission mode: " + mode.caption + " (Shift+Tab in the input switches)";
+        }
+
+        // a narrow panel: the mode pill shows its icon only, then the model pill its name only
+        function fitWidth() {
+            if (!root) return;
+            var w = root.clientWidth;
+            if (!w) return;
+            root.classList.toggle("claude-narrow", w < 360);
+            root.classList.toggle("claude-tiny", w < 310);
+            pops.forEach(function(pop) { if (pop.visible) pop.place(); });
         }
 
         /***** Session history *****/
@@ -679,48 +901,42 @@ define(function(require, exports, module) {
 
         // The recent Claude Code sessions of this workspace (the panel's and
         // the terminal's), newest first. The service reads the transcripts.
-        function buildHistoryMenu() {
-            if (!historyMenu)
-                historyMenu = newMenu("claude-history-menu");
-            clearMenu(historyMenu);
-            historyMenu.claudeMeta = [];
-            if (!api) {
-                infoItem(historyMenu, "Not connected to the server");
-                return historyMenu;
-            }
-            infoItem(historyMenu, "Loading sessions…");
+        var historyData = null;
+        function loadHistory(pop) {
+            historyData = { loading: true };
+            if (!api) return;
             api.sessions(function(err, res) {
-                clearMenu(historyMenu);
-                historyMenu.claudeMeta = [];
-                var list = !err && res && Array.isArray(res.sessions) ? res.sessions : [];
-                if (err)
-                    infoItem(historyMenu, "Could not read the sessions: " + (err.message || err));
-                else if (!list.length)
-                    infoItem(historyMenu, "No Claude Code sessions in this workspace yet.");
-                list.forEach(function(item) {
-                    if (!item || !UUID_RE.test(item.id || "")) return;
-                    var title = String(item.title || "Untitled");
-                    var when = relativeTime(item.mtime, res.now || Date.now());
-                    var open = item.elsewhere && typeof item.elsewhere == "object";
-                    var meta = [item.folder, when, open ? "open elsewhere" : ""].filter(Boolean).join(" · ");
-                    var mi = historyMenu.appendChild(new ui.item({
-                        type: "check",
-                        caption: title.length > 64 ? title.slice(0, 63) + "…" : title,
-                        checked: item.id == sessionId,
-                        onclick: function() {
-                            if (item.id != sessionId) resumeSession(item.id, item);
-                        }
-                    }));
-                    historyMenu.claudeMeta.push({ item: mi, text: meta, tip: title
-                        + "\n" + (item.folder ? "Folder: " + item.folder + "\n" : "")
+                historyData = err ? { error: err.message || String(err) }
+                    : { list: res && Array.isArray(res.sessions) ? res.sessions : [], now: res && res.now || Date.now() };
+                pop.refresh();
+            });
+        }
+
+        function buildHistoryPop(pop) {
+            pop.heading("Sessions");
+            if (!api) return pop.info("Not connected to the server");
+            if (!historyData || historyData.loading) return pop.info("Loading sessions…");
+            if (historyData.error) return pop.info("Could not read the sessions: " + historyData.error);
+            var list = historyData.list.filter(function(item) { return item && UUID_RE.test(item.id || ""); });
+            if (!list.length) return pop.info("No Claude Code sessions in this workspace yet.");
+            list.forEach(function(item) {
+                var title = String(item.title || "Untitled");
+                var open = item.elsewhere && typeof item.elsewhere == "object";
+                var meta = [item.folder, relativeTime(item.mtime, historyData.now), open ? "open elsewhere" : ""].filter(Boolean).join(" · ");
+                pop.item({
+                    label: title.length > 100 ? title.slice(0, 99) + "…" : title,
+                    desc: meta,
+                    checked: item.id == sessionId,
+                    title: title + "\n" + (item.folder ? "Folder: " + item.folder + "\n" : "")
                         + "Last activity: " + new Date(item.mtime).toLocaleString()
                         + (open ? item.elsewhere.how == "process" ? "\nOpen in another process (e.g. a terminal)"
-                            : "\nIt may still be open elsewhere" : "") });
+                            : "\nIt may still be open elsewhere" : ""),
+                    onpick: function() {
+                        pop.close(true);
+                        if (item.id != sessionId) resumeSession(item.id, item);
+                    }
                 });
-                applyMeta(historyMenu);
-                if (historyMenu.visible) placeMenu(historyMenu);
             });
-            return historyMenu;
         }
 
         function codeSpan(text) {
@@ -813,11 +1029,15 @@ define(function(require, exports, module) {
             else if (stopping) { text = "Stopping…"; state = "busy"; }
             else if (pending) { text = "Waiting for your approval"; state = "waiting"; }
             else if (busy) { text = taskSummary || "Working…"; state = "busy"; }
-            else if (sessionId) { text = "Ready"; state = "ready"; }
-            else { text = "New session"; state = "ready"; }
+            else { text = "Ready"; state = "ready"; }
             statusText.textContent = text;
-            statusText.title = sessionId ? "Session " + sessionId : "";
+            statusText.title = text + (sessionId ? "\nSession " + sessionId : "");
+            statusText.classList.toggle("claude-summary", busy && !!taskSummary && !pending && !stopping);
             statusDot.className = "claude-status-dot claude-dot-" + state;
+            titleEl.textContent = sessionTitle || "New session";
+            titleEl.title = sessionTitle || "";
+            titleEl.classList.toggle("claude-untitled", !sessionTitle);
+            textarea.placeholder = busy || stopping ? "Queue another message…" : "Ask Claude…";
 
             btnHistory.disabled = !api;
             btnNew.disabled = !hasMessages && !sessionId;
@@ -1787,159 +2007,255 @@ define(function(require, exports, module) {
             return parts;
         }
 
+        // Permission requests wait in order; the first one takes the place of
+        // the input box ("1 of 2" when more wait). The tool card in the
+        // conversation says "Needs approval", then shows the outcome.
+        var promptQueue = [];
+        var promptShown = null;
+
         function showPermission(message) {
             var id = message.request_id;
             var req = message.request || {};
             if (!id || permCards[id]) return;
-            var name = req.tool_name;
-            var input = req.input || {};
             var toolCard = req.tool_use_id && toolCards[req.tool_use_id];
             if (toolCard) {
                 toolCard.setStatus("waiting");
-                // the prompt shows the preview: do not show it twice
+                // the prompt shows the preview: not twice
                 toolCard.toggle(false);
             }
+            var card = { id: id, req: req, name: req.tool_name, input: req.input || {}, toolCard: toolCard, pending: true };
+            card.resolve = function(how) {
+                if (!card.pending) return;
+                card.pending = false;
+                var tc = card.toolCard;
+                if (tc) {
+                    if (how == "allow" || how == "allowAlways") {
+                        tc.setStatus("running");
+                        if (EXPANDED_BY_DEFAULT[card.name]) tc.toggle(true);
+                    }
+                    else if (how == "deny" || how == "stopped") tc.setStatus("denied");
+                }
+                // what is worth keeping in the conversation
+                var text = null;
+                if (how == "allowAlways")
+                    text = rememberedText(req.permission_suggestions, suggestionLabel(req.permission_suggestions));
+                else if (how == "expired")
+                    text = "This request is no longer pending";
+                else if (!tc && how != "cancelled")
+                    text = ({ allow: card.name == "AskUserQuestion" ? "Answered" : "Allowed",
+                        deny: card.name == "AskUserQuestion" ? "Skipped" : "Denied", stopped: "Denied (stopped)" }[how] || how)
+                        + ": " + promptTitleText(card);
+                if (text) {
+                    var note = el("div", { className: "claude-notice claude-notice-quiet", text: text });
+                    if (tc && tc.el.parentNode) tc.el.parentNode.insertBefore(note, tc.el.nextSibling);
+                    else appendTo(note);
+                }
+                renderPrompt();
+                updateStatus();
+            };
+            permCards[id] = card;
+            promptQueue.push(card);
+            renderPrompt();
+            updateStatus();
+            autoScroll = true;
+            scrollToEnd(true);
+        }
 
-            var actions = el("div", { className: "claude-actions" });
-            var stateEl = el("div", { className: "claude-perm-state" });
-            var node = el("div", { className: "claude-perm" }, [
-                el("div", { className: "claude-perm-title" }, [
-                    icon(name == "AskUserQuestion" ? "question" : "shield", "claude-perm-icon"),
-                    el("span", { className: "claude-perm-text" }, permissionTitle(name, input, req.display_name))
-                ])
+        function promptTitleText(card) {
+            return el("span", null, permissionTitle(card.name, card.input, card.req.display_name)).textContent;
+        }
+
+        // shows the first waiting request, or the input box again
+        function renderPrompt() {
+            promptQueue = promptQueue.filter(function(card) { return card.pending; });
+            var focusHere = !document.activeElement || document.activeElement == document.body
+                || root.contains(document.activeElement);
+            if (promptShown && promptShown.pending) {
+                promptShown.count(promptQueue.length);
+                return;
+            }
+            promptShown = promptQueue[0] || null;
+            promptSlot.textContent = "";
+            root.classList.toggle("claude-prompting", !!promptShown);
+            if (!promptShown) {
+                promptSlot.style.display = "none";
+                composerBox.style.display = "";
+                if (focusHere) textarea.focus();
+                return;
+            }
+            closePops();
+            promptSlot.style.display = "";
+            composerBox.style.display = "none";
+            promptSlot.appendChild(buildPrompt(promptShown));
+            promptShown.count(promptQueue.length);
+            if (focusHere) promptShown.focus();
+        }
+
+        // The prompt: the question, a preview that folds, numbered choices
+        // (1 Yes, 2 Yes and remember, 3 No; keys 1-3, Up/Down and Enter), a
+        // note for Claude (Enter: deny and go on with the note), Esc to deny.
+        function buildPrompt(card) {
+            var name = card.name, input = card.input, req = card.req;
+            var shownAt = Date.now();
+            var answers = {};
+            var question = name == "AskUserQuestion";
+            var plan = name == "ExitPlanMode";
+            var countEl = el("span", { className: "claude-prompt-count" });
+            var node = el("div", { className: "claude-prompt", role: "group" });
+            var titleId = "claude-prompt-title-" + (++popIds);
+            node.setAttribute("aria-labelledby", titleId);
+            var head = el("div", { className: "claude-prompt-head" }, [
+                icon(question ? "question" : plan ? "plan" : "shield", "claude-prompt-icon"),
+                el("span", { className: "claude-prompt-title", id: titleId }, permissionTitle(name, input, req.display_name)),
+                countEl
             ]);
-            var desc = req.description && name != "AskUserQuestion" && req.description != input.file_path
+            node.appendChild(head);
+
+            var desc = req.description && !question && req.description != input.file_path
                 && !(name == "Write" || name == "Edit" || name == "MultiEdit") ? req.description : null;
             if (name == "Bash" && input.description) desc = input.description;
-            if (desc)
-                node.appendChild(el("div", { className: "claude-perm-desc", text: desc }));
+            if (desc) node.appendChild(el("div", { className: "claude-prompt-desc", text: desc }));
             if (req.decision_reason && typeof req.decision_reason == "string")
-                node.appendChild(el("div", { className: "claude-perm-desc", text: req.decision_reason }));
+                node.appendChild(el("div", { className: "claude-prompt-desc", text: req.decision_reason }));
             if (req.blocked_path)
-                node.appendChild(el("div", { className: "claude-perm-desc" }, ["Path: ", fileLink(req.blocked_path)]));
+                node.appendChild(el("div", { className: "claude-prompt-desc" }, ["Path: ", fileLink(req.blocked_path)]));
 
-            var card = { id: id, el: node, pending: true, toolCard: toolCard };
-            permCards[id] = card;
-
-            var answers = {};
-            if (name == "AskUserQuestion") {
-                node.appendChild(questionForm(input.questions || [], answers, function() { decide("allow"); }));
+            if (question) {
+                node.appendChild(el("div", { className: "claude-prompt-body" },
+                    [questionForm(input.questions || [], answers, function() { decide("allow"); })]));
             }
             else {
                 var preview = name == "Bash"
                     ? codePreview(input.command, "command.sh", 40, true)
                     : inputPreview(name, input, true);
-                if (preview) node.appendChild(el("div", { className: "claude-perm-preview" }, [preview]));
+                if (preview) {
+                    var body = el("div", { className: "claude-prompt-body" }, [preview]);
+                    var toggle = el("button", { type: "button", className: "claude-prompt-toggle", "aria-expanded": "true",
+                        title: "Hide the details" }, [icon("chevron")]);
+                    toggle.addEventListener("click", function(e) {
+                        e.preventDefault();
+                        var hidden = node.classList.toggle("claude-folded");
+                        toggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+                        toggle.title = hidden ? "Show the details" : "Hide the details";
+                    });
+                    head.appendChild(toggle);
+                    node.appendChild(body);
+                }
             }
 
-            var buttons = [];
-            var shownAt = Date.now();
-            var feedbackEl = null;
-            // Deny without a note: the turn stops and Claude waits for the
-            // user. With a note (what to do instead): Claude goes on with it.
-            function decide(behavior, feedback) {
-                if (!card.pending) return;
-                // a click meant for what was there before the prompt appeared
-                if (Date.now() - shownAt < PROMPT_GUARD) return;
-                if (!api) return showError("Not connected to the Claude service");
-                buttons.forEach(function(b) { b.disabled = true; });
-                if (feedbackEl) feedbackEl.disabled = true;
-                var decision = { behavior: behavior };
-                if (name == "AskUserQuestion" && behavior == "allow") decision.answers = answers;
-                if (behavior == "deny") {
-                    if (name == "AskUserQuestion") decision.message = "The user skipped the question.";
-                    else if (feedback) decision.message = "The user denied this tool call and said what to do instead: " + feedback;
-                    else decision.interrupt = true;
-                }
-                api.respond(id, decision, function(err) {
-                    if (err) {
-                        card.resolve("expired");
-                        return;
-                    }
-                    card.resolve(behavior);
-                    if (feedback) renderUserMessage(feedback, [], false, true);
-                });
-            }
-            if (name == "AskUserQuestion") {
-                buttons.push(textButton("Submit answers", "claude-btn-primary", function() { decide("allow"); }));
-                buttons.push(textButton("Skip", "claude-btn-secondary", function() { decide("deny"); }));
+            // the choices
+            var choices = [];
+            if (question) {
+                choices.push({ label: "Submit answers", behavior: "allow" });
+                choices.push({ label: "Skip", behavior: "deny" });
             }
             else {
-                buttons.push(textButton(name == "ExitPlanMode" ? "Yes, start" : "Allow", "claude-btn-primary", function() { decide("allow"); }, "Allow this once"));
+                choices.push({ label: plan ? "Yes, start" : "Yes", behavior: "allow" });
                 var label = suggestionLabel(req.permission_suggestions);
-                if (label)
-                    buttons.push(textButton(label, "claude-btn-secondary", function() { decide("allowAlways"); }));
-                var denyCaption = name == "ExitPlanMode" ? "No, keep planning" : "Deny";
-                var denyBtn = textButton(denyCaption, "claude-btn-secondary claude-btn-deny", function() {
-                    decide("deny", feedbackEl.value.trim());
-                }, "Claude stops and waits for you; or write what to do instead below");
-                buttons.push(denyBtn);
+                if (label) choices.push({ label: "Yes, " + label.charAt(0).toLowerCase() + label.slice(1), behavior: "allowAlways" });
+                choices.push({ label: plan ? "No, keep planning" : "No", behavior: "deny" });
+            }
+            var active = 0;
+            var list = el("div", { className: "claude-choices", role: "listbox", tabindex: "0", "aria-labelledby": titleId });
+            var rows = choices.map(function(c, i) {
+                var row = el("div", { className: "claude-choice", role: "option", id: titleId + "-" + i }, [
+                    el("span", { className: "claude-choice-key", text: String(i + 1) }),
+                    el("span", { className: "claude-choice-label", text: c.label })
+                ]);
+                row.addEventListener("mousemove", function() { highlight(i); });
+                row.addEventListener("click", function(e) {
+                    e.preventDefault();
+                    pick(i);
+                });
+                list.appendChild(row);
+                return row;
+            });
+            function highlight(i) {
+                active = Math.max(0, Math.min(rows.length - 1, i));
+                rows.forEach(function(row, k) {
+                    row.classList.toggle("claude-active", k == active);
+                    row.setAttribute("aria-selected", k == active ? "true" : "false");
+                });
+                list.setAttribute("aria-activedescendant", rows[active].id);
+            }
+            highlight(0);
+            node.appendChild(list);
+
+            var feedbackEl = null;
+            if (!question) {
                 feedbackEl = el("input", { type: "text", className: "claude-perm-feedback",
                     placeholder: "Tell Claude what to do instead", "aria-label": "Tell Claude what to do instead (Enter)" });
-                feedbackEl.addEventListener("input", function() {
-                    denyBtn.textContent = feedbackEl.value.trim()
-                        ? (name == "ExitPlanMode" ? "No, and tell Claude" : "Deny and tell Claude") : denyCaption;
-                });
                 feedbackEl.addEventListener("keydown", function(e) {
-                    if (e.keyCode != 13 || e.isComposing) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (feedbackEl.value.trim()) decide("deny", feedbackEl.value.trim());
+                    if (e.keyCode == 13 && !e.isComposing) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (feedbackEl.value.trim()) decide("deny", feedbackEl.value.trim());
+                    }
+                    else if (e.keyCode == 27 && feedbackEl.value) {
+                        // Esc first clears the note, then denies
+                        e.preventDefault();
+                        e.stopPropagation();
+                        feedbackEl.value = "";
+                    }
+                    else if (e.keyCode == 38 && !feedbackEl.value) {
+                        e.preventDefault();
+                        list.focus();
+                        highlight(rows.length - 1);
+                    }
+                });
+                node.appendChild(feedbackEl);
+            }
+            node.appendChild(el("div", { className: "claude-prompt-hint", text: question ? "Esc to skip" : "Esc to deny" }));
+
+            list.addEventListener("keydown", function(e) {
+                var n = e.keyCode >= 49 && e.keyCode <= 57 ? e.keyCode - 49 : e.keyCode >= 97 && e.keyCode <= 105 ? e.keyCode - 97 : -1;
+                if (n >= 0 && n < rows.length && !e.ctrlKey && !e.metaKey && !e.altKey) pick(n);
+                else if (e.keyCode == 40) {
+                    if (active == rows.length - 1 && feedbackEl) feedbackEl.focus();
+                    else highlight(active + 1);
+                }
+                else if (e.keyCode == 38) highlight(active - 1);
+                else if (e.keyCode == 13 || e.keyCode == 32) pick(active);
+                else return;
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            function pick(i) {
+                var c = choices[i];
+                if (c) decide(c.behavior);
+            }
+            // note: the user's text (deny, and Claude goes on with it); without
+            // one, a denial stops the turn and Claude waits
+            function decide(behavior, note) {
+                if (!card.pending || card.answering) return;
+                // a click or key meant for what was there before the prompt
+                if (Date.now() - shownAt < PROMPT_GUARD) return;
+                if (!api) return showError("Not connected to the Claude service");
+                card.answering = true;
+                node.classList.add("claude-answering");
+                var decision = { behavior: behavior };
+                if (question && behavior == "allow") decision.answers = answers;
+                if (behavior == "deny") {
+                    if (question) decision.message = "The user skipped the question.";
+                    else if (note) decision.message = "The user denied this tool call and said what to do instead: " + note;
+                    else decision.interrupt = true;
+                }
+                api.respond(card.id, decision, function(err) {
+                    card.answering = false;
+                    if (err) return card.resolve("expired");
+                    card.resolve(behavior);
+                    if (note) renderUserMessage(note, [], false, true);
                 });
             }
-            buttons.forEach(function(b) { actions.appendChild(b); });
-            node.appendChild(actions);
-            if (feedbackEl) node.appendChild(feedbackEl);
-            node.appendChild(stateEl);
-
-            card.resolve = function(how) {
-                if (!card.pending) return;
-                card.pending = false;
-                node.classList.add("claude-resolved");
-                actions.style.display = "none";
-                var text = {
-                    allow: name == "AskUserQuestion" ? "Answered" : "Allowed",
-                    allowAlways: "Allowed · " + (label || "remembered"),
-                    deny: name == "AskUserQuestion" ? "Skipped" : "Denied",
-                    stopped: "Denied (stopped)",
-                    cancelled: "No longer needed",
-                    expired: "This request is no longer pending"
-                }[how] || how;
-                stateEl.textContent = text;
-                if (feedbackEl) feedbackEl.style.display = "none";
-                node.classList.add("claude-perm-" + (how == "allowAlways" ? "allow" : how));
-                if (card.toolCard) {
-                    if (how == "allow" || how == "allowAlways") {
-                        card.toolCard.setStatus("running");
-                        if (EXPANDED_BY_DEFAULT[name]) card.toolCard.toggle(true);
-                    }
-                    else if (how == "deny" || how == "stopped") card.toolCard.setStatus("denied");
-                    // the tool card shows the outcome; keep only what is worth knowing
-                    if (how != "expired" && node.parentNode) {
-                        if (how == "allowAlways")
-                            node.parentNode.insertBefore(el("div", { className: "claude-notice claude-notice-quiet",
-                                text: rememberedText(req.permission_suggestions, label) }), node);
-                        node.parentNode.removeChild(node);
-                    }
-                }
-                updateStatus();
+            card.escape = function() { decide("deny"); };
+            card.count = function(total) {
+                countEl.textContent = total > 1 ? "1 of " + total : "";
             };
-
-            if (toolCard && toolCard.el.parentNode) {
-                toolCard.el.parentNode.insertBefore(node, toolCard.el.nextSibling);
-            }
-            else {
-                appendTo(node);
-            }
-            hasMessages = true;
-            updateStatus();
-            autoScroll = true;
-            scrollToEnd(true);
-            // focus the first button only when the panel already has the focus
-            var first = buttons[0];
-            if (first && root.contains(document.activeElement) && document.activeElement != textarea) {
-                try { first.focus({ preventScroll: true }); } catch (e) {}
-            }
+            card.focus = function() {
+                try { list.focus({ preventScroll: true }); } catch (e) {}
+            };
+            return node;
         }
 
         function questionForm(questions, answers, submit) {
@@ -2391,68 +2707,82 @@ define(function(require, exports, module) {
                 e.stopPropagation();
                 interrupt();
             }
+            // Shift+Tab: the next permission mode
+            else if (e.keyCode == 9 && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                cycleMode();
+            }
         }
 
         function onPaste(e) {
             var files = images.filesFrom(e.clipboardData);
             if (!files.length) return;
             e.preventDefault();
-            addFiles(files);
+            addFiles(files, true);
         }
 
+        // A line above the input: a short message (quiet: not a warning),
+        // otherwise, once half of the context is used, how much is left
+        // before the CLI compacts the conversation.
         var hintTimer = null;
-        function flashHint(text) {
-            var hint = composer.querySelector(".claude-composer-hint");
-            hint.textContent = text;
-            hint.classList.add("claude-hint-alert");
-            hint.classList.remove("claude-hint-context");
+        function flashHint(text, quiet) {
+            noteEl.textContent = text;
+            noteEl.className = "claude-composer-note claude-show" + (quiet ? "" : " claude-hint-alert");
+            noteEl.title = "";
             clearTimeout(hintTimer);
             hintTimer = setTimeout(function() {
                 hintTimer = null;
-                hint.classList.remove("claude-hint-alert");
                 updateHint();
             }, 3500);
         }
 
-        // The composer hint; once half of the context is used, how much is
-        // left before the CLI compacts the conversation.
         function updateHint() {
-            if (!composer || hintTimer) return;
-            var hint = composer.querySelector(".claude-composer-hint");
+            if (!noteEl || hintTimer) return;
             var size = contextWindow > 0 ? contextWindow : 0;
             var used = size && contextUsed ? contextUsed / size : 0;
             var meter = used >= 0.5;
-            hint.textContent = meter
-                ? Math.max(0, Math.round((1 - used) * 100)) + "% of context left before auto-compact"
-                : "Enter to send, Shift+Enter for a new line";
-            hint.title = meter ? "About " + formatTokens(contextUsed) + " of " + formatTokens(size) + " in use" : "";
-            hint.classList.toggle("claude-hint-context", meter);
-            hint.classList.toggle("claude-hint-low", meter && used >= 0.85);
+            noteEl.textContent = meter ? Math.max(0, Math.round((1 - used) * 100)) + "% of context left before auto-compact" : "";
+            noteEl.title = meter ? "About " + formatTokens(contextUsed) + " of " + formatTokens(size) + " in use" : "";
+            noteEl.className = "claude-composer-note" + (meter ? " claude-show claude-hint-context" : "")
+                + (meter && used >= 0.85 ? " claude-hint-low" : "");
         }
 
-        function addFiles(files) {
+        // Each image is a chip above the input: a thumbnail, its name (or
+        // "pasted image") and its size; a larger preview on hover.
+        function addFiles(files, pasted) {
             files.forEach(function(file) {
                 if (attachments.length >= MAX_ATTACHMENTS)
                     return flashHint("At most " + MAX_ATTACHMENTS + " images per message");
-                var item = { name: file.name || "image", loading: true };
+                var item = { name: pasted ? "pasted image" : file.name || "image", loading: true };
                 attachments.push(item);
-                var thumb = el("div", { className: "claude-thumb claude-loading", title: item.name });
-                var remove = iconButton("close", "Remove", function() {
+                var thumb = el("span", { className: "claude-chip-thumb" });
+                var sizeEl = el("span", { className: "claude-chip-size", text: "…" });
+                var chip = el("div", { className: "claude-chip claude-loading", title: item.name }, [
+                    thumb,
+                    el("span", { className: "claude-chip-name", text: item.name }),
+                    sizeEl
+                ]);
+                var remove = iconButton("close", "Remove " + item.name, function() {
                     var i = attachments.indexOf(item);
                     if (i != -1) attachments.splice(i, 1);
-                    if (thumb.parentNode) thumb.parentNode.removeChild(thumb);
+                    if (chip.parentNode) chip.parentNode.removeChild(chip);
+                    hidePreview();
                     updateAttachments();
+                    textarea.focus();
                 });
-                remove.classList.add("claude-thumb-remove");
-                thumb.appendChild(remove);
-                item.el = thumb;
-                attachRow.appendChild(thumb);
+                remove.classList.add("claude-chip-remove");
+                chip.appendChild(remove);
+                chip.addEventListener("mouseenter", function() { showPreview(chip, item); });
+                chip.addEventListener("mouseleave", hidePreview);
+                item.el = chip;
+                attachRow.appendChild(chip);
                 updateAttachments();
                 images.prepare(file, function(err, image) {
                     if (attachments.indexOf(item) == -1) return;
                     if (err) {
                         attachments.splice(attachments.indexOf(item), 1);
-                        if (thumb.parentNode) thumb.parentNode.removeChild(thumb);
+                        if (chip.parentNode) chip.parentNode.removeChild(chip);
                         updateAttachments();
                         return flashHint(err.message);
                     }
@@ -2461,16 +2791,39 @@ define(function(require, exports, module) {
                     item.data = image.data;
                     item.width = image.width;
                     item.height = image.height;
-                    thumb.classList.remove("claude-loading");
-                    var img = el("img", { alt: item.name });
+                    chip.classList.remove("claude-loading");
+                    var img = el("img", { alt: "" });
                     img.src = "data:" + image.mediaType + ";base64," + image.data;
-                    thumb.insertBefore(img, remove);
-                    thumb.title = item.name + " · " + image.width + "×" + image.height
-                        + " · " + Math.round(image.size / 1024) + " KB" + (image.resized ? " (resized)" : "");
+                    thumb.appendChild(img);
+                    sizeEl.textContent = image.width + "×" + image.height + " · " + formatSize(image.size);
+                    chip.title = item.name + " · " + sizeEl.textContent + (image.resized ? " (resized)" : "");
                     updateAttachments();
                 });
             });
             textarea.focus();
+        }
+
+        function formatSize(bytes) {
+            return bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + " KB" : (bytes / 1024 / 1024).toFixed(1) + " MB";
+        }
+
+        // the larger preview of an attached image, above its chip, inside the panel
+        function showPreview(chip, item) {
+            if (!item.data) return;
+            chipPreview.textContent = "";
+            var img = el("img", { alt: item.name });
+            img.src = "data:" + item.mediaType + ";base64," + item.data;
+            chipPreview.appendChild(img);
+            chipPreview.classList.add("claude-show");
+            var r = root.getBoundingClientRect(), c = chip.getBoundingClientRect();
+            var w = chipPreview.offsetWidth;
+            chipPreview.style.left = Math.max(8, Math.min(c.left - r.left, r.width - w - 8)) + "px";
+            chipPreview.style.bottom = (r.bottom - c.top + 6) + "px";
+        }
+
+        function hidePreview() {
+            chipPreview.classList.remove("claude-show");
+            chipPreview.textContent = "";
         }
 
         function updateAttachments() {
@@ -2481,6 +2834,7 @@ define(function(require, exports, module) {
         function clearAttachments() {
             attachments = [];
             attachRow.textContent = "";
+            hidePreview();
             updateAttachments();
         }
 
@@ -2557,6 +2911,7 @@ define(function(require, exports, module) {
             if (!alreadyShown) renderUserMessage(text.trim() ? text : "", imgs);
             if (!sessionId && !hasSentInSession)
                 pendingTitle = firstLine(text || "(image)", 80);
+            if (!sessionTitle) sessionTitle = firstLine(text || "(image)", 80);
             hasSentInSession = true;
             lastResultError = false;
             startTurn();
@@ -2734,7 +3089,7 @@ define(function(require, exports, module) {
             function str(v) { return typeof v == "string" ? v : null; }
         }
 
-        // The button labels: what the CLI applies, when it is known for the
+        // The pill's label: what the CLI applies, when it is known for the
         // current choice; otherwise the choice (applied when claude starts).
         function updateSettingLabels() {
             if (!drawn) return;
@@ -2748,14 +3103,11 @@ define(function(require, exports, module) {
             var inUse = fresh && applied.model ? modelName(applied.model) : "";
             modelSelect.label = inUse || null;
             modelSelect.tip = "Model: " + chosen + (inUse && inUse != chosen ? " · in use: " + inUse : fresh ? "" : later);
-            // no effort control for a model without effort levels
-            effortSelect.wrapper.style.display = effortLevels(modelSelect.value).length ? "" : "none";
             effortSelect.label = fresh && applied.effort ? effortCaption(applied.effort) : null;
             effortSelect.tip = "Effort: " + (effortSelect.value ? effortCaption(effortSelect.value) : "Auto (Claude's settings decide)")
                 + (fresh && applied.effort && applied.effort != effortSelect.value ? " · in use: " + effortCaption(applied.effort)
                     : fresh ? "" : later);
-            modelSelect.syncLabel();
-            effortSelect.syncLabel();
+            renderPills();
         }
 
         // the CLI's model list and applied settings, after it started
@@ -2934,6 +3286,7 @@ define(function(require, exports, module) {
 
         function clearChat() {
             finishTurn();
+            sessionTitle = "";
             toolCards = Object.create(null);
             permCards = Object.create(null);
             [].slice.call(logEl.childNodes).forEach(function(node) {
@@ -2982,15 +3335,19 @@ define(function(require, exports, module) {
             sessionId = id;
             hasSentInSession = true;
             setSelect(modeSelect, settings.get("user/claude/@mode") || "");
-            var title = info && info.title ? String(info.title) : "";
+            var title = info && info.title ? String(info.title)
+                : id == settings.get("state/claude/@session") ? settings.get("state/claude/@title") || "" : "";
             var name = title ? "\u201c" + (title.length > 60 ? title.slice(0, 59) + "\u2026" : title) + "\u201d"
                 : "session " + id.slice(0, 8);
+            sessionTitle = title ? firstLine(title, 80) : "";
             var notice = showNotice("Resuming " + name + "\u2026", "claude-notice-quiet");
             updateStatus();
             if (!api) return;
             api.history(id, function(err, res) {
                 if (sessionId != id) return;
                 if (err || !res || !res.found) {
+                    sessionTitle = sessionTitle || "Session " + id.slice(0, 8);
+                    updateStatus();
                     notice.textContent = "Resumed " + name
                         + ". Its earlier messages are not available here; Claude still remembers them.";
                     return;
@@ -2998,6 +3355,9 @@ define(function(require, exports, module) {
                 notice.textContent = "Resumed " + name + (res.folder ? " (in " + res.folder + ")" : "")
                     + (res.truncated ? "; older messages are not shown" : "");
                 renderHistory(res.messages || []);
+                // no title from the list: the first prompt
+                if (!sessionTitle) sessionTitle = firstPrompt(res.messages || []) || "Session " + id.slice(0, 8);
+                updateStatus();
                 if (res.elsewhere) askElsewhere(id, res.elsewhere);
             });
             textarea.focus();
@@ -3039,6 +3399,18 @@ define(function(require, exports, module) {
             autoScroll = true;
             scrollToEnd(true);
             updateStatus();
+        }
+
+        function firstPrompt(messages) {
+            for (var i = 0; i < messages.length; i++) {
+                var m = messages[i];
+                if (!m || m.type != "user" || m.parent_tool_use_id) continue;
+                var content = m.message && m.message.content;
+                var text = typeof content == "string" ? content : Array.isArray(content)
+                    ? content.filter(function(b) { return b && b.type == "text"; }).map(function(b) { return b.text; }).join(" ") : "";
+                if (text && text.trim() && !/^\[Request interrupted/.test(text)) return firstLine(text, 80);
+            }
+            return "";
         }
 
         function renderHistory(messages) {
