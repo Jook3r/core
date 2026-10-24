@@ -180,6 +180,7 @@ define(function(require, exports, module) {
         var chatFolder = "";            // the folder it runs in ("": the workspace)
         var chatCwd = "";               // the folder the CLI reports (relative paths)
         var acctInfo = {};              // account -> what the service knows (login, email, sharing)
+        var defaultEnvDir = null;       // the server's own CLAUDE_CONFIG_DIR (the default account's)
         var tabMemory = Object.create(null);    // account -> { effort, ultracode } in this tab
 
         // model and effort: the CLI's model list, and what it really applies
@@ -1381,7 +1382,10 @@ define(function(require, exports, module) {
         function refreshAccounts(callback) {
             if (!api) return callback && callback();
             api.accounts(allAccounts().map(function(a) { return a.dir; }), function(err, res) {
-                if (!err && res && res.accounts && typeof res.accounts == "object") acctInfo = res.accounts;
+                if (!err && res && res.accounts && typeof res.accounts == "object") {
+                    acctInfo = res.accounts;
+                    defaultEnvDir = typeof res.defaultEnv == "string" && /^\//.test(res.defaultEnv) ? res.defaultEnv : null;
+                }
                 renderWhere();
                 if (wherePop && wherePop.visible) wherePop.refresh();
                 renderAccountsPrefs();
@@ -1394,11 +1398,22 @@ define(function(require, exports, module) {
         }
 
         // A terminal that runs claude with the account's folder, to log in
-        // (/login) the way Claude Code does it
+        // (/login) the way Claude Code does it. The default account: with the
+        // server's CLAUDE_CONFIG_DIR, if it has one.
         function loginAccount(key) {
             var bin = settings.get("user/claude/@path") || "claude";
-            var command = (key ? "CLAUDE_CONFIG_DIR=\"$HOME/" + key + "\" " : "")
-                + (/^[A-Za-z0-9_\/.~+-]+$/.test(bin) ? bin : "'" + bin.replace(/'/g, "'\\''") + "'");
+            var home = String(cliInfo && cliInfo.home || c9.home || "").replace(/\/$/, "");
+            var rest = defaultEnvDir && home && defaultEnvDir.indexOf(home + "/") === 0 ? defaultEnvDir.slice(home.length) : null;
+            // only the "$HOME" written here is expanded by the shell
+            var dir = key ? "\"$HOME/" + key + "\""
+                : !defaultEnvDir ? ""
+                : rest && /^[A-Za-z0-9_\/.+-]+$/.test(rest) ? "\"$HOME" + rest + "\""
+                : quote(defaultEnvDir);
+            var command = (dir ? "CLAUDE_CONFIG_DIR=" + dir + " " : "")
+                + (/^[A-Za-z0-9_\/.~+-]+$/.test(bin) ? bin : quote(bin));
+            function quote(text) {
+                return "'" + text.replace(/'/g, "'\\''") + "'";
+            }
             // the terminal's cwd is relative to the workspace unless it
             // starts with "~" (the server expands that to the home folder)
             tabManager.open({ focus: true, active: true, editorType: "terminal",

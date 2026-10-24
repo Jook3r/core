@@ -456,7 +456,9 @@ module.exports = function(vfs, options, register) {
             if (key && info.exists) info.share = shareState(key);
             out[key] = info;
         });
-        callback(null, { accounts: out, home: home, defaultDir: tilde(defaultConfigDir()) });
+        // defaultEnv: the server's own CLAUDE_CONFIG_DIR (a terminal needs it too)
+        callback(null, { accounts: out, home: home, defaultDir: tilde(defaultConfigDir()),
+            defaultEnv: process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : null });
     }
 
     function readJson(file, max) {
