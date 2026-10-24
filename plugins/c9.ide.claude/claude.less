@@ -97,15 +97,32 @@
 
 /* ---- Header ------------------------------------------------------------- */
 
+/* as tall as the bar of the editor tabs next to it, so its line continues
+   the tabs' line */
 .claude-header {
     flex: none;
     display: flex;
     align-items: center;
     gap: 6px;
-    min-height: 36px;
-    padding: 4px 6px 4px 12px;
+    height: @pane-button-container-height;
+    padding: 0 6px 0 12px;
     border-bottom: 1px solid @claude-line;
 }
+/* a low bar (the classic skins: 26px): smaller buttons, clear of the line */
+.claude-header-fit() when (@pane-button-container-height < 30px) {
+    .claude-header .claude-icon-btn {
+        width: 24px;
+        height: 24px;
+    }
+}
+.claude-header-fit();
+/* and the tabs' line colour, where the skin draws that line */
+.claude-header-line() when (iscolor(@pane-buttons-border-bottom-color)) and (alpha(@pane-buttons-border-bottom-color) > 0) {
+    .claude-header {
+        border-bottom-color: @pane-buttons-border-bottom-color;
+    }
+}
+.claude-header-line();
 /* the status keeps its room ("Waiting for your approval"); the title
    gets what is left */
 .claude-status {
@@ -867,13 +884,10 @@
 .claude-thinking.claude-has-text > .claude-thinking-head:hover {
     background: @claude-fill;
 }
-.claude-thinking-meta {
-    color: @claude-faint;
-    font-variant-numeric: tabular-nums;
-}
-.claude-thinking.claude-live .claude-thinking-icon {
-    color: @claude-orange;
-    animation: claude-pulse 1.4s ease-in-out infinite;
+/* while Claude thinks, the activity row says so (with the tokens); the
+   card shows up when the thinking is done ("Thought for 6s") */
+.claude-thinking.claude-live {
+    display: none;
 }
 .claude-thinking-body {
     display: none;
@@ -1486,6 +1500,13 @@
 .claude-prompt-body .claude-code,
 .claude-prompt-body .claude-diff {
     margin: 0;
+}
+/* the body is the one scroller: what it holds shows at its full height
+   (no second scrollbar inside it) */
+.claude-root .claude-prompt-body pre.claude-pre,
+.claude-root .claude-prompt-body pre.claude-output,
+.claude-prompt-body .claude-plan {
+    max-height: none;
 }
 .claude-choices {
     margin: 8px 0 0;

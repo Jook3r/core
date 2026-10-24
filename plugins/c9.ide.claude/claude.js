@@ -1700,19 +1700,19 @@ define(function(require, exports, module) {
             return block;
         }
 
-        // live: streamed now. While it runs: "Thinking… · 1.2k tokens"; then
-        // "Thought for 6s" (timed here, from its start to its end; not shown
-        // after a pause of more than 30 s, e.g. a sleeping laptop). From the
-        // history: "Thinking". Its text, when the CLI passes it on (often
-        // it is empty or redacted), can be expanded.
+        // live: streamed now. Hidden while it runs (the activity row says
+        // "Thinking… 1.2k tokens"); then "Thought for 6s" (timed here, from
+        // its start to its end; not shown after a pause of more than 30 s,
+        // e.g. a sleeping laptop). From the history: "Thinking". Its text,
+        // when the CLI passes it on (often it is empty or redacted), can be
+        // expanded.
         function createThinkingBlock(live) {
             var t = ensureTurn();
             var body = el("div", { className: "claude-thinking-body" });
             var label = el("span", { className: "claude-thinking-label", text: live ? "Thinking…" : "Thinking" });
-            var meta = el("span", { className: "claude-thinking-meta" });
             var card = el("div", { className: "claude-thinking" + (live ? " claude-live" : "") });
             var head = el("div", { className: "claude-thinking-head" }, [
-                icon("thinking", "claude-thinking-icon"), label, meta, icon("chevron", "claude-chevron")
+                icon("thinking", "claude-thinking-icon"), label, icon("chevron", "claude-chevron")
             ]);
             head.addEventListener("click", function() {
                 if (block.text.trim()) card.classList.toggle("claude-expanded");
@@ -1759,17 +1759,14 @@ define(function(require, exports, module) {
                 if (!live) return;
                 touch();
                 card.classList.remove("claude-live");
+                scrollToEnd();
                 var secs = Math.max(1, Math.round((Date.now() - block.start) / 1000));
                 label.textContent = block.maxGap > THINKING_GAP ? "Thinking"
                     : "Thought for " + (secs < 60 ? secs + "s" : formatElapsed(secs * 1000));
-                meta.textContent = "";
                 if (block.tokens()) head.title = "About " + formatTokens(block.tokens());
             };
             function showTokens() {
-                if (block.done) return;
-                var n = block.tokens();
-                meta.textContent = n ? "· " + formatTokens(n) : "";
-                if (liveThinking === block) renderActivityMeta();
+                if (!block.done && liveThinking === block) renderActivityMeta();
             }
             function update() {
                 if (!block.text.trim()) return;
@@ -2380,8 +2377,9 @@ define(function(require, exports, module) {
                     [questionForm(input.questions || [], answers, function() { decide("allow"); })]));
             }
             else {
+                // all of a command: it is what gets run (the body scrolls)
                 var preview = name == "Bash"
-                    ? codePreview(input.command, "command.sh", 40, true)
+                    ? codePreview(input.command, "command.sh", 0, true)
                     : inputPreview(name, input, true);
                 if (preview) {
                     var body = el("div", { className: "claude-prompt-body" }, [preview]);
