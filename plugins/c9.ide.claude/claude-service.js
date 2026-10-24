@@ -53,6 +53,7 @@ module.exports = function(vfs, options, register) {
     var RECENT_MS = 2 * 60 * 1000;          // written this recently: probably open elsewhere
     var RECORD_LIMIT = 200;                 // live-process records read (<config>/sessions)
     var RECORD_MAX_SIZE = 64 * 1024;
+    var ARCHIVE_LIMIT = 500;                // archived ids the panel can send
 
     // model aliases and ids (list_models gives e.g. "sonnet", "claude-opus-4-8");
     // a letter first, so that a value can never pass as an option
@@ -325,6 +326,9 @@ module.exports = function(vfs, options, register) {
             args.push("--model", model);
         if (has(EFFORTS, opts.effort))
             args.push("--effort", opts.effort);
+        // ultracode is a settings key; --settings adds it for this session
+        if (opts.ultracode === true)
+            args.push("--settings", JSON.stringify({ ultracode: true }));
         var resume = typeof opts.resume == "string" && UUID_RE.test(opts.resume) ? opts.resume : null;
         if (resume)
             args.push("--resume", resume);
@@ -1009,7 +1013,11 @@ module.exports = function(vfs, options, register) {
             var a = res && res.applied || {};
             callback(null, {
                 model: typeof a.model == "string" ? a.model : null,
-                effort: typeof a.effort == "string" ? a.effort : null
+                effort: typeof a.effort == "string" ? a.effort : null,
+                // requested (the settings key) and applied (the model supports it)
+                ultracode: a.ultracode === true,
+                ultracodeRequested: a.ultracodeRequested === true,
+                ultracodeAvailable: a.ultracodeAvailable === true
             });
         });
     }
@@ -1090,6 +1098,16 @@ module.exports = function(vfs, options, register) {
     }
 
     // opts.models: false to skip the model list (after each turn)
+    // ultracode (multi-agent workflows): on or off for this session
+    function setUltracode(on, callback) {
+        callback = callback || function() {};
+        if (typeof on != "boolean")
+            return callback(new Error("ultracode must be true or false"));
+        if (!cli)
+            return callback(null, { running: false });
+        controlRequest(cli, { subtype: "apply_flag_settings", settings: { ultracode: on } }, changed(cli, callback));
+    }
+
     function getSettings(opts, callback) {
         if (typeof opts == "function") { callback = opts; opts = {}; }
         callback = callback || function() {};
@@ -1372,8 +1390,15 @@ module.exports = function(vfs, options, register) {
         });
     }
 
-    function sessions(callback) {
+    // opts.archived: ids the panel hides; they are listed apart
+    function sessions(opts, callback) {
+        if (typeof opts == "function") { callback = opts; opts = {}; }
         callback = callback || function() {};
+        opts = opts || {};
+        var archived = Object.create(null);
+        (Array.isArray(opts.archived) ? opts.archived : []).slice(0, ARCHIVE_LIMIT).forEach(function(id) {
+            if (typeof id == "string" && UUID_RE.test(id)) archived[id.toLowerCase()] = true;
+        });
         var projects = projectsDir();
         var dirs = listDirs(projects);
         // folders named after the workspace or a folder in it come first;
@@ -1403,17 +1428,21 @@ module.exports = function(vfs, options, register) {
         files.sort(function(a, b) { return b.mtime - a.mtime; });
 
         var seen = Object.create(null);
-        var list = [];
+        var list = [], hidden = [];
+        var scanned = 0, scannedHidden = 0;
         var live = liveSessions();
-        files.slice(0, SESSION_SCAN).forEach(function(f) {
+        files.forEach(function(f) {
             if (seen[f.id]) return;
             seen[f.id] = true;
+            var isArchived = archived[f.id];
+            // at most SESSION_SCAN transcripts are read, and as many archived ones
+            if (isArchived ? ++scannedHidden > SESSION_SCAN : ++scanned > SESSION_SCAN) return;
             var parts = peek(f.file, f.size);
             var recorded = recordedCwd(parts.head) || recordedCwd(parts.tail);
             if (!recorded || !inWorkspace(recorded)) return;
             var title = sessionTitle(parts);
             if (!title) return; // nothing was ever asked in it
-            list.push({
+            (isArchived ? hidden : list).push({
                 id: f.id,
                 title: title,
                 folder: folderOf(recorded),
@@ -1421,7 +1450,77 @@ module.exports = function(vfs, options, register) {
                 elsewhere: openElsewhere(f.id, f.mtime, live)
             });
         });
-        callback(null, { sessions: list, now: Date.now() });
+        callback(null, { sessions: list, archived: hidden, now: Date.now() });
+    }
+
+    // Deletes a conversation: <projects>/<dir>/<id>.jsonl and its <id>/
+    // folder (sub-agents, tool results). The client sends only the id;
+    // nothing is followed through a symbolic link and nothing outside the
+    // projects folder is touched. Refused for the panel's running session
+    // and for one open in another process.
+    function deleteSession(sessionId, callback) {
+        callback = callback || function() {};
+        if (typeof sessionId != "string" || !UUID_RE.test(sessionId))
+            return callback(new Error("Invalid session id"));
+        var id = sessionId.toLowerCase();
+        if (cli && !cli.exited && cli.sessionId && cli.sessionId.toLowerCase() == id)
+            return callback(refusal("This conversation is open in the panel. Start a new session first.", "ECURRENT"));
+        var projects = projectsDir();
+        var found = [];
+        listDirs(projects).forEach(function(dir) {
+            var file = path.join(projects, dir, id + ".jsonl");
+            try {
+                var st = fs.lstatSync(file);
+                if (st.isFile()) found.push({ dir: path.join(projects, dir), file: file, mtime: st.mtimeMs });
+            } catch (e) {}
+        });
+        if (!found.length)
+            return callback(refusal("This conversation was not found.", "ENOENT"));
+        var live = liveSessions();
+        if (live && live[id])
+            return callback(refusal("This conversation is open in another process (pid " + live[id].pid + "), e.g. a terminal. Close it there first.", "EBUSY"));
+        if (!live && found.some(function(f) { return inUseElsewhere(id, f.mtime); }))
+            return callback(refusal("This conversation changed in the last two minutes and may be open elsewhere. Try again later.", "EBUSY"));
+        var removed = { files: 0, dirs: 0 };
+        try {
+            found.forEach(function(f) {
+                fs.unlinkSync(f.file);
+                removed.files++;
+                // the sibling folder, if it is a real folder in that project folder
+                var sub = path.join(f.dir, id);
+                var st;
+                try { st = fs.lstatSync(sub); } catch (e) { return; }
+                if (st.isDirectory() && path.dirname(sub) == f.dir) {
+                    removeTree(sub, removed);
+                }
+            });
+        } catch (e) {
+            return callback(new Error("Could not delete the conversation: " + e.message));
+        }
+        delete resumePlans[id];
+        try { fs.unlinkSync(markerFile(id)); } catch (e) {}
+        callback(null, { deleted: true, files: removed.files, dirs: removed.dirs });
+    }
+
+    function refusal(message, code) {
+        var err = new Error(message);
+        err.code = code;
+        return err;
+    }
+
+    // a folder and what is in it; links are removed, never followed
+    function removeTree(dir, removed) {
+        fs.readdirSync(dir).forEach(function(name) {
+            var p = path.join(dir, name);
+            var st = fs.lstatSync(p);
+            if (st.isDirectory()) removeTree(p, removed);
+            else {
+                fs.unlinkSync(p);
+                removed.files++;
+            }
+        });
+        fs.rmdirSync(dir);
+        removed.dirs++;
     }
 
     // the earlier messages of a session, and how it will be resumed
@@ -1696,6 +1795,8 @@ module.exports = function(vfs, options, register) {
         setModel: setModel,
         setEffort: setEffort,
         getSettings: getSettings,
+        setUltracode: setUltracode,
+        deleteSession: deleteSession,
         stop: stop,
         history: history,
         sessions: sessions,

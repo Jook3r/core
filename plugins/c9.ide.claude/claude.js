@@ -62,7 +62,7 @@ define(function(require, exports, module) {
         // Shift+Tab in the input goes through these
         var MODE_CYCLE = ["default", "acceptEdits", "plan"];
         // effort levels in the model menu's segmented control
-        var SEGMENTS = { "": "Auto", low: "Low", medium: "Med", high: "High", xhigh: "X-High", max: "Max" };
+        var SEGMENTS = { "": "Auto", low: "Low", medium: "Med", high: "High", xhigh: "Extra", max: "Max" };
         var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         var LOGIN_RE = /\/login\b|not logged in|invalid api key|authentication_error|oauth token|please run .{0,20}login/i;
         var BILLING_RE = /credit balance|billing|payment required|insufficient credit/i;
@@ -100,7 +100,10 @@ define(function(require, exports, module) {
             shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M8 1.8 13 3.7v4c0 3.2-2.1 5.4-5 6.5-2.9-1.1-5-3.3-5-6.5v-4z"/></svg>',
             thinking: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M5.5 12.5h5M6.3 14.3h3.4M8 1.8a4.4 4.4 0 0 0-2.6 8c.4.3.6.7.6 1.2v.3h4v-.3c0-.5.2-.9.6-1.2A4.4 4.4 0 0 0 8 1.8z"/></svg>',
             gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1.8l1 1.6 1.8-.5.5 1.8 1.6 1-.8 1.6.8 1.6-1.6 1-.5 1.8-1.8-.5-1 1.6-1-1.6-1.8.5-.5-1.8-1.6-1 .8-1.6-.8-1.6 1.6-1 .5-1.8 1.8.5z"/></svg>',
-            up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.8 8 6.3l3.5 3.5"/></svg>'
+            up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.8 8 6.3l3.5 3.5"/></svg>',
+            archive: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5c0 .6.4 1 1 1h8c.6 0 1-.4 1-1V6M6.5 9h3"/></svg>',
+            unarchive: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5c0 .6.4 1 1 1h8c.6 0 1-.4 1-1V6M8 12V8.2M6.4 9.6 8 8l1.6 1.6"/></svg>',
+            trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"><path d="M2.8 4.3h10.4M6.3 4.3V3c0-.4.3-.7.7-.7h2c.4 0 .7.3.7.7v1.3M4.2 4.3l.6 8.6c0 .5.5.9 1 .9h4.4c.5 0 1-.4 1-.9l.6-8.6M6.8 6.8v4.6M9.2 6.8v4.6"/></svg>'
         };
 
         /***** Initialization *****/
@@ -155,6 +158,8 @@ define(function(require, exports, module) {
         var applied = null;             // { model, effort } from get_settings
         var appliedFor = null;          // ... for this choice in the menus: { model, effort }
         var confirmNext = false;        // a choice made while claude was not running
+        var ultraAvail = {};            // model choice -> ultracode available (get_settings)
+        var ultraToggled = false;       // the user switched ultracode: say so in the note
         var confirmModeNext = false;
         var hasMessages = false;
         var sessionTitle = "";          // the first prompt of the chat (header)
@@ -176,6 +181,7 @@ define(function(require, exports, module) {
                     ["path", ""],
                     ["model", "default"],
                     ["effort", ""],
+                    ["ultracode", "false"],
                     ["mode", ""]
                 ]);
                 settings.setDefaults("state/claude", [
@@ -190,6 +196,9 @@ define(function(require, exports, module) {
                 refreshStatus();
             }, plugin);
             // changed elsewhere (another window, the settings file)
+            settings.on("user/claude/@ultracode", function() {
+                if (drawn) updateSettingLabels();
+            }, plugin);
             ["model", "effort", "mode"].forEach(function(name) {
                 settings.on("user/claude/@" + name, function(value) {
                     var node = { model: modelSelect, effort: effortSelect, mode: modeSelect }[name];
@@ -408,7 +417,8 @@ define(function(require, exports, module) {
             modelPill = el("button", { type: "button", className: "claude-pill claude-model-pill",
                 "aria-haspopup": "true", "aria-expanded": "false" }, [
                 el("span", { className: "claude-pill-name" }),
-                el("span", { className: "claude-pill-effort" })
+                el("span", { className: "claude-pill-effort" }),
+                el("span", { className: "claude-pill-badge", text: "Ultracode" })
             ]);
             modePill = el("button", { type: "button", className: "claude-pill claude-mode-pill",
                 "aria-haspopup": "true", "aria-expanded": "false" }, [
@@ -599,8 +609,22 @@ define(function(require, exports, module) {
                 node.appendChild(row.el);
                 return row;
             };
-            // { label, desc, icon, checked, title, onpick }
+            // { label, desc, icon, checked, title, onpick, actions: [{ icon,
+            // title, run, danger, disabled }] }. Actions: buttons on the right
+            // (on hover), and with Right/Left on the highlighted row; Delete
+            // runs the danger one.
             pop.item = function(item) {
+                var actions = (item.actions || []).map(function(a) {
+                    var b = el("button", { type: "button", tabindex: "-1", title: a.title, "aria-label": a.title,
+                        className: "claude-pop-action" + (a.danger ? " claude-danger" : "") }, [icon(a.icon)]);
+                    b.disabled = !!a.disabled;
+                    b.addEventListener("click", function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!b.disabled) a.run();
+                    });
+                    return b;
+                });
                 var row = el("div", { className: "claude-pop-item" + (item.checked ? " claude-checked" : ""),
                     role: "menuitemradio", "aria-checked": item.checked ? "true" : "false", title: item.title || null }, [
                     item.icon ? icon(item.icon, "claude-pop-icon") : null,
@@ -608,17 +632,49 @@ define(function(require, exports, module) {
                         el("span", { className: "claude-pop-label", text: item.label }),
                         item.desc ? el("span", { className: "claude-pop-desc", text: item.desc }) : null
                     ]),
+                    actions.length ? el("span", { className: "claude-pop-actions" }, actions) : null,
                     icon("check", "claude-pop-check")
                 ]);
                 row.addEventListener("click", function(e) {
                     e.preventDefault();
                     item.onpick();
                 });
-                return pop.row({ el: row, onpick: item.onpick, checked: !!item.checked });
+                var sub = -1;   // the action the keyboard is on
+                function focusAction(i) {
+                    sub = i;
+                    actions.forEach(function(b, k) { b.classList.toggle("claude-focus", k == i); });
+                    row.setAttribute("aria-label", i >= 0 ? actions[i].title : "");
+                    if (i < 0) row.removeAttribute("aria-label");
+                }
+                return pop.row({
+                    el: row,
+                    checked: !!item.checked,
+                    onpick: function() {
+                        if (sub >= 0) actions[sub].click();
+                        else item.onpick();
+                    },
+                    leave: function() { focusAction(-1); },
+                    onKey: !actions.length ? null : function(e) {
+                        var enabled = actions.map(function(b, k) { return b.disabled ? -1 : k; }).filter(function(k) { return k >= 0; });
+                        if (e.keyCode == 39 || e.keyCode == 37) {
+                            var at = enabled.indexOf(sub);
+                            if (e.keyCode == 39) focusAction(at + 1 < enabled.length ? enabled[at + 1] : sub);
+                            else focusAction(at > 0 ? enabled[at - 1] : -1);
+                            return true;
+                        }
+                        if (e.keyCode == 46) {
+                            var danger = (item.actions || []).filter(function(a) { return a.danger && !a.disabled; })[0];
+                            if (danger) danger.run();
+                            return true;
+                        }
+                        return false;
+                    }
+                });
             };
             pop.highlight = function(i) {
                 var old = pop.rows[pop.active];
                 if (old) old.el.classList.remove("claude-active");
+                if (old && old.leave && pop.active != i) old.leave();
                 pop.active = i;
                 var row = pop.rows[i];
                 if (!row) return node.removeAttribute("aria-activedescendant");
@@ -662,6 +718,11 @@ define(function(require, exports, module) {
                 opts.build(pop);
                 pop.place();
                 if (keep >= 0) pop.highlight(Math.min(keep, pop.rows.length - 1));
+                // the focused element may have gone with the old rows
+                var focus = document.activeElement;
+                if (!focus || focus == document.body || node.contains(focus)) {
+                    try { node.focus({ preventScroll: true }); } catch (e) {}
+                }
             };
             pop.place = function() {
                 var r = root.getBoundingClientRect();
@@ -691,6 +752,10 @@ define(function(require, exports, module) {
                 var i = pop.active < 0 ? (step > 0 ? -1 : n) : pop.active;
                 pop.highlight(Math.max(0, Math.min(n - 1, i + step)));
             }
+            // buttons in the menu do not take the focus from it
+            node.addEventListener("mousedown", function(e) {
+                if (e.target.closest && e.target.closest("button")) e.preventDefault();
+            });
             node.addEventListener("keydown", function(e) {
                 var row = pop.rows[pop.active];
                 if (row && row.onKey && row.onKey(e)) {
@@ -776,6 +841,44 @@ define(function(require, exports, module) {
             });
             var levels = effortLevels(modelSelect.value);
             if (levels.length) pop.row(effortControl(pop, [""].concat(levels)));
+            // ultracode: where the model supports it, or while it is requested
+            var ultra = ultracodeState();
+            if (ultraAvail[modelSelect.value] === true || ultra != "off" || applied && applied.ultracodeAvailable
+                && appliedFor && appliedFor.model == modelSelect.value)
+                pop.row(ultracodeControl(pop, ultra));
+        }
+
+        // a switch below the effort
+        function ultracodeControl(pop, state) {
+            var on = state != "off";
+            var knob = el("span", { className: "claude-switch" + (on ? " claude-on" : ""), role: "switch",
+                "aria-checked": on ? "true" : "false", "aria-label": "Ultracode" }, [el("span", { className: "claude-switch-knob" })]);
+            var box = el("div", { className: "claude-ultracode" + (state == "unavailable" ? " claude-unavailable" : "") }, [
+                el("div", { className: "claude-ultracode-head" }, [el("span", { text: "Ultracode" }), knob]),
+                el("div", { className: "claude-ultracode-note", text: state == "unavailable"
+                    ? "Requested, but " + (modelEntry(modelSelect.value) ? modelEntry(modelSelect.value).displayName : "this model")
+                        + " does not support it"
+                    : "Multi-agent workflows for big tasks · uses many more tokens" })
+            ]);
+            function toggle() {
+                onUltracodeChange(!on);
+                pop.refresh();
+            }
+            box.addEventListener("click", function(e) {
+                e.preventDefault();
+                toggle();
+            });
+            return {
+                el: box,
+                onpick: toggle,
+                onKey: function(e) {
+                    if ((e.keyCode == 39 && !on) || (e.keyCode == 37 && on)) {
+                        toggle();
+                        return true;
+                    }
+                    return e.keyCode == 37 || e.keyCode == 39;
+                }
+            };
         }
 
         // Effort as a segmented control at the bottom of the model menu:
@@ -865,8 +968,14 @@ define(function(require, exports, module) {
                 effort = effortSelect.label || (effortSelect.value ? effortCaption(effortSelect.value) : "");
             modelPill.querySelector(".claude-pill-name").textContent = name;
             modelPill.querySelector(".claude-pill-effort").textContent = effort ? " · " + effort : "";
+            var ultra = ultracodeState();
+            var badge = modelPill.querySelector(".claude-pill-badge");
+            badge.style.display = ultra == "off" ? "none" : "";
+            badge.classList.toggle("claude-badge-off", ultra == "unavailable");
+            var ultraTip = ultra == "on" ? "Ultracode: on"
+                : ultra == "unavailable" ? "Ultracode: requested, but this model does not support it" : "";
             modelPill.title = (modelSelect.tip || "Model: " + name) + (effortSelect.tip && effortLevels(modelSelect.value).length
-                ? "\n" + effortSelect.tip : "");
+                ? "\n" + effortSelect.tip : "") + (ultraTip ? "\n" + ultraTip : "");
             var mode = modeSelect.find(modeSelect.value) || { caption: modeSelect.value, short: modeSelect.value, icon: "tool" };
             var iconEl = modePill.querySelector(".claude-pill-icon");
             iconEl.textContent = "";
@@ -901,32 +1010,106 @@ define(function(require, exports, module) {
 
         // The recent Claude Code sessions of this workspace (the panel's and
         // the terminal's), newest first. The service reads the transcripts.
+        // Archived ones (a list in the state settings, this panel only) are
+        // listed apart; a deleted one is gone for good.
         var historyData = null;
+        var historyView = "list";       // or "archived"
+        var historyConfirm = null;      // the session whose deletion is being confirmed
+        var historyError = "";
+        var historyBusy = false;
+        var ARCHIVE_MAX = 500;
+
+        function archivedIds() {
+            var ids = settings.getJson("state/claude/archived");
+            return (Array.isArray(ids) ? ids : []).filter(function(id) {
+                return typeof id == "string" && UUID_RE.test(id);
+            }).slice(-ARCHIVE_MAX);
+        }
+
+        function setArchived(id, on) {
+            var ids = archivedIds().filter(function(x) { return x != id; });
+            if (on) ids.push(id);
+            settings.setJson("state/claude/archived", ids.slice(-ARCHIVE_MAX));
+        }
+
         function loadHistory(pop) {
             historyData = { loading: true };
+            historyView = "list";
+            historyConfirm = null;
+            historyError = "";
             if (!api) return;
-            api.sessions(function(err, res) {
-                historyData = err ? { error: err.message || String(err) }
-                    : { list: res && Array.isArray(res.sessions) ? res.sessions : [], now: res && res.now || Date.now() };
+            api.sessions({ archived: archivedIds() }, function(err, res) {
+                historyData = err ? { error: err.message || String(err) } : {
+                    list: res && Array.isArray(res.sessions) ? res.sessions : [],
+                    archived: res && Array.isArray(res.archived) ? res.archived : [],
+                    now: res && res.now || Date.now()
+                };
                 pop.refresh();
             });
         }
 
+        // moves a session between the list and the archived ones
+        function archiveSession(pop, item, on) {
+            setArchived(item.id, on);
+            var from = on ? historyData.list : historyData.archived;
+            var to = on ? historyData.archived : historyData.list;
+            var i = from.indexOf(item);
+            if (i != -1) from.splice(i, 1);
+            to.push(item);
+            to.sort(function(x, y) { return y.mtime - x.mtime; });
+            if (!historyData.archived.length) historyView = "list";
+            pop.refresh();
+        }
+
+        function deleteSession(pop, item) {
+            if (!api || historyBusy) return;
+            historyBusy = true;
+            historyError = "";
+            pop.refresh();
+            api.deleteSession(item.id, function(err) {
+                historyBusy = false;
+                if (err) {
+                    historyError = err.message || String(err);
+                    return pop.refresh();
+                }
+                historyConfirm = null;
+                [historyData.list, historyData.archived].forEach(function(list) {
+                    var i = list.indexOf(item);
+                    if (i != -1) list.splice(i, 1);
+                });
+                setArchived(item.id, false);
+                // it was the "Resume last session" one
+                if (settings.get("state/claude/@session") == item.id) {
+                    settings.set("state/claude/@session", "");
+                    settings.set("state/claude/@title", "");
+                    renderWelcome();
+                }
+                if (!historyData.archived.length) historyView = "list";
+                pop.refresh();
+                flashHint("Conversation deleted: " + firstLine(item.title || "", 60), true);
+            });
+        }
+
         function buildHistoryPop(pop) {
-            pop.heading("Sessions");
+            if (historyConfirm) return buildDeleteConfirm(pop, historyConfirm);
+            var archivedView = historyView == "archived";
+            pop.heading(archivedView ? "Archived sessions" : "Sessions");
             if (!api) return pop.info("Not connected to the server");
             if (!historyData || historyData.loading) return pop.info("Loading sessions…");
             if (historyData.error) return pop.info("Could not read the sessions: " + historyData.error);
-            var list = historyData.list.filter(function(item) { return item && UUID_RE.test(item.id || ""); });
-            if (!list.length) return pop.info("No Claude Code sessions in this workspace yet.");
+            var list = (archivedView ? historyData.archived : historyData.list).filter(function(item) {
+                return item && UUID_RE.test(item.id || "");
+            });
+            if (!list.length && !archivedView) pop.info("No Claude Code sessions in this workspace yet.");
             list.forEach(function(item) {
                 var title = String(item.title || "Untitled");
                 var open = item.elsewhere && typeof item.elsewhere == "object";
+                var current = item.id == sessionId;
                 var meta = [item.folder, relativeTime(item.mtime, historyData.now), open ? "open elsewhere" : ""].filter(Boolean).join(" · ");
                 pop.item({
                     label: title.length > 100 ? title.slice(0, 99) + "…" : title,
                     desc: meta,
-                    checked: item.id == sessionId,
+                    checked: current,
                     title: title + "\n" + (item.folder ? "Folder: " + item.folder + "\n" : "")
                         + "Last activity: " + new Date(item.mtime).toLocaleString()
                         + (open ? item.elsewhere.how == "process" ? "\nOpen in another process (e.g. a terminal)"
@@ -934,9 +1117,81 @@ define(function(require, exports, module) {
                     onpick: function() {
                         pop.close(true);
                         if (item.id != sessionId) resumeSession(item.id, item);
-                    }
+                    },
+                    actions: [
+                        archivedView
+                            ? { icon: "unarchive", title: "Unarchive", run: function() { archiveSession(pop, item, false); } }
+                            : { icon: "archive", title: "Archive (hide from this list)", run: function() { archiveSession(pop, item, true); } },
+                        { icon: "trash", title: current ? "This conversation is open in the panel" : open ? "Open in another process" : "Delete…",
+                            danger: true, disabled: current || open, run: function() {
+                                historyConfirm = item;
+                                historyError = "";
+                                pop.refresh();
+                            } }
+                    ]
                 });
             });
+            if (archivedView)
+                pop.item({ label: "Back to the sessions", icon: "history", onpick: function() {
+                    historyView = "list";
+                    pop.refresh();
+                } });
+            else if (historyData.archived.length)
+                pop.item({ label: "Show archived (" + historyData.archived.length + ")", icon: "archive", onpick: function() {
+                    historyView = "archived";
+                    pop.refresh();
+                } });
+        }
+
+        // "Delete this conversation?" in the menu: Delete or Cancel
+        function buildDeleteConfirm(pop, item) {
+            pop.heading("Delete this conversation?");
+            pop.info(firstLine(item.title || "Untitled", 100));
+            pop.el.lastChild.classList.add("claude-pop-title");
+            pop.info("Its transcript will be removed from ~/.claude/projects. This can't be undone.");
+            if (historyError) node(el("div", { className: "claude-pop-error", role: "alert", text: historyError }));
+            var cancel = el("button", { type: "button", tabindex: "-1", className: "claude-btn claude-btn-secondary", text: "Cancel" });
+            var del = el("button", { type: "button", tabindex: "-1", className: "claude-btn claude-btn-danger", text: historyBusy ? "Deleting…" : "Delete" });
+            del.disabled = historyBusy;
+            var buttons = [del, cancel];
+            var focus = 1;      // Cancel first
+            function show() {
+                buttons.forEach(function(b, i) { b.classList.toggle("claude-focus", i == focus); });
+            }
+            function back() {
+                historyConfirm = null;
+                historyError = "";
+                pop.refresh();
+            }
+            del.addEventListener("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteSession(pop, item);
+            });
+            cancel.addEventListener("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                back();
+            });
+            show();
+            pop.row({
+                el: el("div", { className: "claude-pop-buttons" }, buttons),
+                checked: true,
+                onpick: function() { buttons[focus].click(); },
+                onKey: function(e) {
+                    if (e.keyCode == 37 || e.keyCode == 39 || e.keyCode == 9) {
+                        focus = 1 - focus;
+                        show();
+                        return true;
+                    }
+                    if (e.keyCode == 27) {
+                        back();
+                        return true;
+                    }
+                    return false;
+                }
+            });
+            function node(n) { pop.el.appendChild(n); }
         }
 
         function codeSpan(text) {
@@ -2929,6 +3184,7 @@ define(function(require, exports, module) {
                 options: {
                     model: modelSelect.value,
                     effort: effortForModel(effortSelect.value, modelSelect.value),
+                    ultracode: ultracodeWanted(),
                     // only a mode the user picked; the label may show the CLI's
                     mode: settings.get("user/claude/@mode") || "",
                     resume: sessionId,
@@ -3083,8 +3339,16 @@ define(function(require, exports, module) {
             if (list.length) modelList = list;
             var last = settings.getJson("state/claude/applied");
             if (last && last.applied && last.appliedFor) {
-                applied = { model: str(last.applied.model), effort: str(last.applied.effort) };
-                appliedFor = { model: String(last.appliedFor.model || ""), effort: String(last.appliedFor.effort || "") };
+                applied = { model: str(last.applied.model), effort: str(last.applied.effort),
+                    ultracode: last.applied.ultracode === true, ultracodeRequested: last.applied.ultracodeRequested === true,
+                    ultracodeAvailable: last.applied.ultracodeAvailable === true };
+                appliedFor = { model: String(last.appliedFor.model || ""), effort: String(last.appliedFor.effort || ""),
+                    ultracode: last.appliedFor.ultracode === true };
+            }
+            if (last && last.ultraAvail && typeof last.ultraAvail == "object") {
+                Object.keys(last.ultraAvail).slice(0, 80).forEach(function(key) {
+                    if (typeof last.ultraAvail[key] == "boolean") ultraAvail[key] = last.ultraAvail[key];
+                });
             }
             function str(v) { return typeof v == "string" ? v : null; }
         }
@@ -3151,27 +3415,66 @@ define(function(require, exports, module) {
             var before = applied;
             applied = {
                 model: typeof a.model == "string" ? a.model : null,
-                effort: typeof a.effort == "string" ? a.effort : null
+                effort: typeof a.effort == "string" ? a.effort : null,
+                ultracode: a.ultracode === true,
+                ultracodeRequested: a.ultracodeRequested === true,
+                ultracodeAvailable: a.ultracodeAvailable === true
             };
-            appliedFor = { model: modelSelect.value, effort: effortSelect.value };
-            settings.setJson("state/claude/applied", { applied: applied, appliedFor: appliedFor });
+            appliedFor = { model: modelSelect.value, effort: effortSelect.value, ultracode: ultracodeWanted() };
+            if (typeof a.ultracodeAvailable == "boolean") ultraAvail[modelSelect.value] = a.ultracodeAvailable;
+            settings.setJson("state/claude/applied", { applied: applied, appliedFor: appliedFor, ultraAvail: ultraAvail });
             updateSettingLabels();
-            var changed = !before || before.model != applied.model || before.effort != applied.effort;
+            var ultraChanged = !before ? applied.ultracodeRequested
+                : before.ultracode != applied.ultracode || before.ultracodeRequested != applied.ultracodeRequested;
+            var changed = !before || before.model != applied.model || before.effort != applied.effort || ultraChanged;
+            var toggled = ultraToggled;
+            ultraToggled = false;
             if (!force && !changed) return;
+            var unavailable = applied.ultracodeRequested && !applied.ultracode;
             var text = "Model: " + (modelName(applied.model) || "default")
-                + (applied.effort ? " · Effort: " + effortCaption(applied.effort) : "");
-            insertNotice(text, atStart);
+                + (applied.effort ? " · Effort: " + effortCaption(applied.effort) : "")
+                + (unavailable ? " · Ultracode: requested, but " + (modelName(applied.model) || "this model") + " does not support it"
+                    : applied.ultracode || ultraChanged || toggled ? " · Ultracode: " + (applied.ultracode ? "on" : "off") : "");
+            insertNotice(text, atStart, unavailable);
+        }
+
+        function ultracodeWanted() {
+            return settings.getBool("user/claude/@ultracode") === true;
+        }
+
+        // ultracode as the pill and the switch show it: "on", "off" or
+        // "unavailable" (requested, but the model does not support it)
+        function ultracodeState() {
+            var fresh = !!(applied && appliedFor && appliedFor.model == modelSelect.value
+                && appliedFor.effort == effortSelect.value && appliedFor.ultracode == ultracodeWanted());
+            if (!fresh) return ultracodeWanted() ? ultraAvail[modelSelect.value] === false ? "unavailable" : "on" : "off";
+            return applied.ultracode ? "on" : applied.ultracodeRequested ? "unavailable" : "off";
+        }
+
+        function onUltracodeChange(on) {
+            settings.set("user/claude/@ultracode", on ? "true" : "false");
+            ultraToggled = true;
+            updateSettingLabels();
+            queueSettings(function(done) {
+                if (!api || !running) return notRunning() && done();
+                api.setUltracode(on, function(err, res) {
+                    if (err) showError("Could not change Ultracode: " + (err.message || err));
+                    else if (!notRunning(res)) confirmSettings(res.applied, true);
+                    done();
+                });
+            });
         }
 
         // atStart: about the claude that starts for this turn: before Claude's answer
-        function insertNotice(text, atStart) {
+        function insertNotice(text, atStart, warn) {
+            var className = "claude-notice-settings " + (warn ? "claude-notice-warn" : "claude-notice-quiet");
             if (atStart && turn && turn.el.parentNode == logEl) {
-                var node = el("div", { className: "claude-notice claude-notice-quiet claude-notice-settings", text: text });
+                var node = el("div", { className: "claude-notice " + className, text: text });
                 logEl.insertBefore(node, turn.el);
                 scrollToEnd();
                 return node;
             }
-            return showNotice(text, "claude-notice-quiet claude-notice-settings");
+            return showNotice(text, className);
         }
 
         // Changes of the model, effort and mode go to the CLI one at a time,

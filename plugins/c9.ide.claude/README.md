@@ -41,7 +41,11 @@ terminal.
   applies, e.g. "Haiku 5.5 · Medium") and the mode button (Ask, Accept edits,
   Plan, or "From settings", the default). The model menu lists the CLI's models
   with their descriptions and ends with the effort: Auto, or a level the model
-  supports (none for a model without effort levels). A short note in the chat
+  supports (none for a model without effort levels), and, where the model
+  supports it, the **Ultracode** switch (multi-agent workflows for big tasks;
+  it uses many more tokens). Ultracode is off by default; when on, the pill
+  shows an "Ultracode" badge (struck through when the model does not support
+  it). A short note in the chat
   confirms a change; one made while Claude is not running applies when it
   starts. All menus open inside the panel. The header shows the status, the
   session's title, **New session** and **Session history**.
@@ -52,7 +56,12 @@ terminal.
   newest first, including the ones started with `claude` in a terminal, in the
   workspace or in a folder inside it (read from `~/.claude/projects`). Picking
   one resumes it in the folder it was started in and shows its earlier
-  messages. If the session is still open in another process (the CLI's
+  messages. Each entry can be archived (hidden from the list, in this panel
+  only; "Show archived" lists them again) or deleted: after a confirmation the
+  service removes its transcript and its folder from `~/.claude/projects`. It
+  refuses for the session open in the panel and for one open in another
+  process, and it never follows a symbolic link. If the session is still open
+  in another process (the CLI's
   records in `~/.claude/sessions`; without any, a transcript written in the
   last 2 minutes), the panel asks: **Open a copy** (`--fork-session`), **Open
   here anyway** or **Cancel**. The welcome screen still offers "Resume last
@@ -75,9 +84,10 @@ Preferences > User Settings > Claude.
   --verbose --include-partial-messages --permission-prompt-tool stdio` with an
   argument list built from whitelisted values only, and relays its output.
   Permission answers, Stop (`interrupt`), the mode (`set_permission_mode`),
-  the model (`set_model`), the effort (`apply_flag_settings`, and `--effort`
-  at start), the model list (`list_models`) and the applied settings
-  (`get_settings`) use the CLI's control messages. Changes are sent one at a
+  the model (`set_model`), the effort and Ultracode (`apply_flag_settings`;
+  at start `--effort` and `--settings {"ultracode":true}`), the model list
+  (`list_models`) and the applied settings (`get_settings`) use the CLI's
+  control messages. Changes are sent one at a
   time, in order.
 - One CLI process per chat, started by the first message. It is stopped after
   20 minutes without activity (never in the middle of a turn), on New session,
