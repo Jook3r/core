@@ -1563,6 +1563,14 @@ body .runner-form-header {
     background: @background;
 }
 
+/* The Claude panel's header continues that line: the bar is
+   @pane-button-container-height plus its border, and starts 1px below the
+   right panels. */
+.claude-root .claude-header {
+    height: @pane-button-container-height + 2;
+    border-bottom-color: lighten(@background, 20%);
+}
+
 .session_btn {
     padding: 0 15px !important;
     margin-right: 0px !important;
