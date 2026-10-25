@@ -557,6 +557,10 @@ module.exports = function(options) {
             staticPrefix: staticPrefix + "/plugins/c9.ide.claude"
         },
         {
+            packagePath: "plugins/c9.ide.deepseek/deepseek",
+            staticPrefix: staticPrefix + "/plugins/c9.ide.deepseek"
+        },
+        {
             packagePath: "plugins/c9.ide.panels/panels",
             defaultActiveLeft: "tree"
         },

@@ -1563,10 +1563,11 @@ body .runner-form-header {
     background: @background;
 }
 
-/* The Claude panel's header continues that line: the bar is
+/* The Claude and DeepSeek panels' header continues that line: the bar is
    @pane-button-container-height plus its border, and starts 1px below the
    right panels. */
-.claude-root .claude-header {
+.claude-root .claude-header,
+.ds-root .ds-header {
     height: @pane-button-container-height + 2;
     border-bottom-color: lighten(@background, 20%);
 }

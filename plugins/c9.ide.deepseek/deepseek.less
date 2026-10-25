@@ -1,0 +1,2240 @@
+/*
+ * DeepSeek chat panel (c9.ide.deepseek): the Claude panel's styles under
+ * the ds- prefix, in DeepSeek's blue.
+ *
+ * Built into every skin's CSS, so it only uses variables that all skins
+ * define (themes/default-*.less, mapped to the @cs-* tokens by the
+ * code-server palette). Tints are derived from @color so that they work on
+ * light and dark panels alike.
+ */
+
+@ds-fg: @color;
+@ds-muted: fade(@color, 62%);
+@ds-faint: fade(@color, 42%);
+@ds-line: fade(@color, 12%);
+@ds-fill: fade(@color, 6%);
+@ds-fill-strong: fade(@color, 10%);
+@ds-accent: @highlight-color;
+@ds-radius: @textarea-border-radius;
+@ds-radius-small: @button-border-radius;
+@ds-add: #2ea043;
+@ds-del: #e5534b;
+@ds-warn: #d29922;
+@ds-brand: #4d6bfe;
+@ds-mono: var(--ds-mono, Menlo, Monaco, Consolas, "Ubuntu Mono", "Droid Sans Mono", monospace);
+
+.ds-scheme() when (lightness(@panel-background) < 50%) {
+    color-scheme: dark;
+}
+.ds-scheme() when (lightness(@panel-background) >= 50%) {
+    color-scheme: light;
+}
+
+/* ---- Panel button: a glyph in the jett and code-server skins ------------ */
+
+.panelsbutton.deepseek.ds-glyph {
+    position: relative;
+    font-size: 0 !important;
+    width: 15px;
+    text-align: center;
+    transform: rotate(-90deg);
+}
+.panelsbutton.deepseek.ds-glyph:after {
+    content: "";
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-top: -2px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M1.2 8.4C1.2 6 3.6 4.4 6.9 4.4c2.5 0 4.3.9 5.2 2.4l1.6-2.2c.3-.4.9-.2.9.3l-.3 2.9 1.2.5c.4.2.3.8-.1.8l-1.5.2c-.6 2.6-3.3 4.3-6.9 4.3-3.6 0-5.8-2-5.8-5.2zM4.4 7.3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z'/></svg>") center / 16px 16px no-repeat;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M1.2 8.4C1.2 6 3.6 4.4 6.9 4.4c2.5 0 4.3.9 5.2 2.4l1.6-2.2c.3-.4.9-.2.9.3l-.3 2.9 1.2.5c.4.2.3.8-.1.8l-1.5.2c-.6 2.6-3.3 4.3-6.9 4.3-3.6 0-5.8-2-5.8-5.2zM4.4 7.3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z'/></svg>") center / 16px 16px no-repeat;
+}
+.panelsbutton.deepseek.ds-glyph:hover {
+    color: @panel-button-active-color;
+}
+
+/* ---- Layout -------------------------------------------------------------- */
+
+.ds-bar {
+    overflow: hidden;
+}
+.ds-root {
+    .ds-scheme();
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: @panel-background;
+    color: @ds-fg;
+    font-family: @general-font-family;
+    font-size: @general-font-size;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    cursor: default;
+    user-select: text;
+}
+.ds-root *,
+.ds-root *:before,
+.ds-root *:after {
+    box-sizing: border-box;
+}
+
+.ds-icon {
+    display: inline-flex;
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+.ds-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
+/* ---- Header ------------------------------------------------------------- */
+
+/* as tall as the bar of the editor tabs next to it, so its line continues
+   the tabs' line */
+.ds-header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: @pane-button-container-height;
+    padding: 0 6px 0 12px;
+    border-bottom: 1px solid @ds-line;
+}
+/* a low bar (the classic skins: 26px): smaller buttons, clear of the line */
+.ds-header-fit() when (@pane-button-container-height < 30px) {
+    .ds-header .ds-icon-btn {
+        width: 24px;
+        height: 24px;
+    }
+}
+.ds-header-fit();
+/* and the tabs' line colour, where the skin draws that line */
+.ds-header-line() when (iscolor(@pane-buttons-border-bottom-color)) and (alpha(@pane-buttons-border-bottom-color) > 0) {
+    .ds-header {
+        border-bottom-color: @pane-buttons-border-bottom-color;
+    }
+}
+.ds-header-line();
+/* the status keeps its room ("Waiting for your approval"); the title
+   gets what is left */
+.ds-status {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    max-width: 100%;
+    font-weight: 600;
+}
+.ds-status-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+/* the CLI's summary of the task: long, so it may shorten */
+.ds-status-text.ds-summary {
+    max-width: 180px;
+}
+.ds-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: @ds-muted;
+}
+.ds-title:before {
+    content: "·";
+    margin-right: 6px;
+    color: @ds-faint;
+}
+.ds-title.ds-untitled {
+    color: @ds-faint;
+}
+.ds-status-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: @ds-faint;
+}
+.ds-status-dot.ds-dot-ready { background: @ds-add; }
+.ds-status-dot.ds-dot-busy {
+    background: @ds-brand;
+    animation: ds-pulse 1.1s ease-in-out infinite;
+}
+.ds-status-dot.ds-dot-waiting {
+    background: @ds-warn;
+    animation: ds-pulse 1.1s ease-in-out infinite;
+}
+.ds-status-dot.ds-dot-error { background: @ds-del; }
+.ds-status-dot.ds-dot-offline { background: @ds-faint; }
+
+@keyframes ds-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+@keyframes ds-spin {
+    to { transform: rotate(360deg); }
+}
+/* the whale while DeepSeek works: swims up and down */
+@keyframes ds-spark {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-2px) rotate(-8deg); }
+}
+
+.ds-header-tools {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.ds-icon-btn.ds-open {
+    background: @ds-fill-strong;
+    color: @ds-fg;
+}
+
+/* ---- Popover menus (model, mode, sessions): inside the panel ------------- */
+
+.ds-pop {
+    position: absolute;
+    z-index: 20;
+    box-sizing: border-box;
+    min-width: 180px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid @menu-border-color;
+    border-radius: @ds-radius;
+    background: @menu-background;
+    color: @menu-color;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    font-size: 12px;
+    line-height: 1.35;
+    outline: none;
+    user-select: none;
+    cursor: default;
+}
+.ds-pop-model { width: 300px; }
+.ds-pop-mode { width: 300px; }
+.ds-pop-history { width: 360px; }
+.ds-pop-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px 4px;
+    font-size: 11px;
+    opacity: 0.65;
+}
+.ds-pop-hint {
+    white-space: nowrap;
+}
+.ds-pop-info {
+    padding: 6px 8px 8px;
+    opacity: 0.75;
+    white-space: normal;
+}
+.ds-pop-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: @ds-radius-small;
+}
+.ds-pop-item.ds-active,
+.ds-pop-item:hover {
+    background: @menu-item-hover-background;
+    color: @menu-item-hover-color;
+}
+.ds-pop-icon {
+    margin-top: 1px;
+    opacity: 0.8;
+}
+.ds-pop-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.ds-pop-label {
+    overflow-wrap: anywhere;
+}
+/* descriptions wrap below the name */
+.ds-pop-desc {
+    margin-top: 1px;
+    font-size: 11px;
+    opacity: 0.68;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.ds-pop-check {
+    margin-top: 1px;
+    visibility: hidden;
+}
+.ds-pop-item.ds-checked .ds-pop-check {
+    visibility: visible;
+}
+
+/* effort, at the bottom of the model menu */
+.ds-effort {
+    margin: 4px 0 0;
+    padding: 7px 8px 6px;
+    border-top: 1px solid fade(@menu-color, 14%);
+    border-radius: @ds-radius-small;
+}
+.ds-effort.ds-active {
+    background: fade(@menu-color, 6%);
+}
+.ds-effort-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+.ds-effort-value {
+    font-weight: 600;
+}
+.ds-seg {
+    display: flex;
+    padding: 2px;
+    border: 1px solid fade(@menu-color, 18%);
+    border-radius: @ds-radius-small;
+    background: fade(@menu-color, 5%);
+}
+.ds-root .ds-seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 22px;
+    margin: 0;
+    padding: 0 2px;
+    border: 0;
+    border-radius: @ds-radius-small;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.75;
+    cursor: pointer;
+    box-shadow: none;
+}
+.ds-root .ds-seg-btn:hover {
+    background: fade(@menu-color, 9%);
+    opacity: 1;
+}
+.ds-root .ds-seg-btn.ds-on,
+.ds-root .ds-seg-btn.ds-on:hover {
+    background: @menu-item-hover-background;
+    color: @menu-item-hover-color;
+    opacity: 1;
+}
+.ds-effort-note {
+    margin-top: 5px;
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* ultracode, below the effort */
+.ds-ultracode {
+    margin: 2px 0 0;
+    padding: 6px 8px;
+    border-radius: @ds-radius-small;
+    cursor: pointer;
+}
+.ds-ultracode.ds-active {
+    background: fade(@menu-color, 6%);
+}
+.ds-ultracode-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.ds-ultracode-note {
+    margin-top: 3px;
+    font-size: 11px;
+    opacity: 0.7;
+}
+.ds-ultracode.ds-unavailable .ds-ultracode-note {
+    color: @ds-warn;
+    opacity: 1;
+}
+.ds-switch {
+    position: relative;
+    flex: none;
+    width: 28px;
+    height: 16px;
+    border-radius: 8px;
+    background: fade(@menu-color, 25%);
+    transition: background 0.12s ease;
+}
+.ds-switch.ds-on {
+    background: @ds-accent;
+}
+.ds-unavailable .ds-switch.ds-on {
+    background: @ds-warn;
+}
+.ds-switch-knob {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: left 0.12s ease;
+}
+.ds-switch.ds-on .ds-switch-knob {
+    left: 14px;
+}
+
+/* the actions of a session in the history (archive, delete) */
+.ds-pop-actions {
+    display: flex;
+    gap: 2px;
+    margin: -2px 0;
+    visibility: hidden;
+}
+.ds-pop-item:hover .ds-pop-actions,
+.ds-pop-item.ds-active .ds-pop-actions {
+    visibility: visible;
+}
+.ds-root .ds-pop-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: @ds-radius-small;
+    background: transparent;
+    color: inherit;
+    opacity: 0.75;
+    cursor: pointer;
+    box-shadow: none;
+}
+.ds-root .ds-pop-action:hover,
+.ds-root .ds-pop-action.ds-focus {
+    background: fade(@menu-color, 12%);
+    opacity: 1;
+}
+.ds-root .ds-pop-action.ds-focus {
+    border-color: @spinner-focus-border-color;
+}
+.ds-root .ds-pop-action.ds-danger:hover,
+.ds-root .ds-pop-action.ds-danger.ds-focus {
+    color: @ds-del;
+}
+.ds-root .ds-pop-action[disabled] {
+    opacity: 0.3;
+    cursor: default;
+}
+.ds-pop-action .ds-icon,
+.ds-pop-action .ds-icon svg {
+    width: 14px;
+    height: 14px;
+}
+.ds-pop-info.ds-pop-title {
+    padding-bottom: 2px;
+    font-weight: 600;
+    opacity: 1;
+}
+.ds-pop-error {
+    margin: 0 8px 6px;
+    padding: 5px 8px;
+    border-radius: @ds-radius-small;
+    background: fade(@ds-del, 12%);
+    color: @ds-del;
+    white-space: normal;
+}
+.ds-pop-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 4px 8px 6px;
+}
+.ds-pop-buttons .ds-btn.ds-focus {
+    box-shadow: 0 0 0 1px @menu-background, 0 0 0 2px @spinner-focus-border-color;
+}
+
+.ds-icon-btn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: @ds-radius-small;
+    background: transparent;
+    color: @ds-muted;
+    cursor: pointer;
+    outline: none;
+}
+.ds-icon-btn:hover {
+    background: @ds-fill-strong;
+    color: @ds-fg;
+}
+.ds-icon-btn:focus-visible {
+    border-color: @spinner-focus-border-color;
+}
+.ds-icon-btn[disabled],
+.ds-icon-btn[disabled]:hover {
+    background: transparent;
+    color: @ds-faint;
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* ---- Conversation --------------------------------------------------------- */
+
+.ds-log-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.ds-log {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 12px 12px;
+    outline: none;
+    overflow-anchor: none;
+}
+
+.ds-jump {
+    position: absolute;
+    right: 14px;
+    bottom: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid @ds-line;
+    background: @panel-background;
+    color: @ds-fg;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.ds-jump.ds-show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+}
+.ds-jump:hover {
+    background: @panel-background;
+    border-color: @ds-faint;
+}
+
+/* welcome / empty state */
+.ds-welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 36px 12px 16px;
+    text-align: center;
+    color: @ds-muted;
+}
+.ds-welcome-icon,
+.ds-welcome-icon svg {
+    width: 30px;
+    height: 30px;
+}
+.ds-welcome-icon {
+    margin-bottom: 10px;
+    color: @ds-brand;
+}
+.ds-welcome-title {
+    margin-bottom: 6px;
+    color: @ds-fg;
+    font-size: 15px;
+    font-weight: 600;
+}
+.ds-welcome-text {
+    max-width: 300px;
+    margin-bottom: 16px;
+}
+.ds-welcome-resume {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    margin-bottom: 16px;
+}
+.ds-welcome-last {
+    max-width: 280px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: @ds-faint;
+}
+.ds-welcome-tips {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+    color: @ds-faint;
+}
+.ds-welcome-tips li {
+    margin: 3px 0;
+}
+.ds-welcome-version {
+    max-width: 100%;
+    margin-top: 18px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    color: @ds-faint;
+}
+.ds-welcome .ds-notfound {
+    max-width: 340px;
+    margin-top: 4px;
+    text-align: left;
+}
+
+/* user messages */
+.ds-user {
+    margin: 14px 0 8px;
+    padding: 7px 10px;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius;
+    background: @ds-fill;
+    color: @ds-fg;
+}
+.ds-user:first-child {
+    margin-top: 4px;
+}
+.ds-user-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+.ds-user-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 2px 0 6px;
+}
+.ds-user-images:last-child {
+    margin-bottom: 2px;
+}
+.ds-user-image {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius-small;
+    background: @ds-fill;
+    color: @ds-faint;
+}
+.ds-user-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.ds-queued {
+    opacity: 0.6;
+    border-style: dashed;
+}
+
+.ds-turn {
+    margin: 0 0 4px;
+}
+.ds-turn-footer {
+    margin: 4px 0 6px;
+    font-size: 11px;
+    color: @ds-faint;
+    font-variant-numeric: tabular-nums;
+}
+
+.ds-notice {
+    margin: 8px 0;
+    font-size: 12px;
+    color: @ds-muted;
+    text-align: center;
+}
+.ds-notice-quiet {
+    font-size: 11.5px;
+    color: @ds-faint;
+}
+.ds-notice-warn {
+    color: @ds-warn;
+}
+/* "Conversation compacted · 12.3k tokens freed" */
+.ds-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0;
+    font-size: 11.5px;
+    color: @ds-faint;
+    white-space: nowrap;
+}
+.ds-divider:before,
+.ds-divider:after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: @ds-line;
+}
+
+/* ---- Markdown ------------------------------------------------------------ */
+
+.ds-md {
+    margin: 6px 0;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
+.ds-md > :first-child { margin-top: 0; }
+.ds-md > :last-child { margin-bottom: 0; }
+.ds-md p {
+    margin: 0 0 8px;
+}
+.ds-md h1,
+.ds-md h2,
+.ds-md h3,
+.ds-md h4,
+.ds-md h5,
+.ds-md h6 {
+    margin: 14px 0 6px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.ds-md h1 { font-size: 1.3em; }
+.ds-md h2 { font-size: 1.18em; }
+.ds-md h3 { font-size: 1.06em; }
+.ds-md h4,
+.ds-md h5,
+.ds-md h6 { font-size: 1em; }
+.ds-md ul,
+.ds-md ol {
+    margin: 0 0 8px;
+    padding-left: 22px;
+}
+.ds-md li {
+    margin: 2px 0;
+}
+.ds-md li > p {
+    margin: 0;
+}
+.ds-md blockquote {
+    margin: 0 0 8px;
+    padding: 0 0 0 10px;
+    border-left: 3px solid @ds-line;
+    color: @ds-muted;
+}
+.ds-md hr {
+    height: 0;
+    margin: 12px 0;
+    border: 0;
+    border-top: 1px solid @ds-line;
+}
+.ds-md a,
+.ds-root a.ds-file-link {
+    color: @ds-accent;
+    text-decoration: none;
+    cursor: pointer;
+}
+.ds-md a:hover,
+.ds-root a.ds-file-link:hover {
+    text-decoration: underline;
+}
+.ds-md :not(pre) > code,
+.ds-inline-code {
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: @ds-fill-strong;
+    font-family: @ds-mono;
+    font-size: 0.92em;
+    overflow-wrap: anywhere;
+}
+.ds-md table {
+    display: block;
+    max-width: 100%;
+    margin: 0 0 8px;
+    overflow-x: auto;
+    border-collapse: collapse;
+}
+.ds-md th,
+.ds-md td {
+    padding: 4px 8px;
+    border: 1px solid @ds-line;
+}
+.ds-md th {
+    background: @ds-fill;
+    font-weight: 600;
+}
+.ds-streaming > :last-child:after {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 13px;
+    margin-left: 2px;
+    vertical-align: -2px;
+    background: @ds-accent;
+    animation: ds-pulse 1s ease-in-out infinite;
+}
+
+/* code blocks: the editor's theme colours (its class is on the <pre>) */
+.ds-code {
+    margin: 6px 0 10px;
+    overflow: hidden;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius;
+}
+.ds-code-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 26px;
+    padding: 0 2px 0 10px;
+    border-bottom: 1px solid @ds-line;
+    background: @ds-fill;
+    font-size: 11px;
+    color: @ds-muted;
+}
+.ds-code-head .ds-icon-btn {
+    width: 22px;
+    height: 22px;
+}
+.ds-code-head .ds-icon,
+.ds-code-head .ds-icon svg {
+    width: 14px;
+    height: 14px;
+}
+.ds-code-head .ds-copied {
+    color: @ds-add;
+}
+.ds-root pre.ds-pre {
+    margin: 0;
+    padding: 8px 10px;
+    overflow: auto;
+    max-height: 420px;
+    font-family: @ds-mono;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 4;
+}
+.ds-root pre.ds-pre code {
+    padding: 0;
+    background: none;
+    font: inherit;
+    white-space: inherit;
+}
+.ds-code-plain {
+    margin: 4px 0;
+}
+/* commands: long lines wrap */
+.ds-root .ds-code-wrap pre.ds-pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.ds-code-more {
+    padding: 3px 10px;
+    border-top: 1px solid @ds-line;
+    font-size: 11px;
+    color: @ds-faint;
+}
+
+/* ---- Thinking ----------------------------------------------------------- */
+
+.ds-thinking {
+    margin: 4px 0;
+    color: @ds-muted;
+}
+.ds-thinking-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 24px;
+    padding: 3px 4px;
+    border-radius: @ds-radius-small;
+    font-size: 12px;
+}
+.ds-thinking.ds-has-text > .ds-thinking-head {
+    cursor: pointer;
+}
+.ds-thinking.ds-has-text > .ds-thinking-head:hover {
+    background: @ds-fill;
+}
+/* while the model thinks, the activity row says so (with the tokens); the
+   card shows up when the thinking is done ("Thought for 6s") */
+.ds-thinking.ds-live {
+    display: none;
+}
+.ds-thinking-body {
+    display: none;
+    margin: 2px 0 6px 22px;
+    padding-left: 10px;
+    max-height: 240px;
+    overflow: auto;
+    border-left: 2px solid @ds-line;
+    white-space: pre-wrap;
+    font-size: 12px;
+    font-style: italic;
+}
+.ds-thinking.ds-expanded .ds-thinking-body {
+    display: block;
+}
+
+/* ---- Tool cards ----------------------------------------------------------- */
+
+.ds-tool {
+    margin: 2px 0;
+}
+.ds-tool-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 26px;
+    padding: 3px 4px;
+    border-radius: @ds-radius-small;
+    cursor: pointer;
+}
+.ds-tool-head:hover {
+    background: @ds-fill;
+}
+.ds-tool-icon {
+    color: @ds-muted;
+}
+.ds-st-running > .ds-tool-head .ds-tool-icon {
+    color: @ds-accent;
+}
+.ds-st-waiting > .ds-tool-head .ds-tool-icon {
+    color: @ds-warn;
+}
+.ds-st-error > .ds-tool-head .ds-tool-icon,
+.ds-st-denied > .ds-tool-head .ds-tool-icon {
+    color: @ds-del;
+}
+.ds-tool-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.ds-tool-verb {
+    font-weight: 600;
+}
+.ds-tool-title .ds-inline-code {
+    font-size: 0.9em;
+}
+.ds-path {
+    font-family: @ds-mono;
+    font-size: 0.92em;
+}
+.ds-tool-meta {
+    font-size: 11.5px;
+    color: @ds-faint;
+}
+.ds-diffstat .ds-added { color: @ds-add; }
+.ds-diffstat .ds-removed { color: @ds-del; }
+.ds-tool-status {
+    flex: none;
+    font-size: 11px;
+    color: @ds-faint;
+}
+.ds-tool-status:empty {
+    display: none;
+}
+.ds-tool-status .ds-icon {
+    color: @ds-del;
+}
+.ds-st-denied > .ds-tool-head .ds-tool-status { color: @ds-del; }
+.ds-st-waiting > .ds-tool-head .ds-tool-status { color: @ds-warn; }
+
+/* a tool call that runs */
+.ds-spinner {
+    display: block;
+    width: 12px;
+    height: 12px;
+    margin: 0 2px;
+    border: 1.5px solid fade(@ds-accent, 25%);
+    border-top-color: @ds-accent;
+    border-radius: 50%;
+    animation: ds-spin 0.8s linear infinite;
+}
+.ds-chevron {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: @ds-faint;
+    visibility: hidden;
+    transition: transform 0.12s ease;
+}
+.ds-chevron svg {
+    width: 14px;
+    height: 14px;
+}
+.ds-has-body > .ds-tool-head .ds-chevron,
+.ds-thinking.ds-has-text .ds-chevron {
+    visibility: visible;
+}
+.ds-expanded > .ds-tool-head .ds-chevron,
+.ds-thinking.ds-expanded .ds-chevron {
+    transform: rotate(90deg);
+}
+/* below the head, the full width of the conversation */
+.ds-tool-body {
+    display: none;
+    margin: 2px 0 8px;
+    min-width: 0;
+}
+.ds-expanded > .ds-tool-body {
+    display: block;
+}
+.ds-tool-desc {
+    margin: 2px 0 6px;
+    font-size: 12px;
+    color: @ds-muted;
+    white-space: pre-wrap;
+}
+.ds-subagent:not(:empty) {
+    margin: 2px 0 6px;
+    padding-left: 8px;
+    border-left: 2px solid @ds-line;
+}
+.ds-subagent-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: @ds-muted;
+}
+.ds-subagent-step .ds-icon,
+.ds-subagent-step .ds-icon svg {
+    width: 13px;
+    height: 13px;
+}
+
+.ds-root pre.ds-output {
+    margin: 4px 0;
+    padding: 6px 9px;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius;
+    background: @ds-fill;
+    color: @ds-fg;
+    font-family: @ds-mono;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.ds-root pre.ds-output-error {
+    border-color: fade(@ds-del, 45%);
+    background: fade(@ds-del, 8%);
+}
+
+/* diffs */
+.ds-diff {
+    margin: 4px 0;
+    padding: 4px 0;
+    overflow-x: auto;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius;
+    background: @ds-fill;
+    font-family: @ds-mono;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.ds-diff-line {
+    display: flex;
+    min-width: min-content;
+    padding: 0 10px 0 0;
+    white-space: pre;
+}
+.ds-diff-sign {
+    flex: none;
+    width: 22px;
+    text-align: center;
+    color: @ds-faint;
+    user-select: none;
+}
+.ds-diff-add {
+    background: fade(@ds-add, 20%);
+}
+.ds-diff-add .ds-diff-sign { color: @ds-add; }
+.ds-diff-del {
+    background: fade(@ds-del, 18%);
+}
+.ds-diff-del .ds-diff-sign { color: @ds-del; }
+.ds-diff-skip {
+    padding: 1px 10px 1px 22px;
+    font-family: @general-font-family;
+    font-size: 11px;
+    color: @ds-faint;
+}
+
+/* todo lists */
+.ds-todos {
+    margin: 2px 0 4px;
+    padding: 0;
+    list-style: none;
+}
+.ds-todo {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 3px 0;
+}
+.ds-todo-box {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    margin-top: 3px;
+    border: 1px solid @ds-faint;
+    border-radius: 3px;
+}
+.ds-todo-in_progress .ds-todo-box {
+    border-color: @ds-accent;
+    background: fade(@ds-accent, 30%);
+}
+.ds-todo-completed {
+    color: @ds-faint;
+    text-decoration: line-through;
+}
+.ds-todo-completed .ds-todo-box {
+    border-color: @ds-add;
+    background: @ds-add;
+}
+
+/* ---- Questions in the conversation (a session open elsewhere) ------------ */
+
+.ds-perm {
+    margin: 6px 0 10px;
+    padding: 10px 12px;
+    border: 1px solid fade(@ds-accent, 55%);
+    border-radius: @ds-radius;
+    background: fade(@ds-accent, 7%);
+}
+.ds-perm-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 600;
+}
+.ds-perm-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.ds-perm-icon {
+    margin-top: 1px;
+    color: @ds-accent;
+}
+.ds-perm-desc {
+    margin: 4px 0 0 24px;
+    font-size: 12px;
+    color: @ds-muted;
+}
+.ds-perm .ds-actions {
+    margin-top: 10px;
+}
+/* deny with a note: what the model should do instead */
+.ds-root input.ds-perm-feedback {
+    display: block;
+    width: 100%;
+    height: 28px;
+    margin: 8px 0 0;
+    padding: 0 8px;
+    border: 1px solid @textbox-border-color;
+    border-radius: @ds-radius-small;
+    outline: none;
+    background: @textbox-background;
+    color: @textbox-color;
+    font-family: inherit;
+    font-size: 12px;
+    box-shadow: none;
+}
+.ds-root input.ds-perm-feedback:focus {
+    border-color: @spinner-focus-border-color;
+}
+.ds-root input.ds-perm-feedback::placeholder {
+    color: fade(@textbox-color, 50%);
+}
+/* a session that is open elsewhere: how to open it */
+.ds-perm.ds-elsewhere .ds-perm-icon {
+    color: @ds-warn;
+}
+.ds-perm.ds-elsewhere {
+    border-color: fade(@ds-warn, 55%);
+    background: fade(@ds-warn, 7%);
+}
+.ds-plan {
+    max-height: 360px;
+    overflow: auto;
+    padding: 8px 10px;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius;
+    background: @panel-background;
+}
+
+.ds-questions {
+    margin-top: 8px;
+}
+.ds-question + .ds-question {
+    margin-top: 10px;
+}
+.ds-question-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: @ds-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.ds-question-text {
+    margin: 2px 0 6px;
+}
+.ds-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.ds-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    margin: 0;
+    padding: 6px 10px;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius-small;
+    background: @panel-background;
+    color: @ds-fg;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.ds-option:hover {
+    border-color: @ds-faint;
+}
+.ds-option.ds-selected {
+    border-color: @ds-accent;
+    background: fade(@ds-accent, 12%);
+}
+.ds-option-desc {
+    font-size: 12px;
+    color: @ds-muted;
+}
+
+/* ---- Buttons --------------------------------------------------------------- */
+
+.ds-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.ds-btn {
+    margin: 0;
+    padding: 3px 12px;
+    min-height: 26px;
+    border: 1px solid transparent;
+    border-radius: @ds-radius-small;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 18px;
+    cursor: pointer;
+    outline: none;
+    white-space: nowrap;
+}
+.ds-btn:focus-visible {
+    box-shadow: 0 0 0 1px @panel-background, 0 0 0 2px @spinner-focus-border-color;
+}
+.ds-btn[disabled] {
+    opacity: 0.55;
+    cursor: default;
+}
+.ds-btn-primary {
+    background: @button-green-idle-gradient;
+    color: @button-green-color;
+}
+.ds-btn-primary:hover {
+    background: @button-green-over-gradient;
+}
+.ds-btn-secondary {
+    background: @button-grey-idle-gradient;
+    color: @button-grey-color;
+}
+.ds-btn-secondary:hover {
+    background: @button-grey-over-gradient;
+}
+.ds-root .ds-btn-danger {
+    background: @ds-del;
+    color: #fff;
+}
+.ds-root .ds-btn-danger:hover {
+    background: darken(@ds-del, 6%);
+}
+
+/* ---- Errors ---------------------------------------------------------------- */
+
+.ds-error {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-radius: @ds-radius;
+    background: @error-background;
+    color: @error-color;
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+}
+.ds-error-icon {
+    margin-top: 1px;
+}
+.ds-error-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ds-error-title {
+    font-weight: 600;
+}
+.ds-notfound {
+    display: block;
+}
+.ds-notfound > div + div {
+    margin-top: 6px;
+}
+.ds-notfound .ds-actions {
+    margin-top: 10px;
+}
+.ds-root pre.ds-error-details,
+.ds-tried pre {
+    margin: 6px 0 0;
+    max-height: 160px;
+    overflow: auto;
+    font-family: @ds-mono;
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    opacity: 0.85;
+}
+.ds-tried {
+    margin-top: 6px;
+}
+.ds-tried summary {
+    cursor: pointer;
+}
+
+/* ---- Activity: what DeepSeek does while a turn runs ---------------------- */
+
+.ds-activity {
+    flex: none;
+    display: none;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    height: 26px;
+    padding: 0 14px;
+    font-size: 12px;
+    color: @ds-muted;
+    white-space: nowrap;
+}
+.ds-activity.ds-show {
+    display: flex;
+}
+.ds-activity-spark {
+    color: @ds-brand;
+    animation: ds-spark 2.4s ease-in-out infinite;
+}
+.ds-activity-spark,
+.ds-activity-spark svg {
+    width: 14px;
+    height: 14px;
+}
+.ds-act-waiting .ds-activity-spark {
+    color: @ds-warn;
+    animation: ds-pulse 1.1s ease-in-out infinite;
+}
+.ds-act-stopping .ds-activity-spark {
+    color: @ds-faint;
+    animation: ds-pulse 1.1s ease-in-out infinite;
+}
+.ds-activity-text {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: @ds-fg;
+}
+.ds-act-waiting .ds-activity-text {
+    color: @ds-warn;
+}
+.ds-activity-text .ds-inline-code {
+    font-size: 11.5px;
+}
+.ds-activity-meta {
+    flex: none;
+    color: @ds-faint;
+    font-variant-numeric: tabular-nums;
+}
+.ds-activity-hint {
+    flex: none;
+    margin-left: auto;
+    padding-left: 6px;
+    font-size: 11px;
+    color: @ds-faint;
+}
+.ds-act-stopping .ds-activity-hint {
+    display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .ds-activity-spark {
+        animation: ds-pulse 2s ease-in-out infinite;
+    }
+    .ds-spinner {
+        animation-duration: 2s;
+    }
+}
+
+/* ---- Permission prompt, in place of the input box ------------------------ */
+
+.ds-log {
+    transition: opacity 0.15s ease;
+}
+.ds-prompting .ds-log {
+    opacity: 0.62;
+}
+.ds-prompt {
+    padding: 9px 10px 8px;
+    border: 1px solid fade(@ds-accent, 60%);
+    border-radius: @ds-radius;
+    background: @panel-background;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.ds-prompt.ds-answering {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.ds-prompt-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 600;
+}
+.ds-prompt-icon {
+    margin-top: 1px;
+    color: @ds-accent;
+}
+.ds-prompt-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.ds-prompt-count {
+    flex: none;
+    font-size: 11px;
+    font-weight: normal;
+    color: @ds-faint;
+}
+.ds-root .ds-prompt-toggle {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: -2px -2px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: @ds-radius-small;
+    background: transparent;
+    color: @ds-muted;
+    cursor: pointer;
+    box-shadow: none;
+}
+.ds-root .ds-prompt-toggle:hover {
+    background: @ds-fill-strong;
+}
+.ds-prompt-toggle .ds-icon {
+    transform: rotate(90deg);
+    transition: transform 0.12s ease;
+}
+.ds-folded .ds-prompt-toggle .ds-icon {
+    transform: rotate(0deg);
+}
+.ds-prompt-desc {
+    margin: 3px 0 0 24px;
+    font-size: 12px;
+    color: @ds-muted;
+}
+.ds-prompt-body {
+    max-height: 32vh;
+    margin: 8px 0 0;
+    overflow: auto;
+}
+.ds-folded .ds-prompt-body {
+    display: none;
+}
+.ds-prompt-body .ds-code,
+.ds-prompt-body .ds-diff {
+    margin: 0;
+}
+/* the body is the one scroller: what it holds shows at its full height
+   (no second scrollbar inside it) */
+.ds-root .ds-prompt-body pre.ds-pre,
+.ds-root .ds-prompt-body pre.ds-output,
+.ds-prompt-body .ds-plan {
+    max-height: none;
+}
+.ds-choices {
+    margin: 8px 0 0;
+    outline: none;
+}
+.ds-choice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    margin: 0 0 4px;
+    padding: 4px 8px;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius-small;
+    cursor: pointer;
+    user-select: none;
+}
+.ds-choice:hover {
+    background: @ds-fill;
+}
+/* the choice that Enter picks */
+.ds-choice.ds-active {
+    border-color: fade(@ds-accent, 65%);
+    background: fade(@ds-accent, 13%);
+}
+.ds-choice-key {
+    flex: none;
+    min-width: 10px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+}
+.ds-choice-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.ds-prompt .ds-perm-feedback {
+    margin-top: 2px;
+}
+.ds-prompt-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: @ds-faint;
+}
+
+/* ---- Composer ------------------------------------------------------------- */
+
+.ds-composer {
+    flex: none;
+    padding: 6px 10px 10px;
+}
+.ds-composer-box {
+    border: 1px solid @textbox-border-color;
+    border-radius: @ds-radius;
+    background: @textbox-background;
+    color: @textbox-color;
+    cursor: text;
+    transition: border-color 0.12s ease;
+}
+.ds-composer-box:focus-within {
+    border-color: @spinner-focus-border-color;
+}
+.ds-root textarea.ds-input {
+    display: block;
+    width: 100%;
+    min-height: 34px;
+    margin: 0;
+    padding: 8px 10px 4px;
+    border: 0;
+    outline: none;
+    resize: none;
+    overflow-y: hidden;
+    background: transparent;
+    color: @textbox-color;
+    font-family: inherit;
+    font-size: @general-font-size;
+    line-height: 1.45;
+    box-shadow: none;
+}
+.ds-root textarea.ds-input::placeholder {
+    color: fade(@textbox-color, 50%);
+}
+.ds-composer-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 4px 4px;
+}
+.ds-composer-bar .ds-icon-btn {
+    color: fade(@textbox-color, 65%);
+}
+.ds-composer-bar .ds-icon-btn:hover {
+    background: fade(@textbox-color, 10%);
+    color: @textbox-color;
+}
+.ds-composer-gap {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 4px;
+    cursor: text;
+}
+/* a short message, or the context left, above the input */
+.ds-composer-note {
+    display: none;
+    margin: 0 2px 4px;
+    font-size: 11px;
+    color: @ds-faint;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+}
+.ds-composer-note.ds-show {
+    display: block;
+}
+.ds-composer-note.ds-hint-alert,
+.ds-composer-note.ds-hint-low {
+    color: @ds-warn;
+}
+
+/* the model (and effort) and the mode, in the input's footer */
+.ds-root .ds-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 24px;
+    margin: 0;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: fade(@textbox-color, 7%);
+    color: fade(@textbox-color, 78%);
+    font-family: inherit;
+    font-size: 11.5px;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+}
+.ds-root .ds-pill:hover,
+.ds-root .ds-pill.ds-open {
+    background: fade(@textbox-color, 13%);
+    color: @textbox-color;
+}
+.ds-root .ds-pill:focus-visible {
+    border-color: @spinner-focus-border-color;
+}
+.ds-model-pill {
+    overflow: hidden;
+}
+.ds-pill-name,
+.ds-pill-effort {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ds-pill-effort {
+    flex: 0 0 auto;
+    opacity: 0.8;
+}
+.ds-root .ds-mode-pill {
+    flex: 0 0 auto;
+    background: transparent;
+}
+.ds-pill-icon,
+.ds-pill-icon .ds-icon,
+.ds-pill-icon svg {
+    width: 14px;
+    height: 14px;
+}
+.ds-pill-icon .ds-icon {
+    display: block;
+}
+/* a narrow panel: the mode as an icon, then the model without its effort */
+.ds-narrow .ds-mode-pill .ds-pill-label {
+    display: none;
+}
+.ds-root.ds-narrow .ds-mode-pill {
+    padding: 0 5px;
+}
+.ds-tiny .ds-pill-effort {
+    display: none;
+}
+/* ultracode on (or requested but not available) */
+.ds-pill-badge {
+    flex: 0 0 auto;
+    padding: 0 5px;
+    border-radius: 7px;
+    background: fade(@ds-accent, 18%);
+    color: @textbox-color;
+    font-size: 10px;
+    line-height: 14px;
+}
+.ds-pill-badge.ds-badge-off {
+    background: fade(@ds-warn, 22%);
+    text-decoration: line-through;
+}
+.ds-tiny .ds-pill-badge {
+    display: none;
+}
+.ds-composer-bar .ds-send,
+.ds-composer-bar .ds-send:hover {
+    background: @button-green-idle-gradient;
+    color: @button-green-color;
+}
+.ds-composer-bar .ds-send:hover {
+    background: @button-green-over-gradient;
+}
+.ds-composer-bar .ds-send.ds-stop,
+.ds-composer-bar .ds-send.ds-stop:hover {
+    background: @button-grey-idle-gradient;
+    color: @button-grey-color;
+}
+.ds-composer-bar .ds-send[disabled],
+.ds-composer-bar .ds-send[disabled]:hover {
+    background: fade(@textbox-color, 10%);
+    color: fade(@textbox-color, 40%);
+    opacity: 1;
+}
+
+.ds-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 6px 0;
+}
+/* an attached image: thumbnail, name, size, remove */
+.ds-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    height: 26px;
+    padding: 0 2px 0 3px;
+    border: 1px solid fade(@textbox-color, 16%);
+    border-radius: @ds-radius-small;
+    background: fade(@textbox-color, 5%);
+    font-size: 11.5px;
+    cursor: default;
+}
+.ds-chip-thumb {
+    flex: none;
+    position: relative;
+    width: 20px;
+    height: 20px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: fade(@textbox-color, 10%);
+}
+.ds-chip-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.ds-chip.ds-loading .ds-chip-thumb:after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 10px;
+    height: 10px;
+    border: 2px solid fade(@textbox-color, 25%);
+    border-top-color: @ds-accent;
+    border-radius: 50%;
+    animation: ds-spin 0.8s linear infinite;
+}
+.ds-chip-name {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+.ds-chip-size {
+    flex: none;
+    color: fade(@textbox-color, 55%);
+    font-variant-numeric: tabular-nums;
+}
+.ds-root .ds-chip-remove {
+    width: 20px;
+    height: 20px;
+}
+.ds-chip-remove .ds-icon,
+.ds-chip-remove .ds-icon svg {
+    width: 12px;
+    height: 12px;
+}
+.ds-chip-preview {
+    position: absolute;
+    z-index: 20;
+    display: none;
+    padding: 3px;
+    border: 1px solid @ds-line;
+    border-radius: @ds-radius;
+    background: @panel-background;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    pointer-events: none;
+}
+.ds-chip-preview.ds-show {
+    display: block;
+}
+.ds-chip-preview img {
+    display: block;
+    max-width: 220px;
+    max-height: 160px;
+    border-radius: 3px;
+}
+.ds-drop {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    right: 6px;
+    bottom: 6px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed @ds-accent;
+    border-radius: @ds-radius;
+    background: fade(@panel-background, 88%);
+    color: @ds-fg;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+}
+.ds-drop.ds-show {
+    opacity: 1;
+}
+
+.ds-copy-area {
+    position: fixed;
+    left: -1000px;
+    top: 0;
+    opacity: 0;
+}
+
+/* ---- The chat's account and folder (the line above the input) ---------- */
+
+.ds-where {
+    display: flex;
+    min-width: 0;
+    margin: -2px 0 2px -4px;
+}
+.ds-root .ds-where-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    height: 20px;
+    margin: 0;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: @ds-radius-small;
+    background: transparent;
+    color: fade(@textbox-color, 62%);
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+}
+.ds-root .ds-where-pill:hover,
+.ds-root .ds-where-pill.ds-open {
+    background: fade(@textbox-color, 9%);
+    color: @textbox-color;
+}
+.ds-root .ds-where-pill:focus-visible {
+    border-color: @spinner-focus-border-color;
+}
+.ds-where-icon,
+.ds-where-icon svg {
+    width: 13px;
+    height: 13px;
+}
+.ds-where-icon {
+    flex: none;
+    opacity: 0.85;
+}
+.ds-where-account {
+    flex: 0 0 auto;
+    margin-right: 6px;
+    font-weight: 600;
+}
+.ds-where-folder {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ds-where-chevron,
+.ds-where-chevron svg {
+    width: 11px;
+    height: 11px;
+}
+.ds-where-chevron {
+    flex: none;
+    transform: rotate(90deg);
+    opacity: 0.7;
+}
+/* fixed once the chat has started: it only tells */
+.ds-root .ds-where-pill.ds-locked {
+    color: fade(@textbox-color, 50%);
+}
+.ds-folder-row {
+    padding: 4px 8px 6px;
+}
+.ds-root .ds-folder-input {
+    display: block;
+    width: 100%;
+    height: 26px;
+    margin: 0;
+    padding: 2px 8px;
+    border: 1px solid rgba(128, 128, 128, 0.45);
+    border-radius: @ds-radius-small;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+    box-shadow: none;
+}
+.ds-root .ds-folder-input:focus {
+    border-color: @spinner-focus-border-color;
+}
+.ds-folder-error {
+    margin-top: 4px;
+    font-size: 11px;
+    color: @ds-del;
+    white-space: normal;
+}
+.ds-folder-error:empty {
+    display: none;
+}
+
+/* ---- Preferences > DeepSeek ------------------------------------------------
+   Outside the panel: neutral tints that suit the light and dark
+   preference pages of every skin. */
+
+.ds-accounts {
+    padding: 2px 0 12px;
+    color: @preferences-form-label-color;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: normal;
+    user-select: text;
+    cursor: default;
+}
+.ds-accounts * {
+    box-sizing: border-box;
+}
+.ds-acct-intro {
+    margin: 0 0 8px;
+    opacity: 0.75;
+}
+.ds-acct,
+.ds-acct-form {
+    margin: 0 0 6px;
+    padding: 8px 10px;
+    border: 1px solid fade(@preferences-form-label-color, 22%);
+    border-radius: 6px;
+}
+.ds-acct.ds-acct-current {
+    border-color: fade(@preferences-form-label-color, 45%);
+}
+.ds-acct-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+.ds-acct-name {
+    font-weight: 600;
+}
+.ds-acct-fixed {
+    min-width: 130px;
+}
+.ds-accounts input.ds-acct-name {
+    width: 130px;
+}
+.ds-acct-dir {
+    font-family: @ds-mono;
+    font-size: 11.5px;
+    opacity: 0.75;
+}
+.ds-acct-status {
+    opacity: 0.7;
+}
+.ds-acct-status.ds-acct-ok {
+    opacity: 1;
+}
+.ds-acct-status.ds-acct-ok:before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin: 0 5px 1px 0;
+    border-radius: 50%;
+    background: @ds-add;
+}
+.ds-acct-share {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
+    margin-top: 7px;
+}
+.ds-acct-label {
+    opacity: 0.75;
+}
+.ds-acct-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+.ds-acct-check input {
+    margin: 0;
+}
+.ds-acct-note {
+    margin-top: 6px;
+    opacity: 0.75;
+}
+.ds-acct-error {
+    margin-top: 6px;
+    color: @ds-del;
+}
+.ds-acct-confirm,
+.ds-acct-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    margin-top: 8px;
+}
+.ds-acct-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+}
+.ds-acct-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.ds-accounts input[type=text],
+.ds-accounts input[type=password],
+.ds-accounts select,
+.ds-accounts textarea {
+    height: 24px;
+    margin: 0;
+    padding: 2px 6px;
+    border: 1px solid @spinner-border-color;
+    border-radius: 4px;
+    background: @spinner-background;
+    color: @spinner-color;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+}
+.ds-accounts input[type=text]:focus,
+.ds-accounts input[type=password]:focus,
+.ds-accounts select:focus,
+.ds-accounts textarea:focus {
+    border-color: @spinner-focus-border-color;
+}
+.ds-accounts .ds-btn-danger {
+    background: @ds-del;
+    color: #fff;
+}
+
+/* ---- DeepSeek: peak hours, models, API keys ------------------------------ */
+
+/* off-peak (cheaper) or peak, at the end of the line above the input */
+.ds-root .ds-peak-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    height: 20px;
+    margin: 0 0 0 auto;
+    padding: 0 7px 0 5px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: fade(@ds-add, 13%);
+    color: @ds-add;
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+    font-variant-numeric: tabular-nums;
+}
+.ds-root .ds-peak-pill:hover,
+.ds-root .ds-peak-pill.ds-open {
+    background: fade(@ds-add, 22%);
+}
+.ds-root .ds-peak-pill.ds-peak-soon {
+    border-color: fade(@ds-warn, 55%);
+}
+.ds-root .ds-peak-pill.ds-peak-on {
+    background: fade(@ds-warn, 16%);
+    color: @ds-warn;
+}
+.ds-root .ds-peak-pill.ds-peak-on:hover,
+.ds-root .ds-peak-pill.ds-peak-on.ds-open {
+    background: fade(@ds-warn, 26%);
+}
+.ds-root .ds-peak-pill:focus-visible {
+    border-color: @spinner-focus-border-color;
+}
+.ds-peak-label {
+    font-weight: 600;
+}
+.ds-peak-next {
+    opacity: 0.85;
+}
+.ds-peak-icon,
+.ds-peak-icon svg {
+    width: 12px;
+    height: 12px;
+}
+.ds-narrow .ds-peak-next {
+    display: none;
+}
+
+/* the paperclip, for a model that can't read images */
+.ds-composer-bar .ds-icon-btn.ds-attach-off {
+    opacity: 0.45;
+}
+
+.ds-acct-keyform {
+    margin-top: 8px;
+}
+.ds-acct-field-wide input[type=password] {
+    width: 280px;
+    font-family: @ds-mono;
+}
+.ds-accounts .ds-acct-new-key {
+    width: 160px;
+    font-family: @ds-mono;
+}
+
+/* Models and prices */
+.ds-models {
+    margin: 0 0 4px;
+    border-collapse: collapse;
+}
+.ds-models th {
+    padding: 0 8px 4px 0;
+    font-weight: normal;
+    text-align: left;
+    white-space: nowrap;
+    opacity: 0.7;
+}
+.ds-models td {
+    padding: 2px 8px 2px 0;
+    vertical-align: middle;
+}
+.ds-models td.ds-acct-error {
+    padding-top: 0;
+}
+.ds-accounts .ds-models-id {
+    width: 170px;
+    font-family: @ds-mono;
+}
+.ds-accounts .ds-models-name {
+    width: 130px;
+}
+.ds-accounts .ds-models-price {
+    width: 66px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.ds-models-bad input[type=text] {
+    border-color: @ds-del;
+}
+.ds-models .ds-icon-btn {
+    color: inherit;
+}
+.ds-models .ds-icon-btn[disabled] {
+    opacity: 0.35;
+}
+.ds-accounts select.ds-models-fast {
+    width: auto;
+    min-width: 200px;
+}
+
+/* Peak hours */
+.ds-peak-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ds-peak-field {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 10px;
+}
+.ds-peak-field > .ds-acct-note,
+.ds-peak-field > .ds-acct-error {
+    grid-column: 2;
+    margin-top: 2px;
+}
+.ds-accounts .ds-peak-input {
+    width: 100%;
+    max-width: 400px;
+}
+.ds-accounts .ds-peak-pct {
+    width: 66px;
+}
+.ds-accounts textarea.ds-peak-input {
+    height: auto;
+    min-height: 44px;
+    resize: vertical;
+    font-family: @ds-mono;
+}
+.ds-peak-notices {
+    margin-top: 10px;
+}
+.ds-peak-now {
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: fade(@preferences-form-label-color, 7%);
+    font-variant-numeric: tabular-nums;
+}
