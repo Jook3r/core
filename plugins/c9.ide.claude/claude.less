@@ -1847,10 +1847,18 @@
 
 /* ---- The chat's account and folder (the line above the input) ---------- */
 
+/* inside the box (it has no padding of its own): a negative margin put
+   the hover and the badges over its border. The pills' text lines up with
+   the input's (10px). */
 .claude-where {
     display: flex;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
-    margin: -2px 0 2px -4px;
+    padding: 5px 6px 0;
+}
+.claude-root .claude-where ~ textarea.claude-input {
+    padding-top: 4px;
 }
 .claude-root .claude-where-pill {
     display: inline-flex;

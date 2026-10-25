@@ -1847,10 +1847,18 @@
 
 /* ---- The chat's account and folder (the line above the input) ---------- */
 
+/* inside the box (it has no padding of its own): a negative margin put
+   the hover and the badges over its border. The pills' text lines up with
+   the input's (10px). */
 .ds-where {
     display: flex;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
-    margin: -2px 0 2px -4px;
+    padding: 5px 6px 0;
+}
+.ds-root .ds-where ~ textarea.ds-input {
+    padding-top: 4px;
 }
 .ds-root .ds-where-pill {
     display: inline-flex;
