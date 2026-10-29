@@ -51,6 +51,9 @@ environment variable (which keeps the password out of `ps`):
 
     C9_AUTH=user:password node server.js -w ~/workspace --packed
 
+An address that tries 10 different wrong passwords within 15 minutes is
+refused for 15 minutes; wrong passwords and logins are written to the log.
+
 The following options can be used:
 
     --settings       Settings file to use

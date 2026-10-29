@@ -48,6 +48,17 @@ and the packed client, and tells you if a system package is missing.
 Set `C9_AUTH=username:password` (use a long random password) and
 `C9_HOSTNAME=app.example.com`. Cloud9 refuses to start without a login.
 
+An address that tries 10 different wrong passwords within 15 minutes is
+refused for 15 minutes (HTTP 429), whatever it sends. Wrong passwords,
+blocks and the first login from each address each day are logged:
+
+    journalctl -u cloud9 | grep Login:
+
+Behind Apache the address is the visitor's (Apache adds it to
+`X-Forwarded-For`). With another reverse proxy on the same machine, make it
+set that header too (nginx: `proxy_set_header X-Forwarded-For
+$proxy_add_x_forwarded_for;`), or every visitor counts as the proxy.
+
 ## 4. Service
 
     sudo cp deploy/cloud9.service /etc/systemd/system/
