@@ -90,7 +90,8 @@ define(function(require, exports, module) {
         var RENDER_DELAY = 60;          // markdown re-render throttle while streaming (ms)
         var PREVIEW_LINES = 60;         // Write previews
         var INSTALL_HELP = "Install Claude Code with `curl -fsSL https://claude.ai/install.sh | bash` "
-            + "or `npm install -g @anthropic-ai/claude-code`, then log in once by running `claude` in a terminal.";
+            + "or `npm install -g @anthropic-ai/claude-code`, then log in once: Preferences › User Settings › "
+            + "Claude › Log in… (or run `claude` in a new terminal).";
 
         // 16px icons, drawn with currentColor (static markup only)
         var ICONS = {
@@ -1401,7 +1402,10 @@ define(function(require, exports, module) {
         // (/login) the way Claude Code does it. The default account: with the
         // server's CLAUDE_CONFIG_DIR, if it has one.
         function loginAccount(key) {
-            var bin = settings.get("user/claude/@path") || "claude";
+            // where the panel found it: ~/.local/bin may not be on the
+            // terminal's PATH
+            var bin = settings.get("user/claude/@path")
+                || cliInfo && cliInfo.found && cliInfo.path || "claude";
             var home = String(cliInfo && cliInfo.home || c9.home || "").replace(/\/$/, "");
             var rest = defaultEnvDir && home && defaultEnvDir.indexOf(home + "/") === 0 ? defaultEnvDir.slice(home.length) : null;
             // only the "$HOME" written here is expanded by the shell

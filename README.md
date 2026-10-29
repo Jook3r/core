@@ -14,13 +14,19 @@ tutorials that use them don't work.
 
 #### Installation ####
 
-This fork runs on Ubuntu 24.04/26.04 with Node.js 24 LTS (22 also works),
+This fork runs on Ubuntu 24.04/26.04 with Node.js 24 LTS (18 or newer works),
 tmux 3.x and Python 3. Install the system packages, then the SDK:
 
     sudo apt-get install -y git tmux python3 python3-venv build-essential
     git clone https://github.com/Jook3r/core.git onlineIDE
     cd onlineIDE
     scripts/install-sdk.sh
+
+The Claude and DeepSeek panels run Claude Code, which the setup doesn't
+install. Install it as the user Cloud9 runs as (it goes to `~/.local/bin`;
+the panels find it there without a PATH change):
+
+    curl -fsSL https://claude.ai/install.sh | bash
 
 To update the SDK to the latest version run:
 
