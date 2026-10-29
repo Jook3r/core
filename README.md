@@ -62,4 +62,9 @@ The following options can be used:
 
 Now visit [http://localhost:8181/ide.html](http://localhost:8181/ide.html) to load Cloud9.
 
+Terminals and runners have the `c9` command on their PATH: `c9 open file`
+opens a file in an editor tab (a file in the workspace or the home folder).
+With Preferences > User Settings > Terminal > Use Cloud9 as the Default
+Editor, `git commit` opens the message in a tab and waits until you close it.
+
 Happy coding, Cloud9

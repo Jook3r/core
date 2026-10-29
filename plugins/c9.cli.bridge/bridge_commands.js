@@ -113,8 +113,9 @@ define(function(require, exports, module) {
                 path = c9.toInternalPath(path);
                 // Make sure file is inside workspace
                 if (path.charAt(0) !== "~") {
+                    // say so: every IDE tab has this workspace, so none can open it
                     if (path.substr(0, BASEPATH.length) !== BASEPATH)
-                        return; // Dont' call callback. Perhaps another client will pick this up.
+                        return next("Cloud9 can only open files in the workspace or the home folder: " + info.path);
                     
                     // Remove base path
                     path = path.substr(BASEPATH.length);

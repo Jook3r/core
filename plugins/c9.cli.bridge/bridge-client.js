@@ -44,7 +44,8 @@ define(function(require, exports, module) {
                 jstream.on("data", function(payload) {
                     if (payload.id == msgId && !done) {
                         done = true;
-                        callback(null, payload.message);
+                        var err = typeof payload.error == "string" ? new Error(payload.error) : null;
+                        callback(err, payload.message);
                         stream.end();
                     }
                 });

@@ -232,6 +232,9 @@ module.exports = function(config, optimist) {
                 // apps started from the IDE listen on $IP:$PORT, which the
                 // app's reverse proxy (deploy/apache2/cloud9-app.conf) forwards to
                 defaultEnv: { CUSTOM: 43, IP: "127.0.0.1", PORT: "8080" },
+                // put bin/ (the c9 command) first on the PATH of terminals
+                // and runners
+                binDir: path.join(__dirname, "../bin"),
                 local: config.local,
                 debug: debug,
                 inProcess: argv.inProcessLocalFs

@@ -122,11 +122,10 @@ define(function(require, exports, module) {
                     else
                         console.log(err.message);
                 }
-                
-                if (response !== true)
+                else if (response !== true)
                     console.log("Could not open ", paths);
                 
-                process.exit(); // I don't get why this is needed
+                process.exit(response === true ? 0 : 1); // I don't get why this is needed
             });
         }
         
