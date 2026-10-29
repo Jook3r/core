@@ -607,7 +607,7 @@ define(function(require, exports, module) {
                     logln("\n" + err.message + "\n\n" + RED
                       + "One or more errors occured. "
                       + "Please try to resolve them and "
-                      + "restart Cloud9 or contact support@c9.io." 
+                      + "restart Cloud9." 
                       + RESETCOLOR);
                       
                     spinner.style.display = "none";

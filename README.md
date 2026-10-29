@@ -5,22 +5,12 @@ This is the core repository for the Cloud9 v3 SDK. The SDK allows you to run a v
  
 #### Creating Plugins ####
 
-The best and easiest way to create plugins is on c9.io. Please check out this tutorial for how to [get started writing plugins.](http://cloud9-sdk.readme.io/v0.1/docs/getting-started-with-cloud9-plugins)
-
-We also have a tutorial for how to get started working on the core plugins. [Check out that tutorial here.](http://cloud9-sdk.readme.io/v0.1/docs/contributing-to-cloud9)
-
-#### Documentation ####
-
-We have several documentation resources for you:
-
-<table>
-    <tr><th>SDK documentation</th><td>http://cloud9-sdk.readme.io/v0.1/docs</td></tr>
-    <tr><th>API documentation</th><td>http://docs.c9.io/api</td></tr>
-    <tr><th>User documentation</th><td>http://docs.c9.io</td></tr>
-</table>
-
-Please join the mailinglist to get support or give support to the growing community of plugin developers:
-https://groups.google.com/forum/#!forum/cloud9-sdk
+Run Cloud9 as described below, then follow the tutorials on [writing
+plugins](https://cloud9-sdk.readme.io/docs/getting-started-with-cloud9-plugins)
+and [working on the core plugins](https://cloud9-sdk.readme.io/docs/contributing-to-cloud9),
+and the rest of the [SDK documentation](https://cloud9-sdk.readme.io/docs).
+c9.io and docs.c9.io are gone (they redirect to AWS), so the parts of the
+tutorials that use them don't work.
 
 #### Installation ####
 
@@ -71,17 +61,5 @@ The following options can be used:
     --no-cache       Don't use the cached version of CSS
 
 Now visit [http://localhost:8181/ide.html](http://localhost:8181/ide.html) to load Cloud9.
-
-#### Running Tests ####
-
-Run server side tests with:
-    
-    npm run test
-    
-Run client side tests with:
-
-    npm run ctest
-    
-Then visit [http://localhost:8181/static/test](http://localhost:8181/static/test) in your browser.
 
 Happy coding, Cloud9

@@ -102,6 +102,7 @@ define(function(require, exports, module) {
                 if (mainlogo && (mainlogo = mainlogo[0])) {
                     mainlogo.title = "back to dashboard";
                     mainlogo.href = dashboardUrl;
+                    mainlogo.target = "_blank";
                     mainlogo.innerHTML = "Dashboard";
                 }
             }

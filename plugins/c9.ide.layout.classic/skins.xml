@@ -67,7 +67,7 @@
                         <div class="c9-mbar-cont"> </div>
 
                         <div class="c9-mbar-round">
-                            <a id="backToC9" href="http://c9.io/" class="mainlogo backToC9" target="_blank" title="Go to c9.io">c9.io</a>
+                            <a id="backToC9" class="mainlogo backToC9" title="Cloud9">Cloud9</a>
                             <div class="c9-activity" id="saveStatus"><div class="light"> </div></div>
                         </div>
                     </div>

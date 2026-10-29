@@ -108,7 +108,8 @@ define(function(require, module, exports) {
                               + "/My Builder.build",
                             active: true,
                             value: '// Create a custom Cloud9 build system - similar to the Sublime build system\n'
-                              + '// For more information see https://docs.c9.io/custom_runners.html\n'
+                              + '// Variables include $file, $file_path, $file_name, $file_base_name, $args\n'
+                              + '// and $project_path; see the comment on run() in plugins/c9.ide.run/run.js\n'
                               + '{\n'
                               + '    "cmd" : ["ls", "$file", "$args"],\n'
                               + '    "env" : {},\n'

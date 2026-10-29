@@ -216,7 +216,8 @@ define(function(require, module, exports) {
                               + "/My Runner.run",
                             active: true,
                             value: '// Create a custom Cloud9 runner - similar to the Sublime build system\n'
-                              + '// For more information see https://docs.c9.io/custom_runners.html\n'
+                              + '// Variables include $file, $file_path, $file_name, $file_base_name, $args\n'
+                              + '// and $project_path; see the comment on run() in plugins/c9.ide.run/run.js\n'
                               + '{\n'
                               + '    "cmd" : ["ls", "$file", "$args"],\n'
                               + '    "info" : "Started $project_path$file_name",\n'
@@ -252,7 +253,7 @@ define(function(require, module, exports) {
                                     value: exists
                                       ? undefined
                                       : "// This file overrides the built-in " + runnerName + " runner\n"
-                                        + '// For more information see http://docs.c9.io:8080/#!/api/run-method-run\n'
+                                        + '// The fields are described in the comment on run() in plugins/c9.ide.run/run.js\n'
                                         + JSON.stringify(runner, null, 2),
                                     document: !exists && {
                                         meta: {

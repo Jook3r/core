@@ -1,7 +1,7 @@
 define(function(require, exports, module) {
     main.consumes = [
         "Editor", "editors", "ui", "tabManager", "settings", "Form",
-        "commands", "fs", "ace", "layout", "c9", "menus"
+        "commands", "fs", "ace", "layout", "c9", "menus", "util"
     ];
     main.provides = ["welcome"];
     return main;
@@ -24,6 +24,7 @@ define(function(require, exports, module) {
         var settings = imports.settings;
         var Form = imports.Form;
         var menus = imports.menus;
+        var util = imports.util;
 
         var join = require("path").join;
         
@@ -283,7 +284,37 @@ define(function(require, exports, module) {
                 container.querySelector(".newfile").onclick = function() {
                     commands.exec("newfile");
                 };
+
+                showGuides(node.querySelector(".sidepanel .docs"));
             });
+
+            // The guides are README files in the Cloud9 folder. They open
+            // in a preview tab when the IDE can read that folder (it is in
+            // the workspace or in the home folder).
+            function showGuides(docs) {
+                if (!c9.sourceDir) {
+                    docs.style.display = "none";
+                    return;
+                }
+
+                var dir = c9.sourceDir;
+                if (c9.home && dir.indexOf(c9.home + "/") === 0)
+                    dir = "~" + dir.slice(c9.home.length);
+                docs.querySelector(".location").textContent = "In the Cloud9 folder, " + dir;
+
+                var path = util.normalizePath(c9.sourceDir).replace(/\/$/, "");
+                fs.exists(path + "/README.md", function(exists) {
+                    if (!exists) return;
+                    docs.className += " reachable";
+                    [].forEach.call(docs.querySelectorAll("[data-doc]"), function(link) {
+                        link.onclick = function() {
+                            commands.exec("preview", null, {
+                                path: path + "/" + link.getAttribute("data-doc")
+                            });
+                        };
+                    });
+                });
+            }
             
             /***** Method *****/
             
