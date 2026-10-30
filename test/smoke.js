@@ -344,6 +344,58 @@ async function main() {
         assert(/In typed\.ts, line 1:\n\n```ts\nconst count: number = "three";\n```/.test(text), text);
     });
 
+    await check("Git: a changed line is marked, blame shows the author", async function() {
+        var repo = path.join(workspace, "repo");
+        fs.mkdirSync(repo);
+        fs.writeFileSync(path.join(repo, "notes.txt"), "one\ntwo\nthree\n");
+        var env = Object.assign({}, process.env, {
+            HOME: home,
+            GIT_AUTHOR_NAME: "Smoke Author",
+            GIT_AUTHOR_EMAIL: "smoke@example.com",
+            GIT_COMMITTER_NAME: "Smoke Author",
+            GIT_COMMITTER_EMAIL: "smoke@example.com"
+        });
+        [["init", "-q"], ["add", "notes.txt"], ["commit", "-q", "-m", "First version"]].forEach(function(args) {
+            childProcess.execFileSync("git", args, { cwd: repo, env: env });
+        });
+
+        await page.evaluate(function() {
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/repo/notes.txt", true, resolve); });
+        });
+        await until("the file", function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.findTab("/repo/notes.txt");
+                return tab && tab.editor.ace && tab.editor.ace.getValue() == "one\ntwo\nthree\n";
+            });
+        });
+        await page.evaluate(function() {
+            window.app.tabManager.findTab("/repo/notes.txt").editor.ace.session.doc.insertFullLines(1, ["inserted"]);
+        });
+        var marks = await until("the marker", function() {
+            return page.evaluate(function() {
+                var session = window.app.tabManager.findTab("/repo/notes.txt").editor.ace.session;
+                return session.$decorations.map(function(classes, row) {
+                    return classes && classes.trim() ? row + ":" + classes.trim() : "";
+                }).filter(Boolean).join(" ");
+            });
+        });
+        assert.equal(marks, "1:c9-git-added");
+
+        await page.evaluate(function() {
+            var tab = window.app.tabManager.findTab("/repo/notes.txt");
+            tab.editor.ace.focus();
+            window.app.commands.exec("blame", tab.editor);
+        });
+        var cells = await until("the blame column", function() {
+            return page.evaluate(function() {
+                var cells = [].slice.call(document.querySelectorAll(".ace_blame-cell"));
+                return cells.length && cells.map(function(cell) { return cell.textContent; });
+            });
+        });
+        assert(/^Smoke Author \xB7 .* \xB7 First version$/.test(cells[0]), JSON.stringify(cells));
+        assert.equal(cells[1], "Not committed yet");
+    });
+
     // the panels: a chat through Claude Code to the mock API
     var panels = [["deepseek", "ds"], ["claude", "claude"]];
     for (var i = 0; i < panels.length; i++) {

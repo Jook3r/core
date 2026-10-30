@@ -2,7 +2,8 @@ define(function(require, exports, module) {
     main.consumes = [
         "Panel", "Menu", "MenuItem", "Divider", "settings", "ui", "c9", 
         "watcher", "panels", "util", "save", "preferences", "commands", "Tree",
-        "Datagrid", "tabManager", "layout", "preferences.experimental"
+        "Datagrid", "tabManager", "layout", "preferences.experimental",
+        "dialog.error"
     ];
     main.provides = ["scm"];
     return main;
@@ -103,6 +104,7 @@ define(function(require, exports, module) {
         var prefs = imports.preferences;
         var commands = imports.commands;
         var experimental = imports["preferences.experimental"];
+        var showError = imports["dialog.error"].show;
         
         // var Tooltip = require("ace_tree/tooltip");
         var DataProvider = require("ace_tree/data_provider");
@@ -137,6 +139,7 @@ define(function(require, exports, module) {
         var mnuCommit, btnCommit, mnuExecute, barCommit, mnuSettings;
         var btnSettings, container, btnPush, barPush, pushBtn;
         var barPull, btnPull, activeDialog;
+        var barBranch, currentBranch;
         
         var locationBar, locationBox, locationRefreshButton;
         
@@ -157,45 +160,6 @@ define(function(require, exports, module) {
             });
             
             commands.addCommand({
-                name: "blame",
-                group: "scm",
-                exec: function() {
-                    var tab = tabs.focussedTab || tabs.getPanes()[0].activeTab;
-                    if (!tab || !tab.path || tab.editorType != "ace")
-                        return;
-                    var blameAnnotation, err, data;
-                    var ace = tab.editor.ace;
-                    var session = ace.session;
-                    require(["../blame"], function(blameModule) {
-                        if (ace.session != session)
-                            return;
-                        blameAnnotation = blameModule.annotate(ace);
-                        done();
-                    });
-                    
-                    var path = tab.path;
-                    scm.getBlame(path, function(err, blameInfo) {
-                        if (err) return console.error(err);
-                        data = blameInfo;
-                        done();
-                    });
-                    
-                    function done() {
-                        if (!blameAnnotation) return;
-                        if (data === null) return;
-                        
-                        blameAnnotation.setData(data);
-                    }
-                },
-                isAvailable: function() {
-                    var tab = tabs.focussedTab || tabs.getPanes()[0].activeTab;
-                    if (!tab || !tab.path || tab.editorType != "ace")
-                        return false;
-                    return true;
-                }
-            }, plugin);
-            
-            commands.addCommand({
                 name: "addall",
                 group: "scm",
                 exec: function() { addAll(); }
@@ -210,7 +174,7 @@ define(function(require, exports, module) {
             commands.addCommand({
                 name: "fetch",
                 group: "scm",
-                exec: function() { fetch(); }
+                exec: function() { fetch({}); }
             }, plugin);
             
             commands.addCommand({
@@ -315,42 +279,42 @@ define(function(require, exports, module) {
                                 skin: "btn-default-css3",
                                 class: "btn-green",
                                 margin: "5 0 0 0",
-                                onclick: function() {
-                                    commitBtn.disable();
-                                    commit(commitBox.ace.getValue(), ammendCb.checked, function(err) {
-                                        commitBtn.enable();
-                                        if (err) return console.error(err);
-                                        
-                                        ammendCb.uncheck();
-                                        commitBox.ace.setValue("");
-                                        barCommit.hide();
-                                    });
-                                }
+                                onclick: submitCommit
                             })
                         ]
                     })
                 ]
             }));
             
-            commitBox.on("DOMNodeInsertedIntoDocument", function() {
+            withAce(commitBox, function() {
                 commitBox.ace.setOption("minLines", 2);
                 commitBox.ace.commands.addCommand({
                     bindKey: "Esc",
+                    name: "closeCommitForm",
                     exec: function() {
-                        btnCommit.hideMenu();
+                        barCommit.hide();
                     }
                 });
                 commitBox.ace.commands.addCommand({
                     bindKey: "Ctrl-Enter|Cmd-Enter",
                     name: "commit",
-                    exec: function(editor) {
-                        commands.exec("commit", null, {
-                            message: commitBox.ace.getValue(),
-                            ammend: ammendCb.checked
-                        });
-                    }
+                    exec: submitCommit
                 });
             });
+            
+            function submitCommit() {
+                var message = commitBox.ace.getValue();
+                if (!message.trim()) return commitBox.focus();
+                commitBtn.disable();
+                commit(message, ammendCb.checked, function(err) {
+                    commitBtn.enable();
+                    if (err) return;
+                    
+                    ammendCb.uncheck();
+                    commitBox.ace.setValue("");
+                    barCommit.hide();
+                });
+            }
             
             mnuCommit = new Menu({ items: [
                 new MenuItem({ caption: "Add All", command: "addall", tooltip: "git add -u" }, plugin),
@@ -401,7 +365,7 @@ define(function(require, exports, module) {
                                         force: forceCb.checked
                                     }, function(err) {
                                         pushBtn.enable();
-                                        if (err) return console.error(err);
+                                        if (err) return;
                                         
                                         // TODO stream output
                                         barPush.hide();
@@ -459,7 +423,7 @@ define(function(require, exports, module) {
                                     }, function(err) {
                                         pullBtn.enable();
                                         fetchBtn.enable();
-                                        if (err) return console.error(err);
+                                        if (err) return;
                                         
                                         // TODO stream output
                                         barPull.hide();
@@ -480,7 +444,7 @@ define(function(require, exports, module) {
                                     }, function(err) {
                                         pullBtn.enable();
                                         fetchBtn.enable();
-                                        if (err) return console.error(err);
+                                        if (err) return;
                                         
                                         // TODO stream output
                                         barPull.hide();
@@ -523,28 +487,44 @@ define(function(require, exports, module) {
                 } else if (activeDialog == this) {
                     activeDialog = null;
                 }
-                this.button.setAttribute("value", e.value);
+                if (this.button)
+                    this.button.setAttribute("value", e.value);
             }
             
+            var seenRemotes = {};
             mnuBranches = new ui.menu({ width: 500, style: "padding:0" });
             mnuBranches.on("prop.visible", function(e) {
                 if (e.value) {
                     if (!branchesTree) {
+                        var grid = mnuBranches.$int.appendChild(document.createElement("div"));
+                        grid.className = "scm-branches";
                         branchesTree = new Datagrid({
-                            container: mnuBranches.$int,
+                            container: grid,
                             scrollMargin: [0, 0],
                             theme: "blackdg",
                             isLoading: function() {},
     
                             getEmptyMessage: function() {
-                                if (!this.keyword)
-                                    return this.isLoading()
-                                        ? "Loading file list. One moment please..."
-                                        : "No files found.";
-                                else
-                                    return "No files found that match '" + this.keyword + "'";
+                                return "No branches yet: they start with the first commit.";
                             }
                         }, plugin);
+                        branchesTree.on("afterChoose", function() {
+                            var node = branchesTree.selectedNode;
+                            // folders have no hash
+                            if (node && node.hash) switchTo(node);
+                        });
+                        
+                        var footer = mnuBranches.$int.appendChild(document.createElement("div"));
+                        footer.className = "scm-branches-footer";
+                        footer.appendChild(document.createElement("span")).textContent =
+                            "Double-click a branch or tag to check it out.";
+                        var newButton = footer.appendChild(document.createElement("button"));
+                        newButton.textContent = "New Branch\u2026";
+                        newButton.addEventListener("click", function() {
+                            mnuBranches.hide();
+                            barBranch.show();
+                            branchNameBox.focus();
+                        });
                         branchesTree.columns = [
                             {
                                 caption: "Name",
@@ -588,6 +568,7 @@ define(function(require, exports, module) {
                             };
                         };
                         idMixin.call(branchesTree.model);
+                        branchesTree.model.expandedList["refs/heads/"] = true;
                         branchesTree.model.expandedList["refs/remotes/"] = true;
                         
                         branchesTree.container.style.margin = "0 0px 0 0";
@@ -604,6 +585,9 @@ define(function(require, exports, module) {
                         var root = { path: "" };
                         data.forEach(function(x) {
                             x.path = x.name;
+                            if (currentBranch && !currentBranch.detached
+                              && x.path == "refs/heads/" + currentBranch.name)
+                                x.className = "current";
                             var parts = x.name.split("/");
                             x.name = parts.pop();
                             var node = root;
@@ -613,11 +597,16 @@ define(function(require, exports, module) {
                                     label: p,
                                     path: node.path + p + "/"
                                 });
+                                // a remote's branches start open
+                                if (/^refs\/remotes\/[^\/]+\/$/.test(node.path) && !seenRemotes[node.path]) {
+                                    seenRemotes[node.path] = true;
+                                    branchesTree.model.expandedList[node.path] = true;
+                                }
                             });
                             var map = node.map || (node.map = {});
                             map[x.name] = x;
                         });
-                        branchesTree.setRoot(root.map.refs);
+                        branchesTree.setRoot(root.map && root.map.refs || {});
                         branchesTree.resize();
                     });
                 }
@@ -630,6 +619,64 @@ define(function(require, exports, module) {
                 style: "float:right",
                 submenu: mnuBranches
             }), 200, plugin);
+            
+            var branchNameBox, createBranchBtn;
+            barBranch = vbox.appendChild(new ui.bar({
+                class: "form-bar",
+                visible: false,
+                childNodes: [
+                    new ui.hsplitbox({
+                        height: 30,
+                        align: "center",
+                        padding: 3,
+                        childNodes: [
+                            new ui.label({ caption: "Branch", width: 70, margin: "5 0 0 0" }),
+                            branchNameBox = new apf.codebox({ "initial-message": "new branch name" })
+                        ]
+                    }),
+                    new ui.hbox({
+                        padding: 3,
+                        childNodes: [
+                            new ui.filler(),
+                            createBranchBtn = new ui.button({
+                                caption: "Create",
+                                skin: "btn-default-css3",
+                                class: "btn-green",
+                                margin: "5 0 0 0",
+                                onclick: submitBranch
+                            })
+                        ]
+                    })
+                ]
+            }));
+            barBranch.on("prop.visible", updateActiveDialog);
+            withAce(branchNameBox, function() {
+                branchNameBox.ace.commands.addCommands([{
+                    bindKey: "Enter|Return",
+                    name: "createBranch",
+                    exec: submitBranch
+                }, {
+                    bindKey: "Esc",
+                    name: "closeBranchForm",
+                    exec: function() { barBranch.hide(); }
+                }]);
+            });
+            
+            function submitBranch() {
+                var name = branchNameBox.ace.getValue().trim();
+                if (!name) return branchNameBox.focus();
+                createBranchBtn.disable();
+                scm.createBranch(name, function(err) {
+                    createBranchBtn.enable();
+                    if (err) return showError("Could not create the branch: " + err.message);
+                    branchNameBox.ace.setValue("");
+                    barBranch.hide();
+                    emit("reload");
+                    getLog();
+                });
+            }
+            
+            plugin.on("reload", updateBranch);
             
             mnuExecute = new Menu({ items: [
                 new MenuItem({ caption: "Refresh", onclick: refresh }, plugin)
@@ -662,23 +709,34 @@ define(function(require, exports, module) {
             plugin.on("show", function() {
                 save.on("afterSave", markDirty);
                 watcher.on("change", markDirty);
+                watcher.on("change", onGitDir);
+                watcher.on("directory", onGitDir);
             });
             plugin.on("hide", function() {
                 clearTimeout(timer);
                 save.off("afterSave", markDirty);
                 watcher.off("change", markDirty);
+                watcher.off("change", onGitDir);
+                watcher.off("directory", onGitDir);
             });
             
-            watcher.watch(util.normalizePath(workspaceDir) + "/.git");
+            var gitDir = util.normalizePath(workspaceDir + "/.git");
+            watcher.watch(gitDir);
             
-            var timer = null;
-            function markDirty(e) {
+            // commits, checkouts, staging: also from a terminal
+            function onGitDir(e) {
+                if (e.path == gitDir) markDirty(e, true);
+            }
+            
+            var timer = null, logDirty = false;
+            function markDirty(e, gitChanged) {
                 clearTimeout(timer);
+                logDirty = logDirty || gitChanged;
                 timer = setTimeout(function() {
-                    if (tree && tree.meta.options && !tree.meta.options.hash) {
-                        tree.meta.options.force = true;
-                        emit("reload", tree.meta.options);
-                    }
+                    // the list of changes, unless it shows a commit
+                    emit("reload", { force: true, dirty: true });
+                    if (logDirty) getLog();
+                    logDirty = false;
                 }, 800);
             }
             
@@ -738,7 +796,10 @@ define(function(require, exports, module) {
                 message: message,
                 amend: amend
             }, function(err) {
-                if (err) return console.error(err);
+                if (err) {
+                    showError("Git commit failed: " + err.message);
+                    return callback && callback(err);
+                }
                 
                 emit("reload");
                 getLog();
@@ -789,21 +850,30 @@ define(function(require, exports, module) {
         }
         function fetch(options, callback) {
             scm.fetch(options, function(err) {
-                if (err) return console.error(err);
+                if (err) {
+                    showError("Git fetch failed: " + err.message);
+                    return callback && callback(err);
+                }
                 emit("reload");
                 callback && callback();
             });
         }
         function pull(options, callback) {
             scm.pull(options, function(err) {
-                if (err) return console.error(err);
+                if (err) {
+                    showError("Git pull failed: " + err.message);
+                    return callback && callback(err);
+                }
                 emit("reload");
                 callback && callback();
             });
         }
         function push(options, callback) {
             scm.push(options, function(err) {
-                if (err) return callback(err);
+                if (err) {
+                    showError("Git push failed: " + err.message);
+                    return callback && callback(err);
+                }
                 emit("reload");
                 callback && callback();
             });
@@ -817,6 +887,39 @@ define(function(require, exports, module) {
         }
         function getStatus(options, callback) {
             scm.getStatus(options, callback);
+        }
+        
+        // a codebox's editor exists once it is in the document
+        function withAce(codebox, fn) {
+            if (codebox.ace) return fn();
+            codebox.on("DOMNodeInsertedIntoDocument", function() {
+                if (codebox.ace) fn();
+            });
+        }
+        
+        // the checked out branch, on the Branches button
+        function updateBranch() {
+            if (!btnBranches || !scm || !scm.getCurrentBranch) return;
+            scm.getCurrentBranch(function(err, branch) {
+                currentBranch = err ? null : branch;
+                btnBranches.setAttribute("caption", !branch
+                    ? "Branches"
+                    : branch.detached ? branch.name + " (detached)" : branch.name);
+                btnBranches.setAttribute("tooltip", !branch
+                    ? "Branches and tags"
+                    : (branch.detached ? "Not on a branch (detached HEAD at " + branch.name + ")" : "On branch " + branch.name)
+                        + ": click to switch branches");
+            });
+        }
+        
+        function switchTo(node) {
+            var name = node.path.replace(/^refs\/(heads|remotes|tags)\//, "");
+            mnuBranches.hide();
+            scm.checkout(node.path, function(err) {
+                if (err) return showError("Could not check out " + name + ": " + err.message);
+                emit("reload", { force: true });
+                getLog();
+            });
         }
         
         /***** Lifecycle *****/

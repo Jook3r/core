@@ -216,6 +216,11 @@ define(function(require, exports, module) {
             // }, plugin);
             
             scm.on("reload", function(options) {
+                // files changed: the working copy, unless a commit is shown
+                if (options && options.dirty) {
+                    if (tree.meta.options && tree.meta.options.hash) return;
+                    options = { hash: 0, force: true };
+                }
                 reload(options || { hash: 0, force: true }, function(e, status) {
                     
                 });

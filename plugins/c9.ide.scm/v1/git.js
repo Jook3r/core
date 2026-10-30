@@ -54,21 +54,80 @@ define(function(require, exports, module) {
             var args = ["fetch"];
             if (options.prune) args.push("--prune");
             if (options.branch) args.push(options.branch);
-            git(args, callback);
+            run(args, callback);
         }
         
         function pull(options, callback) {
             var args = ["pull"];
             if (options.prune) args.push("--prune");
             if (options.branch) args.push(options.branch);
-            git(args, callback);
+            run(args, callback);
         }
         
         function push(options, callback) {
             var args = ["push"];
             if (options.force) args.push("--force");
             if (options.branch) args.push(options.branch);
-            git(args, callback);
+            run(args, callback);
+        }
+        
+        // like git(), but a failure is an error with git's message
+        function run(args, callback) {
+            proc.execFile("git", {
+                args: args,
+                cwd: workspaceDir,
+                // no tty to ask for a password on: fail instead of waiting
+                env: { GIT_TERMINAL_PROMPT: "0" },
+                maxBuffer: 10 * 1024 * 1024
+            }, function(err, stdout, stderr) {
+                if (err) {
+                    // git commit puts "nothing to commit" last on stdout
+                    var message = String(err.stderr || stderr || "").trim()
+                        || String(stdout || "").trim().split("\n").pop() || err.message;
+                    message = message.split("\n").filter(function(line) {
+                        return !/^hint: /.test(line);
+                    }).join("\n").replace(/^(error|fatal): /gm, "");
+                    return callback(new Error(message), stdout);
+                }
+                callback(null, stdout);
+            });
+        }
+        
+        // { name: "main" }, or { name: "1a2b3c4", detached: true }
+        function getCurrentBranch(callback) {
+            run(["symbolic-ref", "--short", "-q", "HEAD"], function(err, stdout) {
+                if (!err) return callback(null, { name: stdout.trim() });
+                run(["rev-parse", "--short", "HEAD"], function(err, stdout) {
+                    if (err) return callback(err);
+                    callback(null, { name: stdout.trim(), detached: true });
+                });
+            });
+        }
+        
+        // a ref from listAllRefs: refs/heads/..., refs/remotes/... or refs/tags/...
+        function checkout(ref, callback) {
+            var match = /^refs\/(heads|remotes|tags)\/(.+)$/.exec(ref);
+            if (!match || /(^|\/)HEAD$/.test(match[2]))
+                return callback(new Error("Only branches and tags can be checked out here."));
+            if (match[1] == "heads")
+                return run(["checkout", "-q", match[2]], callback);
+            if (match[1] == "tags")
+                return run(["checkout", "-q", "--detach", "refs/tags/" + match[2]], callback);
+            
+            // origin/feature: the local feature branch, created to track it
+            var name = match[2].replace(/^[^\/]+\//, "");
+            run(["show-ref", "--verify", "-q", "refs/heads/" + name], function(err) {
+                if (!err) return run(["checkout", "-q", name], callback);
+                run(["checkout", "-q", "--track", match[2]], callback);
+            });
+        }
+        
+        // a new branch from HEAD, checked out
+        function createBranch(name, callback) {
+            run(["check-ref-format", "--branch", name], function(err) {
+                if (err) return callback(new Error("\"" + name + "\" is not a valid branch name."));
+                run(["checkout", "-q", "-b", name], callback);
+            });
         }
         
         function git(args, cb) {
@@ -311,9 +370,9 @@ define(function(require, exports, module) {
         
         function commit(options, callback) {
             if (!options.message) return;
-            var args = ["commit", options.ammend && "--amend", "-m", options.message].filter(Boolean);
+            var args = ["commit", options.amend && "--amend", "-m", options.message].filter(Boolean);
             
-            git(args, callback);
+            run(args, callback);
         }
         
         function listAllRefs(cb) {
@@ -463,6 +522,21 @@ define(function(require, exports, module) {
              * 
              */
             getBlame: getBlame,
+            
+            /**
+             * The checked out branch: { name }, or { name: hash, detached: true }
+             */
+            getCurrentBranch: getCurrentBranch,
+            
+            /**
+             * Checks out a branch or tag of listAllRefs (by its full ref)
+             */
+            checkout: checkout,
+            
+            /**
+             * Creates a branch from HEAD and checks it out
+             */
+            createBranch: createBranch,
             
         });
         

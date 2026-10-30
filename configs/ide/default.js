@@ -771,6 +771,7 @@ module.exports = function(options) {
         "plugins/c9.ide.scm/v1/log",
         "plugins/c9.ide.scm/v1/git",
         "plugins/c9.ide.scm/v1/editor",
+        "plugins/c9.ide.scm/v1/gutter",
         
         // git integration
         "plugins/c9.ide.scm/mergetool"

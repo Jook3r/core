@@ -148,20 +148,42 @@ function BlameParser(str) {
                 lastHash = lineData[i].hash;
                 var time = new Date(parseInt(commitData[lineData[i].hash].authorTime, 10) * 1000);
                 var commit = commitData[lineData[i].hash];
+                // lines that differ from the last commit (git blame --contents)
+                var uncommitted = /^0+$/.test(lineData[i].hash);
                 textHash[i - 1] = {
-                    text: commit.author +
-                        " \xBB "/* +
-                        lineData[i].hash.substr(0, 8),*/,
-                    title: commitData[lineData[i].hash].summary,
+                    text: uncommitted
+                        ? "Not committed yet"
+                        : commit.author + " \xB7 " + ago(time) + " \xB7 " + commit.summary,
+                    title: uncommitted
+                        ? "Not committed yet"
+                        : lineData[i].hash.substr(0, 8) + " \xB7 " + commit.author + " " + commit.authorMail
+                            + "\n" + time.toLocaleString() + "\n\n" + commit.summary,
                     data: lineData[i],
                     commit: commit,
-                    time: time
+                    time: time,
+                    uncommitted: uncommitted
                 };
             }
         }
         return textHash;
     };
 }).call(BlameParser.prototype);
+
+function ago(time) {
+    var minutes = Math.max(0, (Date.now() - time) / 60000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return plural(minutes, "minute");
+    if (minutes < 60 * 24) return plural(minutes / 60, "hour");
+    var days = minutes / 60 / 24;
+    if (days < 30) return plural(days, "day");
+    if (days < 365) return plural(days / 30, "month");
+    return plural(days / 365, "year");
+}
+
+function plural(n, unit) {
+    n = Math.floor(n);
+    return n + " " + unit + (n == 1 ? "" : "s") + " ago";
+}
 
 
 
@@ -177,8 +199,6 @@ var BlameGutter = function(editor, blameStr) {
     this.onMousedown = this.onMousedown.bind(this);
     this.onChangeEditor = this.onChangeEditor.bind(this);
     this.onChangeSelection = this.onChangeSelection.bind(this);
-    this.onMousemove = this.onMousemove.bind(this);
-    this.onMouseout = this.onMouseout.bind(this);
     
     this.blameData = [];
     this.$cache = [];
@@ -211,14 +231,12 @@ var BlameGutter = function(editor, blameStr) {
             ["div", { class: "ace_closeButton" }]
         ], editor.container);
         this.closeButton = this.resizer.firstChild;
+        this.closeButton.title = "Close";
 
         gutter.on("afterRender", this.drawGutter);
         editor.on("changeSelection", this.onChangeSelection);
         this.element.addEventListener("mousedown", this.onMousedown);
         this.resizer.addEventListener("mousedown", this.onMousedown);
-
-        event.addListener(this.element, "mousemove", this.onMousemove);
-        event.addListener(this.element, "mouseout", this.onMouseout);
 
         this.resizer.style.left =
         this.element.style.width = "220px";
@@ -285,7 +303,10 @@ var BlameGutter = function(editor, blameStr) {
         var cells = gutter.$lines.cells;
         var cache = gutter.blameColumn.$cache;
         var cacheIndex = 0;
-        var offset = -getTop(gutter.element);
+        // Ace moves the container of the cells with a transform: where
+        // it is now
+        var config = gutter.config;
+        var offset = ((config.firstRowScreen * config.lineHeight) % gutter.$lines.canvasHeight) + config.offset;
         
         var commit;
         for (var i = 0; i < cells.length; i++) {
@@ -318,12 +339,14 @@ var BlameGutter = function(editor, blameStr) {
             var el = cache[cacheIndex++];
             if (!el)
                 cache.push(el = dom.createElement("div"));
-            el.className = "ace_blame-cell " + (data.data.hash == selectedHash ? "selected" : "");
+            el.className = "ace_blame-cell" + (data.data.hash == selectedHash ? " selected" : "")
+                + (data.uncommitted ? " uncommitted" : "");
             el.index = row;
-            el.textContent = data.text + " " + data.title;
+            el.textContent = data.text;
+            el.title = data.title;
             
             var top = Math.max(getTop(firstCell.element) - offset, 0);
-            var next = nextCell ? getTop(nextCell.element) - offset : gutter.config.height;
+            var next = nextCell ? getTop(nextCell.element) - offset : config.height;
             el.style.top = top + "px";
             el.style.height = next - top + "px";
             
@@ -344,6 +367,7 @@ var BlameGutter = function(editor, blameStr) {
 
         if (target == this.closeButton) {
             this.removeData();
+            if (this.onClose) this.onClose();
             return event.stopEvent(e);
         }
 
@@ -382,30 +406,6 @@ var BlameGutter = function(editor, blameStr) {
         }
     };
 
-    this.onMousemove = function(e) {
-        var target = e.target;
-        var container = e.currentTarget;
-        var tooltip = this.editor.tooltip;
-        if (this.$highlightedCell != target) {
-            if (dom.hasCssClass(target, "ace_blame-cell")) {
-                tooltip.style.display = "block";
-                this.$highlightedCell = target;
-                tooltip.textContent = target.textContent;
-            }
-        }
-
-        if (this.$highlightedCell) {
-            tooltip.style.top = e.clientY + 10 + "px";
-            tooltip.style.left = e.clientX + 10 + "px";
-        } else {
-            this.onMouseout();
-            return;
-        }
-    };
-    this.onMouseout = function(e) {
-        // this.editor.tooltip.style.display = "none";
-        this.$highlightedCell = null;
-    };
 }).call(BlameGutter.prototype);
 
 

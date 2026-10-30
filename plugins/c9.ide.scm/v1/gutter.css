@@ -1,0 +1,37 @@
+/* Lines that differ from Git's staged version (gutter.js) */
+.ace_gutter-cell.c9-git-added {
+    box-shadow: inset 3px 0 #2da44e;
+}
+.ace_gutter-cell.c9-git-modified {
+    box-shadow: inset 3px 0 #0969da;
+}
+.ace_gutter-cell.c9-git-deleted::before,
+.ace_gutter-cell.c9-git-deleted-first::before,
+.ace_gutter-cell.c9-git-deleted-end::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    border-style: solid;
+    border-width: 4px 0 4px 5px;
+    border-color: transparent transparent transparent #cf222e;
+}
+.ace_gutter-cell.c9-git-deleted::before {
+    top: -4px;
+}
+.ace_gutter-cell.c9-git-deleted-first::before {
+    top: 0;
+}
+.ace_gutter-cell.c9-git-deleted-end::after {
+    bottom: -4px;
+}
+.ace_dark .ace_gutter-cell.c9-git-added {
+    box-shadow: inset 3px 0 #3fb950;
+}
+.ace_dark .ace_gutter-cell.c9-git-modified {
+    box-shadow: inset 3px 0 #388bfd;
+}
+.ace_dark .ace_gutter-cell.c9-git-deleted::before,
+.ace_dark .ace_gutter-cell.c9-git-deleted-first::before,
+.ace_dark .ace_gutter-cell.c9-git-deleted-end::after {
+    border-left-color: #f85149;
+}

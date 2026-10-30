@@ -84,6 +84,12 @@ for Python (installed by the setup), `gofmt`, `prettier`, `rustfmt`, ...
 Go formats on save by default; JavaScript uses the built-in JSBeautify
 unless you set a command.
 
+In a Git repository the code editor marks the lines that differ from the
+staged version as you type (Goto > Next Change, Previous Change); right-click
+the line numbers for Revert Change and Show Git Blame. The Changes panel
+shows the current branch: click it to switch branches or create one
+([plugins/c9.ide.scm](plugins/c9.ide.scm/README.md)).
+
 #### Running Tests ####
 
     scripts/run-tests.sh
