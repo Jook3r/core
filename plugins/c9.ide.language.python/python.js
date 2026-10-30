@@ -79,9 +79,12 @@ define(function(require, exports, module) {
                     // ruff from the venv that server/launch_command.sh sets up
                     ["formatter", '~/.c9/python3/bin/ruff format --stdin-filename "$file" -']
                 ]);
-                // Python 2 is gone; don't let an old setting pick it
-                if (settings.get("project/python/@version") === "python2")
-                    settings.set("project/python/@version", "python3");
+                // Python 2 is gone; don't let an old setting pick it (settings
+                // can be changed once read)
+                setTimeout(function() {
+                    if (settings.get("project/python/@version") === "python2")
+                        settings.set("project/python/@version", "python3");
+                });
             }, plugin);
             
             language.registerLanguageHandler("plugins/c9.ide.language.python/worker/python_linter", function(err, handler) {

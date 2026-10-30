@@ -48,8 +48,15 @@ define(function(require, exports, module) {
                     // gocode is unmaintained and `go get` can't install it on Go 1.18+
                     ["completion", false],
                     ["formatOnSave", true],
-                    ["formatter", 'gofmt -w "$file"'],
+                    // reads the code on stdin (see format/formatters/stdin.js)
+                    ["formatter", "gofmt"],
                 ]);
+                // the old default formatted the file in place, which only
+                // works through collab (settings can be changed once read)
+                setTimeout(function() {
+                    if (settings.get("project/golang/@formatter") === 'gofmt -w "$file"')
+                        settings.set("project/golang/@formatter", "gofmt");
+                });
             }, plugin);
             
             language.registerLanguageHandler("plugins/c9.ide.language.go/worker/go_completer", function(err, handler) {

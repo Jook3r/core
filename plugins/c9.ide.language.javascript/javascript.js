@@ -42,8 +42,17 @@ define(function(require, exports, module) {
             settings.on("read", function() {
                 settings.setDefaults("project/javascript", [
                     ["formatOnSave", "false"],
-                    ["formatter", 'esformatter -i "$file"'],
+                    // reads the code on stdin (see format/formatters/stdin.js);
+                    // used when JSBeautify is off
+                    ["formatter", 'prettier --stdin-filepath "$file"'],
                 ]);
+                // the old default (esformatter is gone) formatted the file in
+                // place, which only works through collab (settings can be
+                // changed once read)
+                setTimeout(function() {
+                    if (settings.get("project/javascript/@formatter") === 'esformatter -i "$file"')
+                        settings.set("project/javascript/@formatter", 'prettier --stdin-filepath "$file"');
+                });
             });
 
             language.registerLanguageHandler('plugins/c9.ide.language.javascript/parse');

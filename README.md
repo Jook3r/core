@@ -77,6 +77,13 @@ JavaScript and TypeScript files get error markers, completion, parameter
 hints and jump to definition from TypeScript 7's language server
 ([plugins/c9.ide.language.lsp](plugins/c9.ide.language.lsp/README.md)).
 
+Code can be formatted on save (or with Edit > Code Formatting) by a command
+that reads it and writes the formatted code, set per language in Project
+Settings (Code Formatters, and Python, JavaScript and Go Support): `ruff`
+for Python (installed by the setup), `gofmt`, `prettier`, `rustfmt`, ...
+Go formats on save by default; JavaScript uses the built-in JSBeautify
+unless you set a command.
+
 #### Running Tests ####
 
     scripts/run-tests.sh
