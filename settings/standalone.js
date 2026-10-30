@@ -59,7 +59,8 @@ module.exports = function(manifest, installPath) {
         tmux: fs.existsSync(path.join(installPath, "bin/tmux"))
             ? path.join(installPath, "bin/tmux")
             : "tmux",
-        nakBin: path.join(__dirname, "../node_modules/nak/bin/nak"),
+        // nak without /proc, /sys, /dev and /run (see the file)
+        nakBin: path.join(__dirname, "../plugins/c9.ide.find/nak.js"),
         bashBin: "bash",
         nodeBin: [process.execPath],
         installPath: installPath,
