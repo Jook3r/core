@@ -79,13 +79,23 @@ define(function(require, exports, module) {
                             forwardEvents(child.stdout, "stdout", ["close", "data", "end", "error", "readable"]);
                             forwardEvents(child.stderr, "stderr", ["close", "data", "end", "error", "readable"]);
                             worker.on("spawn_kill$" + id, kill);
+                            worker.on("spawn_stdin$" + id, write);
+                            worker.on("spawn_stdin_end$" + id, end);
                             child.on("exit", function gc() {
                                 worker.off("spawn_kill$" + id, kill);
+                                worker.off("spawn_stdin$" + id, write);
+                                worker.off("spawn_stdin_end$" + id, end);
                             });
                             worker.emit("spawnResult", { data: { id: id, pid: child.pid }});
-                            
+
                             function kill(e) {
                                 child.kill(e.signal);
+                            }
+                            function write(e) {
+                                child.stdin.write(e.data.data);
+                            }
+                            function end() {
+                                child.stdin.end();
                             }
                             
                             function forwardEvents(source, sourceName, events) {

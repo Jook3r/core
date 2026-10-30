@@ -136,6 +136,9 @@ module.exports = {
      * @param {String} [callback.result.kill.signal]      Signal to kill the child with.
      * @param {Function} callback.result.on               Listen to standard "exit", "error", "close", "disconnect", "message"
      *                                                    child process events.
+     * @param {Object} callback.result.stdin
+     * @param {Function} callback.result.stdin.write      Write a string to the child's stdin.
+     * @param {Function} callback.result.stdin.end        Close the child's stdin.
      * @param {Object} callback.result.stdout
      * @param {Function} callback.result.stdout.on        Listen to standard "close", "data", "end", "error", "readable"
      *                                                    child process events.
@@ -154,6 +157,14 @@ module.exports = {
                 return;
             worker.sender.off("spawnResult", onSpawnResult);
             callback && callback(event.data.err, {
+                stdin: {
+                    write: function(data) {
+                        worker.sender.emit("spawn_stdin$" + id, { data: data });
+                    },
+                    end: function() {
+                        worker.sender.emit("spawn_stdin_end$" + id, {});
+                    }
+                },
                 stdout: { on: listen.bind(null, "stdout") },
                 stderr: { on: listen.bind(null, "stderr") },
                 on: listen.bind(null, "child"),

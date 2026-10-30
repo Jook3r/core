@@ -314,6 +314,21 @@ async function main() {
         assert.equal(info.c9io, 0);
     });
 
+    await check("TypeScript language server: a type error gets a marker", async function() {
+        fs.writeFileSync(path.join(workspace, "typed.ts"), "const count: number = \"three\";\n");
+        await page.evaluate(function() {
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/typed.ts", true, resolve); });
+        });
+        var markers = await until("the marker", function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.findTab("/typed.ts");
+                var annotations = tab && tab.editor.ace && tab.editor.ace.session.getAnnotations();
+                return annotations && annotations.length && annotations.map(function(a) { return a.type + ": " + a.text; });
+            });
+        }, 60000);
+        assert(markers.some(function(m) { return /^error: .*not assignable/.test(m); }), JSON.stringify(markers));
+    });
+
     // the panels: a chat through Claude Code to the mock API
     var panels = [["deepseek", "ds"], ["claude", "claude"]];
     for (var i = 0; i < panels.length; i++) {
