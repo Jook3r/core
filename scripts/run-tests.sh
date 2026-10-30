@@ -35,7 +35,7 @@ serverTests() {
         count=$((count + 1))
         # each in its own process; the mocha launcher script fails silently
         # on newer Node.js, so run _mocha itself
-        if NODE_PATH="$PWD/test/node_modules" node node_modules/mocha/bin/_mocha -R dot -t 30000 "$file" \
+        if NODE_PATH="$PWD/test/node_modules" node test/node_modules/mocha/bin/_mocha -R dot -t 30000 "$file" \
             > /tmp/c9-test.log 2>&1; then
             echo "ok - $file"
         else

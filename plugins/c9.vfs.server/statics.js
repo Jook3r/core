@@ -13,7 +13,6 @@ function main(options, imports, register) {
     var Plugin = imports.Plugin;
     var statics = imports["connect.static"];
     
-    var fs = require("fs");
     var dirname = require("path").dirname;
     
     /***** Initialization *****/
@@ -25,25 +24,10 @@ function main(options, imports, register) {
         if (loaded || options.disableUnpackagedClient) return false;
         loaded = true;
         
-        // TODO: big hack. Patch engine.io client to disable 'withCredentials"
-        var eioClient = require.resolve("engine.io-client/engine.io.js");
-        try {
-            // Only write when unpatched, and atomically: several processes
-            // (the server, cdn-cli builds) load this, and one reading the
-            // file while another rewrote it in place could leave it empty
-            var code = fs.readFileSync(eioClient, "utf8");
-            var patched = code.replace("xhr.withCredentials = true;", "xhr.__withCredentials = true;");
-            if (patched != code) {
-                var tmp = eioClient + "." + process.pid + ".tmp";
-                fs.writeFileSync(tmp, patched);
-                fs.renameSync(tmp, eioClient);
-            }
-        } catch (e) {
-            console.warn("unable to patch engine.io");
-        }
-      
+        // the browser build of engine.io-client, without withCredentials;
+        // the package itself would only bring code for Node.js
         statics.addStatics([{
-            path: dirname(eioClient),
+            path: __dirname + "/engine.io",
             mount: "/engine.io",
             rjs: [{
                 "name": "engine.io",

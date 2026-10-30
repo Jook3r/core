@@ -21,8 +21,8 @@
         %><% include flat-load-screen.html %><%
     }
     else {
-        %><div id="loadingide" class="<%-: theme + (isDark ? " dark" : "") %>">
-            <%-: html %>
+        %><div id="loadingide" class="<%- theme + (isDark ? " dark" : "") %>">
+            <%- html %>
         </div><%
     }
 %>

@@ -43,6 +43,13 @@ To update the SDK to the latest version run:
 `scripts/install-sdk.sh` checks them out again. If you run npm yourself, run
 `git checkout HEAD -- node_modules` afterwards.
 
+The `overrides` in `package.json` move dependencies of old packages
+(connect 2.12, engine.io 3, less 2, tern) to fixed versions; npm applies
+them only to packages it installs, so `scripts/install-sdk.sh` reinstalls
+those. `npm audit` then reports two advisories, both in parts of connect
+2.12 that Cloud9 doesn't load: the `methodOverride` middleware (XSS) and
+the multipart parser (multiparty; uploads use their own parser).
+
 To run Cloud9 on a server behind Apache with HTTPS, see
 [deploy/README.md](deploy/README.md).
 

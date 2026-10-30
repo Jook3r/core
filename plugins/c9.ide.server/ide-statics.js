@@ -54,8 +54,12 @@ function main(options, imports, register) {
             "mocha", // TESTING
             "chai",  // TESTING
         ].forEach(function(name) {
+            var path = __dirname + "/../../node_modules/" + name;
+            // the test packages are in test/node_modules (scripts/run-tests.sh)
+            if (/^(mocha|chai)$/.test(name) && !fs.existsSync(path))
+                path = __dirname + "/../../test/node_modules/" + name;
             statics.addStatics([{
-                path: __dirname + "/../../node_modules/" + name,
+                path: path,
                 mount: "/lib/" + name
             }]);
         });

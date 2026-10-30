@@ -56,6 +56,12 @@ checkDeps() {
 
 updateNodeModules() {
     echo "${magenta}--- Running npm install --------------------------------------------${resetColor}"
+    # npm applies the "overrides" of package.json only to what it installs,
+    # not to what an earlier install left: reinstall the packages they are for
+    local name
+    for name in $(node -p 'Object.keys(require("./package.json").overrides || {}).join(" ")'); do
+        rm -rf "node_modules/$name"
+    done
     npm install --omit=dev --no-audit --no-fund
 
     # npm deletes the modules that are vendored in git (they are not in
