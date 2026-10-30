@@ -21,7 +21,7 @@ Point DNS records for both hostnames at the server, then:
     sudo apt-get install -y git tmux python3 python3-venv build-essential \
         apache2 certbot python3-certbot-apache
 
-Cloud9 needs Node.js 18 or newer; use 24 LTS (18 and 20 no longer get
+Cloud9 needs Node.js 16 or newer; use 24 LTS (16 to 20 no longer get
 security fixes). If `apt-cache policy nodejs` doesn't offer it, use
 NodeSource:
 

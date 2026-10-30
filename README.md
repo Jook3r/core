@@ -14,7 +14,7 @@ tutorials that use them don't work.
 
 #### Installation ####
 
-This fork runs on Ubuntu 24.04/26.04 with Node.js 24 LTS (18 or newer works),
+This fork runs on Ubuntu 24.04/26.04 with Node.js 24 LTS (16 or newer works),
 tmux 3.x and Python 3. Install the system packages, then the SDK:
 
     sudo apt-get install -y git tmux python3 python3-venv build-essential

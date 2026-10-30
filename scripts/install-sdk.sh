@@ -3,7 +3,7 @@
 # Sets up a Cloud9 checkout to run with `node server.js`.
 #
 # Requirements (Ubuntu 24.04 / 26.04):
-#   - Node.js 18 or newer (24 LTS recommended), from nodejs.org or NodeSource
+#   - Node.js 16 or newer (24 LTS recommended), from nodejs.org or NodeSource
 #   - sudo apt-get install -y git tmux python3 python3-venv build-essential
 #     (build-essential and python3 are needed to compile node-pty,
 #     python3-venv for the Python linter, completion and formatter)
@@ -44,9 +44,9 @@ checkDeps() {
         exit 1
     fi
     local major=$(node -p 'process.versions.node.split(".")[0]')
-    # 18: the oldest that Claude Code (the Claude and DeepSeek panels) runs on
-    if [ "$major" -lt 18 ]; then
-        echo "${red}Node.js $(node -v) is too old.${resetColor} Cloud9 needs Node.js 18 or newer (24 LTS recommended)." >&2
+    # 16: the npm of older versions can't build node-pty with Python 3.11+
+    if [ "$major" -lt 16 ]; then
+        echo "${red}Node.js $(node -v) is too old.${resetColor} Cloud9 needs Node.js 16 or newer (24 LTS recommended)." >&2
         exit 1
     fi
     if [ "$major" -lt 22 ]; then
