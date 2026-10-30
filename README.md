@@ -12,6 +12,12 @@ and the rest of the [SDK documentation](https://cloud9-sdk.readme.io/docs).
 c9.io and docs.c9.io are gone (they redirect to AWS), so the parts of the
 tutorials that use them don't work.
 
+File > New Plugin makes a plugin in `~/.c9/plugins`. Tools > Developer >
+Start in Debug Mode opens a window where the Plugin Explorer loads and
+reloads it while you work on it, for that browser session. To load it every
+time Cloud9 starts, tick it in Preferences > User Settings > Plugins; the
+list there shows whether each loaded, or the error in its code.
+
 #### Installation ####
 
 This fork runs on Ubuntu 24.04/26.04 with Node.js 24 LTS (16 or newer works),

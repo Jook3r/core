@@ -898,6 +898,24 @@ define(function(require, exports, module) {
                     return;
                 }
             }
+            // plugins of ~/.c9/plugins can load at every start (startup.js)
+            var startup = settings.getJson("user/plugins/startup");
+            var local = name.split(",").filter(function(n) {
+                var pkg = pluginManager.packages[n];
+                return pkg && pkg.filePath;
+            });
+            if (local.length) {
+                var notAtStartup = local.some(function(n) {
+                    return !Array.isArray(startup) || startup.indexOf(n) == -1;
+                });
+                if (notAtStartup) {
+                    showInfo("Loaded " + name + " for this browser session. To load it every time Cloud9 "
+                        + "starts, tick it in Preferences › User Settings › Plugins.", 6000);
+                }
+                else
+                    showInfo("Loaded " + name + ".", 3000);
+                return;
+            }
             showInfo("Loaded " + name + " for the duration of current browser session.", 3000);
         }
         

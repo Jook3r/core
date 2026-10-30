@@ -89,6 +89,7 @@ module.exports = function(options) {
             devel: devel
         },
         "plugins/c9.ide.plugins/gui",
+        "plugins/c9.ide.plugins/startup",
         // {
         //     packagePath: "plugins/c9.ide.plugins/test",
         // },

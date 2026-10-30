@@ -396,6 +396,46 @@ async function main() {
         assert.equal(cells[1], "Not committed yet");
     });
 
+    await check("Plugins: one ticked in Preferences loads at startup", async function() {
+        var dir = path.join(home, ".c9/plugins/smoke-startup");
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({
+            name: "smoke-startup",
+            plugins: { plugin: {} }
+        }));
+        fs.writeFileSync(path.join(dir, "plugin.js"), [
+            "define(function(require, exports, module) {",
+            "    main.consumes = [\"Plugin\"];",
+            "    main.provides = [\"smokeStartup\"];",
+            "    return main;",
+            "    function main(options, imports, register) {",
+            "        var plugin = new imports.Plugin(\"Smoke\", main.consumes);",
+            "        register(null, { smokeStartup: plugin });",
+            "    }",
+            "});"
+        ].join("\n"));
+
+        await page.evaluate(function() {
+            window.app["pluginManager.startup"].setStartup("smoke-startup", true);
+            window.app.settings.save(true);
+        });
+        await until("the setting to be saved", function() {
+            var file = path.join(home, ".c9/user.settings");
+            return fs.existsSync(file) && /smoke-startup/.test(fs.readFileSync(file, "utf8"));
+        });
+
+        await page.reload({ waitUntil: "load", timeout: 120000 });
+        await page.waitForFunction(function() {
+            return window.app && window.app.vfs && window.app.vfs.connected && window.app.tabManager
+                && window.app.claude && window.app.deepseek;
+        }, null, { timeout: 120000 });
+        await until("the plugin", function() {
+            return page.evaluate(function() {
+                return !!(window.app.smokeStartup && window.app.smokeStartup.loaded);
+            });
+        });
+    });
+
     // the panels: a chat through Claude Code to the mock API
     var panels = [["deepseek", "ds"], ["claude", "claude"]];
     for (var i = 0; i < panels.length; i++) {
