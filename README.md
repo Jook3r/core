@@ -44,11 +44,14 @@ To update the SDK to the latest version run:
 `git checkout HEAD -- node_modules` afterwards.
 
 The `overrides` in `package.json` move dependencies of old packages
-(connect 2.12, engine.io 3, less 2, tern) to fixed versions; npm applies
+(connect 2.12, engine.io 3, optimist, tern) to fixed versions; npm applies
 them only to packages it installs, so `scripts/install-sdk.sh` reinstalls
-those. `npm audit` then reports two advisories, both in parts of connect
-2.12 that Cloud9 doesn't load: the `methodOverride` middleware (XSS) and
-the multipart parser (multiparty; uploads use their own parser).
+those (and puts them back if npm fails). npm 9.2, Ubuntu's `npm` package,
+fails on some forms of overrides: none for a git dependency, no `npm:`
+aliases, and `"."` set to `"$name"` for a direct dependency. `npm audit`
+then reports two advisories, both in parts of connect 2.12 that Cloud9
+doesn't load: the `methodOverride` middleware (XSS) and the multipart
+parser (multiparty; uploads use their own parser).
 
 To run Cloud9 on a server behind Apache with HTTPS, see
 [deploy/README.md](deploy/README.md).

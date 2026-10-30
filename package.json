@@ -19,7 +19,7 @@
         "engine.io": "~3.6.2",
         "jsonm": "1.0.6",
         "http-error": "~0.0.5",
-        "less": "^2.4.0",
+        "less": "~3.13.1",
         "mime": "~1.6.0",
         "mkdirp": "~0.3.5",
         "msgpack-js-browser": "~0.1.4",
@@ -48,6 +48,7 @@
     "devDependencies": {},
     "overrides": {
         "connect": {
+            ".": "$connect",
             "cookie": "~0.7.2",
             "cookie-signature": "~1.0.7",
             "debug": "~2.6.9",
@@ -57,15 +58,13 @@
             "send": "~0.19.2"
         },
         "engine.io": {
+            ".": "$engine.io",
             "cookie": "~0.7.2",
             "debug": "~4.3.7"
         },
-        "minimist": "~0.2.4",
-        "request": "npm:@cypress/request@~4.0.1",
-        "tern": {
-            "glob": "~7.2.3",
-            "minimatch": "~3.1.2"
-        }
+        "glob": "~7.2.3",
+        "minimatch": "~3.1.2",
+        "minimist": "~0.2.4"
     },
     "licenses": [],
     "allowScripts": {

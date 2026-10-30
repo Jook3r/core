@@ -57,12 +57,29 @@ checkDeps() {
 updateNodeModules() {
     echo "${magenta}--- Running npm install --------------------------------------------${resetColor}"
     # npm applies the "overrides" of package.json only to what it installs,
-    # not to what an earlier install left: reinstall the packages they are for
-    local name
+    # not to what an earlier install left: set the packages they are for
+    # aside (also where another package has its own copy) for npm to
+    # install them again, and put them back if npm fails
+    local aside=build/npm-aside name dir i=0
+    rm -rf "$aside"
+    mkdir -p "$aside"
     for name in $(node -p 'Object.keys(require("./package.json").overrides || {}).join(" ")'); do
-        rm -rf "node_modules/$name"
+        for dir in $(find node_modules -mindepth 1 -type d -path "*node_modules/$name" -prune 2>/dev/null); do
+            i=$((i + 1))
+            mkdir "$aside/$i"
+            echo "$dir" > "$aside/$i/path"
+            mv "$dir" "$aside/$i/package"
+        done
     done
-    npm install --omit=dev --no-audit --no-fund
+    if ! npm install --omit=dev --no-audit --no-fund; then
+        for dir in "$aside"/*/; do
+            [ -f "$dir/path" ] && [ ! -e "$(cat "$dir/path")" ] && mv "$dir/package" "$(cat "$dir/path")"
+        done
+        rm -rf "$aside"
+        echo "${red}npm install failed; node_modules is as it was.${resetColor}" >&2
+        exit 1
+    fi
+    rm -rf "$aside"
 
     # npm deletes the modules that are vendored in git (they are not in
     # package.json), so check them out again
@@ -86,9 +103,6 @@ updateNodeModules() {
 
 checkDeps
 
-# cleanup build cache since c9.static doesn't do this automatically yet
-rm -rf ./build/standalone
-
 updateNodeModules
 
 echo -e "nak\n.gitignore" >  node_modules/.gitignore
@@ -110,6 +124,8 @@ setupPython
 # prebuild the packed and minified client for `server.js --packed` (fewer
 # requests, smaller downloads, less RAM); rerun after changing client code
 echo "${magenta}--- Building the packed client ----------------------------------------${resetColor}"
+# not before: until here the previous build keeps working
+rm -rf ./build/standalone
 ./scripts/makestandalone.sh --compress > /dev/null
 
 echo "${green}Success!${resetColor} Start Cloud9 with:"
