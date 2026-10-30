@@ -32,6 +32,10 @@ esac
 
 CACHE=$CURDIR/../build
 
+# from scratch: the server also caches here the modules it builds when they
+# are first asked for, and would go on serving those from the old code
+rm -rf "$CACHE/standalone"
+
 #CDN="echo server.js cdn-cli"
 CDN="$CURDIR/../server.js cdn-cli -s standalone --server-config standalone --server-settings standalone
   --version=standalone --cache $CACHE $COMPRESS_OPTION $OBFUSCATE_OPTION $COPY_STATICS_OPTION"

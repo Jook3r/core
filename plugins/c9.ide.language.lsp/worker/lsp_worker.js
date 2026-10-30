@@ -256,6 +256,9 @@ Client.prototype.start = function() {
             var waiting = self.waiting;
             self.waiting = [];
             waiting.forEach(function(fn) { fn(); });
+            // the open files are checked again: what was asked while the
+            // server started or restarted may have gone unanswered
+            handler.getEmitter().emit("lsp_ready", { server: server.name });
         });
     });
 };

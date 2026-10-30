@@ -124,8 +124,7 @@ setupPython
 # prebuild the packed and minified client for `server.js --packed` (fewer
 # requests, smaller downloads, less RAM); rerun after changing client code
 echo "${magenta}--- Building the packed client ----------------------------------------${resetColor}"
-# not before: until here the previous build keeps working
-rm -rf ./build/standalone
+# (it starts from scratch: until here the previous build keeps working)
 ./scripts/makestandalone.sh --compress > /dev/null
 
 echo "${green}Success!${resetColor} Start Cloud9 with:"

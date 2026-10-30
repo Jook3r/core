@@ -40,16 +40,35 @@ define(function(require, exports, module) {
                 }
             }, plugin);
 
-            language.registerLanguageHandler(HANDLER, function(err, _handler) {
-                if (err) return console.error(err);
-                handler = _handler;
-                send();
-            });
+            registerHandler(3);
         });
 
+        function registerHandler(retries) {
+            language.registerLanguageHandler(HANDLER, function(err, _handler) {
+                if (err) {
+                    console.error("Language servers: " + (err.message || err));
+                    // e.g. the worker could not load it: once more, later
+                    if (retries) setTimeout(registerHandler.bind(null, retries - 1), 3000);
+                    return;
+                }
+                handler = _handler;
+                handler.on("lsp_ready", function() {
+                    language.refreshAllMarkers();
+                });
+                sent = null;
+                send();
+            });
+        }
+
+        // the files that are open are checked again when that changes
+        var sent;
         function send() {
-            if (handler)
-                handler.emit("lsp_config", config());
+            if (!handler) return;
+            var value = config();
+            if (JSON.stringify(value) == sent) return;
+            sent = JSON.stringify(value);
+            handler.emit("lsp_config", value);
+            language.refreshAllMarkers();
         }
 
         function config() {

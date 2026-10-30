@@ -27,6 +27,7 @@ var PASSWORD = crypto.randomBytes(12).toString("hex");
 
 var results = [];
 var tmp, server, mock, browser;
+var consoleErrors = []; // the page's recent console errors, shown when a check fails
 
 async function check(name, fn) {
     try {
@@ -37,6 +38,9 @@ async function check(name, fn) {
         results.push({ name: name, ok: false });
         console.log("not ok " + results.length + " - " + name);
         console.log("  # " + String(e && e.message || e).split("\n").join("\n  # "));
+        consoleErrors.splice(0).forEach(function(text) {
+            console.log("  # console: " + text);
+        });
     }
 }
 
@@ -210,6 +214,11 @@ async function main() {
     var page = await context.newPage();
     var pageErrors = [];
     page.on("pageerror", function(e) { pageErrors.push(e.message.split("\n")[0]); });
+    page.on("console", function(message) {
+        if (message.type() != "error" && message.type() != "warning") return;
+        consoleErrors.push(message.text().slice(0, 300));
+        consoleErrors.splice(0, consoleErrors.length - 20);
+    });
 
     await check("the IDE loads and connects", async function() {
         await page.goto("http://127.0.0.1:" + port + "/ide.html", { waitUntil: "load", timeout: 120000 });
