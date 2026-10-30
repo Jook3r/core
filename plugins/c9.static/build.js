@@ -240,7 +240,8 @@ function main(options, imports, register) {
     }
     
     function buildModule(module, pathConfig, callback) {
-        if (/^(ace\/|plugins\/c9.ide.ace)/.test(module))
+        // editor themes too: they need their text!...css (noDeps drops it)
+        if (/^(ace\/|plugins\/c9.ide.ace|plugins\/[^\/]+\/ace\.themes\/)/.test(module))
             return buildAce(module, pathConfig, callback);
         
         var compileForNode = false;
