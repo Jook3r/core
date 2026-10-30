@@ -24,6 +24,9 @@ describe("The build module", function() {
 
         options = {
             version: "testing",
+            // what scripts/makestandalone.sh builds
+            config: "standalone",
+            settings: "standalone",
             compress: false,
             baseUrl: "https://static.c9.io/static/abcd1234"
         };
@@ -64,7 +67,7 @@ describe("The build module", function() {
     });
     
     it("should compile less", function(done) {
-        build.buildSkin("ssh", "dark", pathConfig, function(err, result) {
+        build.buildSkin("default", "dark", pathConfig, function(err, result) {
             if (err) return done(err);
             
             var code = result.code;

@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Node.js ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # the oldest that installs, the previous LTS and the recommended one
+        node: [16, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux python3-venv build-essential
+
+      - name: Set up Cloud9
+        run: scripts/install-sdk.sh
+
+      - name: Server-side tests
+        run: scripts/run-tests.sh server
+
+      # Playwright needs Node.js 18+; Claude Code for the panels' chat checks
+      - name: Chromium and Claude Code
+        if: matrix.node >= 18
+        run: |
+          test/node_modules/.bin/playwright install --with-deps chromium
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Smoke test
+        if: matrix.node >= 18
+        run: scripts/run-tests.sh smoke

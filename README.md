@@ -73,4 +73,21 @@ opens a file in an editor tab (a file in the workspace or the home folder).
 With Preferences > User Settings > Terminal > Use Cloud9 as the Default
 Editor, `git commit` opens the message in a tab and waits until you close it.
 
+#### Running Tests ####
+
+    scripts/run-tests.sh
+
+runs the server-side tests (`*_test.js`) and a smoke test, `test/smoke.js`.
+The smoke test starts Cloud9 with a login in a temporary home folder and
+checks it in a browser: the login limit, files, search, a terminal,
+`c9 open`, the Welcome page, and a chat in the Claude and DeepSeek panels
+against a mock API (skipped without Claude Code). It needs Node.js 18+ and,
+once, Chromium for Playwright:
+
+    npx --prefix test playwright install --with-deps chromium
+
+`scripts/run-tests.sh server` or `smoke` runs one of the two. The packages
+the tests need go to `test/node_modules`. GitHub Actions runs both on every
+push (`.github/workflows/tests.yml`).
+
 Happy coding, Cloud9

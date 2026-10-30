@@ -45,7 +45,7 @@ describe("client config consistency", function() {
         if (clientOptions)
             return callback(null, JSON.parse(JSON.stringify(clientOptions)));
         var server = require(root + "/server.js");
-        server(["--_getConfig", "-l", "localhost", "--collab=true"], "", function(e, plugins) {
+        server(["--_getConfig", "-l", "localhost", "-a", ":", "--collab=true"], "", function(e, plugins) {
             clientOptions = plugins.filter(function(p) {
                 return /standalone[\\\/]standalone/.test(p.packagePath);
             })[0].options;
