@@ -26,6 +26,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tmux python3-venv build-essential
 
+      # npm 9.2, Ubuntu's npm package, fails on some forms of "overrides"
+      - name: Dependencies resolve with npm 9.2
+        if: matrix.node == 22
+        run: |
+          mkdir "$RUNNER_TEMP/npm92" && cp package.json "$RUNNER_TEMP/npm92/"
+          cd "$RUNNER_TEMP/npm92"
+          npx -y npm@9.2.0 install --package-lock-only --omit=dev --ignore-scripts --no-audit --no-fund
+
       - name: Set up Cloud9
         run: scripts/install-sdk.sh
 
