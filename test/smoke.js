@@ -329,6 +329,21 @@ async function main() {
         assert(markers.some(function(m) { return /^error: .*not assignable/.test(m); }), JSON.stringify(markers));
     });
 
+    await check("Fix with Claude and Ask Claude put the code in the input box", async function() {
+        var text = await page.evaluate(function() {
+            var ace = window.app.tabManager.findTab("/typed.ts").editor.ace;
+            ace.focus();
+            ace.moveCursorTo(0, 3);
+            window.app.commands.exec("fixwithclaude");
+            ace.focus();
+            ace.selection.selectLine();
+            window.app.commands.exec("askclaude");
+            return document.querySelector("textarea.claude-input").value;
+        });
+        assert(/^Fix this error in typed\.ts, line 1:\n\nerror: .*not assignable/.test(text), text);
+        assert(/In typed\.ts, line 1:\n\n```ts\nconst count: number = "three";\n```/.test(text), text);
+    });
+
     // the panels: a chat through Claude Code to the mock API
     var panels = [["deepseek", "ds"], ["claude", "claude"]];
     for (var i = 0; i < panels.length; i++) {

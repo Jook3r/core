@@ -73,6 +73,23 @@ terminal.
   session".
 - Each answer ends with its cost and duration.
 
+### From the editor
+
+Right-click in the editor:
+
+- **Ask Claude...** puts the selected code (or the current line) in the input
+  box as a code block, after the file's path and line numbers: type your
+  question and send it.
+- **Fix with Claude**, on a line with an error or warning marker, puts the
+  markers' messages and the line there.
+
+In a terminal or a run's output, **Ask Claude About Selection** does the same
+with the selected text. Nothing is sent until you press Enter; what is
+already in the input box stays, before the new text. The path is relative to
+the chat's folder when the file is in it, otherwise absolute. Both are
+commands (`askclaude`, `fixwithclaude`) that can get a key in
+Preferences > Keybindings.
+
 ### Accounts and folders
 
 A line above the input shows where the next chat runs: its **account** (once

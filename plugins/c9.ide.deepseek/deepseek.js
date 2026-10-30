@@ -17,7 +17,7 @@ define(function(require, exports, module) {
 
     main.consumes = [
         "Panel", "c9", "ui", "ext", "settings", "preferences", "tabManager",
-        "layout", "ace", "commands", "tree", "dialog.file", "dialog.confirm"
+        "layout", "ace", "commands", "tree", "dialog.file", "dialog.confirm", "menus"
     ];
     main.provides = ["deepseek"];
     return main;
@@ -34,6 +34,7 @@ define(function(require, exports, module) {
         var aceHandle = imports.ace;
         var commands = imports.commands;
         var tree = imports.tree;
+        var menus = imports.menus;
         var fileDialog = imports["dialog.file"];
         var confirm = imports["dialog.confirm"].show;
 
@@ -91,6 +92,7 @@ define(function(require, exports, module) {
         var DEFAULT_ACCOUNT_DIR = ".claude-deepseek";
         var MAX_ACCOUNTS = 20;
         var RECENT_FOLDERS = 8;         // folders offered for a new chat
+        var MAX_QUOTE = 20000;          // characters of code or output Ask DeepSeek… puts in a message
         var HISTORY_PAGE = 50;          // sessions listed, and added by "Show older"
         // what an account can share with Claude Code's own folder (~/.claude).
         // Not settings.json: its env or apiKeyHelper could send another key
@@ -237,6 +239,30 @@ define(function(require, exports, module) {
                 name: "toggledeepseek",
                 hint: "show the DeepSeek panel"
             });
+
+            // the editor and the terminals: a message about the code at hand,
+            // put in the input box to be completed and sent
+            commands.addCommand({
+                name: "askdeepseek",
+                group: "DeepSeek",
+                hint: "ask DeepSeek about the selection or the current line",
+                isAvailable: function(editor) { return !!askText(editor); },
+                exec: function(editor) { compose(askText(editor)); }
+            }, plugin);
+            commands.addCommand({
+                name: "fixwithdeepseek",
+                group: "DeepSeek",
+                hint: "ask DeepSeek to fix the error on the current line",
+                isAvailable: function(editor) { return !!fixText(editor); },
+                exec: function(editor) { compose(fixText(editor)); }
+            }, plugin);
+            // after Run This File, its divider (900) and the Claude panel's
+            aceHandle.getElement("menu", function(menu) {
+                menus.addItemToMenu(menu, new ui.item({ caption: "Ask DeepSeek\u2026", command: "askdeepseek" }), 930, plugin);
+                menus.addItemToMenu(menu, new ui.item({ caption: "Fix with DeepSeek", command: "fixwithdeepseek" }), 940, plugin);
+            });
+            menus.addItemByPath("context/terminal/Ask DeepSeek About Selection",
+                new ui.item({ command: "askdeepseek" }), 2010, plugin);
 
             // the CSS of the panel and of its preferences
             ui.insertCss(require("text!./deepseek.less"), options.staticPrefix, plugin);
@@ -4266,6 +4292,90 @@ define(function(require, exports, module) {
             setSelect(modeSelect, mode);
         }
 
+        /***** From the editor: Ask DeepSeek… and Fix with DeepSeek *****/
+
+        // The start of a message about the code at hand: the selection or
+        // the current line of an editor, or what is selected in a terminal
+        // or a run's output
+        function askText(editor) {
+            var ace = editor && editor.ace;
+            if (!ace) return null;
+            var selected = ace.getSelectedText();
+            if (editor.type != "ace") {
+                if (!selected.trim()) return null;
+                if (selected.length > MAX_QUOTE)
+                    selected = "\u2026" + selected.slice(-MAX_QUOTE);
+                return "From the " + (editor.type == "output" ? "output of a run" : "terminal") + ":\n\n"
+                    + fence(selected, "") + "\n\n";
+            }
+            var path = editorPath(editor);
+            var range = ace.getSelectionRange();
+            var first = range.start.row;
+            var last = range.end.column || range.end.row == first ? range.end.row : range.end.row - 1;
+            if (!selected.trim()) {
+                first = last = ace.getCursorPosition().row;
+                selected = ace.session.getLine(first);
+            }
+            var intro = "In " + filePlace(path) + ", "
+                + (first == last ? "line " + (first + 1) : "lines " + (first + 1) + "-" + (last + 1)) + ":\n\n";
+            // a long one is read from the file
+            if (selected.length > MAX_QUOTE && path) return intro;
+            return intro + fence(selected.slice(0, MAX_QUOTE), path) + "\n\n";
+        }
+
+        // A message about the markers (errors, warnings) on the current line
+        function fixText(editor) {
+            var ace = editor && editor.type == "ace" && editor.ace;
+            if (!ace) return null;
+            var row = ace.getCursorPosition().row;
+            var markers = (ace.session.getAnnotations() || []).filter(function(a) {
+                return a.row == row && a.text;
+            });
+            if (!markers.length) return null;
+            var path = editorPath(editor);
+            var kind = markers.length > 1 ? "these problems"
+                : "this " + (markers[0].type == "error" || markers[0].type == "warning" ? markers[0].type : "problem");
+            return "Fix " + kind + " in " + filePlace(path) + ", line " + (row + 1) + ":\n\n"
+                + markers.map(function(m) { return (m.type || "error") + ": " + m.text; }).join("\n") + "\n\n"
+                + fence(ace.session.getLine(row), path);
+        }
+
+        function editorPath(editor) {
+            var doc = editor.activeDocument;
+            return doc && doc.tab && doc.tab.path || "";
+        }
+
+        // A file of the editor as the CLI sees it: relative to the chat's
+        // folder, otherwise absolute
+        function filePlace(path) {
+            if (!path) return "an unsaved file";
+            var file = editorToAbsolute(path);
+            var folder = currentFolder().replace(/\/$/, "");
+            return file.indexOf(folder + "/") === 0 ? file.slice(folder.length + 1) : file;
+        }
+
+        // A markdown code block, in the language of the file's extension
+        function fence(code, path) {
+            var ext = (/\.([\w+-]+)$/.exec(path || "") || [])[1] || "";
+            var ticks = "```";
+            while (code.indexOf(ticks) != -1) ticks += "`";
+            return ticks + ext + "\n" + code.replace(/\n$/, "") + "\n" + ticks;
+        }
+
+        // Puts text in the input box, after what is there, without sending it
+        function compose(text) {
+            if (!text) return;
+            plugin.show();
+            if (!drawn)
+                return plugin.once("draw", function() { setTimeout(compose.bind(null, text)); });
+            var draft = textarea.value.replace(/\s+$/, "");
+            textarea.value = (draft ? draft + "\n\n" : "") + text;
+            autosize();
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+            textarea.scrollTop = textarea.scrollHeight;
+        }
+
         /***** Composer *****/
 
         function autosize() {
@@ -5181,6 +5291,12 @@ define(function(require, exports, module) {
              */
             get cli() { return cliInfo; },
 
+            /**
+             * Puts text in the input box, after what is there, without
+             * sending it (Ask DeepSeek… in the editor).
+             * @param {String} text
+             */
+            ask: compose,
             /**
              * Sends a message as if typed in the panel.
              * @param {String} text

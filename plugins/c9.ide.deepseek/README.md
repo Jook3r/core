@@ -24,6 +24,12 @@ or subscription is needed, and your Claude login is never used.
    mode, Esc to stop, images, session history, accounts and folders) works
    as in the Claude panel.
 
+Right-click in the editor for **Ask DeepSeek...** (the selected code or the
+current line, with its path and line numbers) and **Fix with DeepSeek** (the
+error markers of the line), and in a terminal or a run's output for **Ask
+DeepSeek About Selection**. As in the Claude panel, they put the text in the
+input box without sending it (commands `askdeepseek`, `fixwithdeepseek`).
+
 ## Peak and off-peak hours
 
 DeepSeek charges half price outside its peak hours: 01:00-04:00 and
