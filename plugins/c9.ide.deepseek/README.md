@@ -30,6 +30,40 @@ error markers of the line), and in a terminal or a run's output for **Ask
 DeepSeek About Selection**. As in the Claude panel, they put the text in the
 input box without sending it (commands `askdeepseek`, `fixwithdeepseek`).
 
+## Inline completions
+
+DeepSeek can also suggest code at the cursor, greyed out in the editor
+("ghost text"), from its [fill-in-the-middle
+API](https://api-docs.deepseek.com/guides/fim_completion). Turn it on in
+**Preferences > General > DeepSeek Inline Completions**:
+
+- **Suggest code in the editor**: **Off** (the default), **As you type**
+  (after a pause in typing), or **When asked** with **Alt-\\** (**Option-\\**
+  on a Mac). Alt-\\ asks in the As you type mode too.
+- **Tab** accepts the suggestion, **Ctrl-Right** (**Cmd-Right** on a Mac) its
+  next word, and **Esc** dismisses it. Typing what it shows keeps the rest.
+  While the editor's own completion list is open, Tab and Esc are the list's.
+- As you type, suggestions come at the end of a line (or before closing
+  brackets and quotes), not in the middle of one; never with a selection,
+  in a snippet or in a read-only file.
+- It uses the API key of the panel's account (the chat's, or the one picked
+  last). The server sends DeepSeek up to about 8,000 characters of code before
+  the cursor and 2,000 after it; the key never reaches the browser.
+- **Model**: `deepseek-flash` (`deepseek-v4-pro` works too; DeepSeek offers
+  fill-in-the-middle in non-thinking mode only). **Longest suggestion**: 128
+  tokens. **Wait after typing**: 400 ms.
+- **As you type only off-peak**: no suggestions as you type in peak hours
+  (Alt-\\ still asks).
+- **Never send these files**: `.env`, `*.pem`, `*.key` and other key files by
+  default. A pattern matches the file name, or the path when it has a `/`.
+- The code sent starts at a row that moves only every 32 rows, so DeepSeek's
+  cache serves most of it, at 2% of the price for deepseek-flash. Below the
+  settings: the suggestions since the IDE was opened, their estimated cost
+  (with the prices in Models and prices) and how much of the code the cache
+  served.
+- An error (no key, a rejected key, no balance) is shown once and pauses
+  suggestions as you type for a minute.
+
 ## Peak and off-peak hours
 
 DeepSeek charges half price outside its peak hours: 01:00-04:00 and
@@ -114,6 +148,12 @@ changes them; **Reset to DeepSeek's models** restores the list.
   `user/deepseek` settings). `peak.js`: the schedule (parsing, whether a
   moment is peak, the next change). `deepseek.less`: the styles, in
   DeepSeek's blue.
+- `inline.js`: inline completions. The ghost text is a backport of Ace
+  1.15's `editor.setGhostText()` to the bundled Ace 1.3.3
+  (`virtual_renderer.js`, `editor.js`, `css/editor.css`; its tests in
+  `virtual_renderer_test.js` run with `scripts/run-tests.sh server`). The
+  service's `complete()` sends the request (`POST /beta/completions`); a
+  newer one cancels the one before.
 - `deepseek-service.js` (the vfs process) starts `claude` with
   `ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`,
   `ANTHROPIC_AUTH_TOKEN=<the account's key>`, `CLAUDE_CONFIG_DIR=<the
@@ -152,8 +192,11 @@ changes them; **Reset to DeepSeek's models** restores the list.
 - Commands that Claude Code runs (the Bash tool) run as you, as in a
   terminal, so they could read the key from the CLI's environment or from
   its file. That is the same for any Claude Code setup with DeepSeek.
-- **Check balance** connects directly; it doesn't use `HTTPS_PROXY`. The
-  CLI does.
+- **Check balance** and inline completions connect directly; they don't use
+  `HTTPS_PROXY`. The CLI does.
+- A suggestion's first line goes in its line, pushing what follows the cursor
+  to the right; in a soft-wrapped line that can make the line wrap in the
+  wrong place until the suggestion goes.
 - After pulling this, rebuild the packed client (`scripts/install-sdk.sh`)
   if you run Cloud9 with `--packed`, so the skins include the panel's
   styles. Without `--packed`, delete `build/standalone/skin/` if the panel

@@ -5352,6 +5352,35 @@ define(function(require, exports, module) {
                 return { peak: now.peak, next: now.next };
             },
             /**
+             * A fill-in-the-middle completion (the editor's inline
+             * suggestions), with the API key of the current chat's account
+             * (of the one picked last before the panel was opened).
+             * @param {Object} opts { prompt (the code before the cursor),
+             *   suffix (after it), model, maxTokens }
+             * @param {Function} callback (err, { text, finishReason, usage:
+             *   { hit, miss, output } (tokens), cost: { usd, priced (all
+             *   tokens had a price), peak } })
+             */
+            complete: function(opts, callback) {
+                opts = opts || {};
+                whenConnected(function() {
+                    if (!api.complete)
+                        return callback(new Error("the DeepSeek service is older than the IDE: reload the page"));
+                    var model = opts.model;
+                    api.complete({ account: drawn ? chatAccount : defaultAccount(), model: model,
+                        prompt: opts.prompt, suffix: opts.suffix, maxTokens: opts.maxTokens }, function(err, res) {
+                        if (res && res.usage) {
+                            var tokens = {};
+                            tokens[model] = { input: res.usage.miss, cacheRead: res.usage.hit, output: res.usage.output };
+                            var now = peakNow();
+                            var cost = usageCost(tokens, now.peak);
+                            res.cost = { usd: cost.usd, priced: !cost.unpriced.length, peak: now.peak };
+                        }
+                        callback(err, res);
+                    });
+                });
+            },
+            /**
              * Checks again where claude is installed.
              */
             refresh: refreshStatus

@@ -87,6 +87,9 @@ function get(port, urlPath, user, password, forwardedFor) {
 
 // The Anthropic Messages API (what Claude Code calls), answering "pong",
 // and DeepSeek's balance
+// what the mock's fill-in-the-middle API was asked: { auth, body }
+var fimRequests = [];
+
 function startMock() {
     return new Promise(function(resolve) {
         var s = http.createServer(function(req, res) {
@@ -95,6 +98,13 @@ function startMock() {
             req.on("end", function() {
                 var json = {};
                 try { json = JSON.parse(body); } catch (e) {}
+                if (req.url == "/beta/completions") {
+                    fimRequests.push({ auth: req.headers.authorization, body: json });
+                    res.writeHead(200, { "content-type": "application/json" });
+                    return res.end(JSON.stringify({ object: "text_completion", choices: [{ index: 0,
+                        text: /return $/.test(json.prompt) ? "a + b;\n" : "", finish_reason: "stop" }],
+                        usage: { prompt_cache_hit_tokens: 0, prompt_cache_miss_tokens: 20, completion_tokens: 4 } }));
+                }
                 if (req.url == "/user/balance") {
                     res.writeHead(200, { "content-type": "application/json" });
                     return res.end(JSON.stringify({ is_available: true, balance_infos: [
@@ -443,6 +453,46 @@ async function main() {
                 return !!(window.app.smokeStartup && window.app.smokeStartup.loaded);
             });
         });
+    });
+
+    await check("DeepSeek inline completions: a suggestion as you type, Tab accepts it", async function() {
+        fs.writeFileSync(path.join(workspace, "inline.js"), "function add(a, b) {\n    \n}\n");
+        await page.evaluate(function() {
+            window.app.settings.set("user/deepseek/inline/@mode", "auto");
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/inline.js", true, resolve); });
+        });
+        await until("the file", function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.findTab("/inline.js");
+                var ace = tab && tab.editor.ace;
+                if (!ace || ace.session.getLength() < 3) return false;
+                ace.focus();
+                ace.moveCursorTo(1, 4);
+                return true;
+            });
+        });
+        await page.keyboard.type("return ");
+        var ghost = await until("the suggestion", function() {
+            return page.evaluate(function() {
+                var span = document.querySelector(".ace_text-layer .ace_ghost_text");
+                return span && span.textContent;
+            });
+        });
+        assert.equal(ghost, "a + b;");
+        // from the server, with the account's key; the code around the cursor
+        var sent = fimRequests[fimRequests.length - 1];
+        assert.equal(sent.auth, "Bearer sk-smoke-deepseek");
+        assert.equal(sent.body.model, "deepseek-flash");
+        assert.equal(sent.body.prompt, "function add(a, b) {\n    return ");
+        assert.equal(sent.body.suffix, "\n}\n");
+        await page.keyboard.press("Tab");
+        await until("the suggestion in the file", function() {
+            return page.evaluate(function() {
+                return window.app.tabManager.findTab("/inline.js").editor.ace.session.getLine(1) == "    return a + b;"
+                    && !document.querySelector(".ace_ghost_text");
+            });
+        });
+        await page.evaluate(function() { window.app.settings.set("user/deepseek/inline/@mode", "off"); });
     });
 
     // the panels: a chat through Claude Code to the mock API

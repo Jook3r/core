@@ -93,6 +93,10 @@ JavaScript and TypeScript files get error markers, completion, parameter
 hints and jump to definition from TypeScript 7's language server
 ([plugins/c9.ide.language.lsp](plugins/c9.ide.language.lsp/README.md)).
 
+With a DeepSeek API key, the editor can suggest code at the cursor as you type,
+greyed out ("ghost text"; Tab accepts it): Preferences > General > DeepSeek
+Inline Completions ([plugins/c9.ide.deepseek](plugins/c9.ide.deepseek/README.md#inline-completions)).
+
 Code can be formatted on save (or with Edit > Code Formatting) by a command
 that reads it and writes the formatted code, set per language in Project
 Settings (Code Formatters, and Python, JavaScript and Go Support): `ruff`
@@ -113,8 +117,9 @@ shows the current branch: click it to switch branches or create one
 runs the server-side tests (`*_test.js`) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
-`c9 open`, the Welcome page, and a chat in the Claude and DeepSeek panels
-against a mock API (skipped without Claude Code). It needs Node.js 18+ and,
+`c9 open`, the Welcome page, a DeepSeek inline completion, and a chat in the
+Claude and DeepSeek panels against a mock API (skipped without Claude Code).
+It needs Node.js 18+ and,
 once, Chromium for Playwright:
 
     npx --prefix test playwright install --with-deps chromium

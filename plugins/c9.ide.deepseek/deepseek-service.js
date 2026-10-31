@@ -77,6 +77,11 @@ module.exports = function(vfs, options, register) {
     var ARCHIVE_LIMIT = 500;                // archived ids the panel can send
     var BALANCE_TIMEOUT = 15000;
     var BALANCE_MAX = 64 * 1024;            // bytes of the balance answer read
+    var FIM_TIMEOUT = 20000;                // inline completions (complete())
+    var FIM_MAX = 256 * 1024;               // bytes of a completion's answer read
+    var FIM_INPUT_MAX = 100000;             // characters of code before and after the cursor
+    var FIM_TEXT_MAX = 16000;               // characters of a suggestion
+    var FIM_MAX_TOKENS = 4096;              // DeepSeek's limit
 
     // model ids ("deepseek-flash[1m]": [1m] tells the CLI the model has a
     // 1M-token context); a letter first, so that a value can never pass as
@@ -561,6 +566,96 @@ module.exports = function(vfs, options, register) {
         function amount(v) {
             v = typeof v == "number" ? String(v) : v;
             return typeof v == "string" && /^-?\d{1,15}(\.\d{1,10})?$/.test(v) ? v : null;
+        }
+    }
+
+    // A suggestion for the editor (inline completion): DeepSeek's
+    // fill-in-the-middle API, POST /beta/completions with the account's key.
+    // opts: { account, model, prompt (the code before the cursor), suffix
+    // (after it), maxTokens }. callback(err, { text, finishReason, usage: {
+    // hit, miss, output } }), the tokens of the prompt from DeepSeek's cache
+    // (hit) and not (miss). One request at a time, for the editor wants only
+    // the latest: a new one (and the vfs going away) cancels the one before,
+    // which calls back with ECANCELED.
+    var fimRequest = null;
+    function complete(opts, callback) {
+        callback = callback || function() {};
+        opts = opts || {};
+        if (fimRequest) fimRequest.cancel();
+        var account;
+        try { account = accountKey(opts.account); } catch (e) { return callback(e); }
+        var k = readKey(account);
+        if (!k) return callback(refusal("This account has no DeepSeek API key", "ENOKEY"));
+        var model = typeof opts.model == "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(opts.model)
+            ? opts.model : "deepseek-flash";
+        var prompt = typeof opts.prompt == "string" ? opts.prompt.slice(-FIM_INPUT_MAX) : "";
+        var suffix = typeof opts.suffix == "string" ? opts.suffix.slice(0, FIM_INPUT_MAX) : "";
+        var maxTokens = Math.floor(Number(opts.maxTokens));
+        maxTokens = maxTokens >= 1 ? Math.min(maxTokens, FIM_MAX_TOKENS) : 128;
+        var url;
+        try { url = new URL("/beta/completions", BASE_URL); } catch (e) { return callback(e); }
+        var lib = require(url.protocol == "http:" ? "http" : "https");
+        var body = JSON.stringify({ model: model, prompt: prompt, suffix: suffix || null,
+            max_tokens: maxTokens, temperature: 0 });
+
+        var done = false;
+        var request = fimRequest = {
+            cancel: function() {
+                req.destroy();
+                finish(refusal("Cancelled by a newer request", "ECANCELED"));
+            }
+        };
+        function finish(err, res) {
+            if (done) return;
+            done = true;
+            if (fimRequest === request) fimRequest = null;
+            callback(err, res);
+        }
+        var req = lib.request(url, { method: "POST", timeout: FIM_TIMEOUT, headers: {
+            Authorization: "Bearer " + k.key,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(body)
+        } }, function(res) {
+            var data = "";
+            res.setEncoding("utf8");
+            res.on("data", function(chunk) {
+                data += chunk;
+                if (data.length > FIM_MAX) req.destroy(new Error("The answer is too large"));
+            });
+            res.on("end", function() {
+                var json = null;
+                try { json = JSON.parse(data); } catch (e) {}
+                var message = json && json.error && typeof json.error.message == "string"
+                    ? json.error.message.slice(0, 300) : "";
+                if (res.statusCode == 401 || res.statusCode == 403)
+                    return finish(refusal("DeepSeek rejected the API key (" + res.statusCode + ")", "EAUTH"));
+                if (res.statusCode == 402)
+                    return finish(refusal("DeepSeek: " + (message || "insufficient balance") + " (402)", "EBALANCE"));
+                if (res.statusCode == 429)
+                    return finish(refusal("DeepSeek: " + (message || "too many requests") + " (429)", "ERATE"));
+                var choice = json && Array.isArray(json.choices) && json.choices[0];
+                if (res.statusCode != 200 || !choice || typeof choice.text != "string")
+                    return finish(new Error("DeepSeek answered " + res.statusCode + (message ? ": " + message : "")));
+                var usage = json.usage || {};
+                finish(null, {
+                    text: choice.text.slice(0, FIM_TEXT_MAX),
+                    finishReason: typeof choice.finish_reason == "string" ? choice.finish_reason.slice(0, 40) : null,
+                    usage: {
+                        hit: count(usage.prompt_cache_hit_tokens),
+                        miss: count(usage.prompt_cache_miss_tokens),
+                        output: count(usage.completion_tokens)
+                    }
+                });
+            });
+            res.on("error", function(e) { finish(e); });
+        });
+        req.on("timeout", function() { req.destroy(new Error("DeepSeek did not answer in time")); });
+        req.on("error", function(e) { finish(new Error("Could not reach " + url.host + ": " + e.message)); });
+        req.end(body);
+
+        function count(v) {
+            return typeof v == "number" && v >= 0 && v < 1e9 ? Math.floor(v) : 0;
         }
     }
 
@@ -2275,6 +2370,7 @@ module.exports = function(vfs, options, register) {
     process[KEY].push(killNow);
 
     function destroy() {
+        if (fimRequest) fimRequest.cancel();
         var list = process[KEY];
         if (list && list.indexOf(killNow) != -1)
             list.splice(list.indexOf(killNow), 1);
@@ -2301,6 +2397,7 @@ module.exports = function(vfs, options, register) {
         setupAccount: setupAccount,
         setApiKey: setApiKey,
         balance: balance,
+        complete: complete,
         checkFolder: checkFolder,
         stop: stop,
         history: history,

@@ -562,6 +562,7 @@ module.exports = function(options) {
             packagePath: "plugins/c9.ide.deepseek/deepseek",
             staticPrefix: staticPrefix + "/plugins/c9.ide.deepseek"
         },
+        "plugins/c9.ide.deepseek/inline",
         {
             packagePath: "plugins/c9.ide.panels/panels",
             defaultActiveLeft: "tree"
