@@ -3,7 +3,8 @@
 # Runs the tests. Needs the setup done (scripts/install-sdk.sh).
 #
 #   scripts/run-tests.sh           the server-side tests, then the smoke test
-#   scripts/run-tests.sh server    the server-side tests (*_test.js marked "use server")
+#   scripts/run-tests.sh server    the server-side tests (*_test.js marked "use server",
+#                                  and the Ace tests below)
 #   scripts/run-tests.sh smoke     the smoke test (test/smoke.js), in a browser
 #
 # The packages the tests need go to test/node_modules, apart from Cloud9's
@@ -20,6 +21,8 @@ resetColor=$'\e[0m'
 # tests that need services this repo doesn't have: the hosted collab
 # server (sqlite3) and the hosted API (c9.api)
 SKIP="plugins/c9.ide.collab/server/collab-server_test.js plugins/c9.preview/preview_test.js"
+# tests of the editor, Ace, for what Cloud9 changed in it (ghost text)
+ACE_TESTS="plugins/node_modules/ace/lib/ace/virtual_renderer_test.js"
 
 installTestPackages() {
     if [ ! -d test/node_modules ] || [ test/package.json -nt test/node_modules ]; then
@@ -28,21 +31,32 @@ installTestPackages() {
     fi
 }
 
+# runTest <file> <command...>: runs a test file in a process of its own
+# (serverTests counts them)
+runTest() {
+    local file=$1
+    shift
+    count=$((count + 1))
+    if "$@" > /tmp/c9-test.log 2>&1; then
+        echo "ok - $file"
+    else
+        echo "${red}not ok - $file${resetColor}"
+        sed 's/^/    /' /tmp/c9-test.log | tail -30
+        failed="$failed $file"
+    fi
+}
+
 serverTests() {
     local failed= count=0 file
     for file in $(git ls-files '*_test.js' | grep -v node_modules/ | xargs grep -l '"use server"' | sort); do
         [[ " $SKIP " == *" $file "* ]] && continue
-        count=$((count + 1))
-        # each in its own process; the mocha launcher script fails silently
-        # on newer Node.js, so run _mocha itself
-        if NODE_PATH="$PWD/test/node_modules" node test/node_modules/mocha/bin/_mocha -R dot -t 30000 "$file" \
-            > /tmp/c9-test.log 2>&1; then
-            echo "ok - $file"
-        else
-            echo "${red}not ok - $file${resetColor}"
-            sed 's/^/    /' /tmp/c9-test.log | tail -30
-            failed="$failed $file"
-        fi
+        # the mocha launcher script fails silently on newer Node.js, so run
+        # _mocha itself
+        runTest "$file" env NODE_PATH="$PWD/test/node_modules" \
+            node test/node_modules/mocha/bin/_mocha -R dot -t 30000 "$file"
+    done
+    for file in $ACE_TESTS; do
+        runTest "$file" node test/ace-test.js "$file"
     done
     rm -f /tmp/c9-test.log
     if [ "$failed" ]; then
