@@ -12,8 +12,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # the oldest that installs, the previous LTS and the recommended one
-        node: [16, 22, 24]
+        # the oldest that installs, the previous LTS, the recommended one and
+        # the newest
+        node: [16, 22, 24, 26]
     steps:
       - uses: actions/checkout@v5
 

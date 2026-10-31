@@ -19,7 +19,6 @@ define(function(require, exports, module) {
         var mime = require("mime");
         var Cache = require("c9/cache");
         var metrics = imports.metrics;
-        var parseUrl = require("url").parse;
         var debug = require("debug")("preview");
         var logError = imports["error.logger"].warn;
         
@@ -145,14 +144,28 @@ define(function(require, exports, module) {
                 if (req.user.code)
                     url += "?access_token=" + encodeURIComponent(req.user.code);
 
-                var parsedUrl = parseUrl(url);
-                var httpModule = parsedUrl.protocol == "https:" ? https : http;
+                // Node.js 24 and later warn about url.parse: new URL() for the
+                // server only, the path goes on as it came (with "..", which the
+                // VFS refuses outside the workspace; new URL() would resolve it)
+                var server;
+                try {
+                    server = new URL(req.proxyUrl);
+                } catch (e) {
+                    return next(new error.ServiceUnavailable("Invalid VFS server URL"));
+                }
+                var requestPath = (url.replace(/^[^:\/]+:\/\/[^\/]*/, "") || "/")
+                    .replace(/["'<>`{|}^]/g, function(c) { // as url.parse did
+                        return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+                    });
+                var pathname = requestPath.split("?")[0];
+                var hostname = server.hostname.replace(/^\[(.*)\]$/, "$1");
+                var httpModule = server.protocol == "https:" ? https : http;
                 
                 req.headers.accept = "application/json";
                 delete req.headers.host;
 
                 var isDir = path[path.length - 1] == "/";
-                if (isDir || parsedUrl.pathname.match(/\.html?$/i)) {
+                if (isDir || pathname.match(/\.html?$/i)) {
                     req.headers["accept-encoding"] = "identity";
                     delete req.headers["if-range"];
                 } else {
@@ -162,9 +175,9 @@ define(function(require, exports, module) {
                 debug("proxy call %s", url);
                 try {
                     httpModule.get({
-                        path: parsedUrl.path,
-                        hostname: parsedUrl.hostname,
-                        port: parsedUrl.port,
+                        path: requestPath,
+                        hostname: hostname,
+                        port: server.port,
                         headers: req.headers,
                         rejectUnauthorized: !options.selfSignedSSL
                     }, function(request) {
@@ -173,7 +186,7 @@ define(function(require, exports, module) {
                         else if (isDir)
                             serveListing(request);
                         else if (request.headers["content-type"] == "text/html")
-                            serveHtml(request, parsedUrl.hostname, req);
+                            serveHtml(request, hostname, req);
                         else
                             serveFile(request);
                     }).on("error", function(err) {

@@ -12,7 +12,6 @@ var http = require("http");
 var mkdirp = require("mkdirp");
 var localfs = require("vfs-local");
 var download = require("./download");
-var urlParse = require('url').parse;
 var execFile = require('child_process').execFile;
 
 describe(__filename, function() {
@@ -38,7 +37,8 @@ describe(__filename, function() {
             assert.equal(err, null);
             var download = api["vfs.download"].download;
             that.server = http.createServer(function(req, res, next) {
-                req.uri = urlParse(req.url, true);
+                var url = new URL(req.url, "http://localhost");
+                req.uri = { pathname: url.pathname, query: Object.fromEntries(url.searchParams) };
                 download(vfs, __dirname, req, res, function(err) {
                     console.log("download failed", err);
                     assert.fail(err);

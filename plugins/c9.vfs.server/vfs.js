@@ -9,7 +9,7 @@ var restful = require("vfs-http-adapter");
 var VfsWorker = require('vfs-socket/worker').Worker;
 var wrapVfs = require("./vfs_wrapper");
 var proxyVfs = require("./vfs_proxy");
-var urlParse = require('url').parse;
+var querystring = require("querystring");
 
 module.exports = Vfs;
 
@@ -67,13 +67,24 @@ util.inherits(Vfs, EventEmitter);
 Vfs.prototype.handleRest = function(scope, path, req, res, next) {
     this.emit("keepalive");
     
-    if (!req.uri) { req.uri = urlParse(req.url, true); }
+    if (!req.uri) { req.uri = parseRequestUrl(req.url); }
     var proto = req.proto;
     req.restBase = proto + "://" + req.headers.host + req.uri.pathname;
     req.uri.pathname = path;
 
     this.restful[scope](req, res, next);
 };
+
+// the pathname and the query of a request's URL (a path), as
+// url.parse(url, true) gives them: Node.js 24 and later warn about url.parse
+function parseRequestUrl(url) {
+    url = url.split("#")[0];
+    var i = url.indexOf("?");
+    return {
+        pathname: i == -1 ? url : url.slice(0, i),
+        query: querystring.parse(i == -1 ? "" : url.slice(i + 1))
+    };
+}
 
 Vfs.prototype.handleEngine = function(req, res, next) {
     if (req.ws) {
