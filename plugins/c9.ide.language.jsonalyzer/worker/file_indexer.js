@@ -60,6 +60,8 @@ indexer.analyzeCurrent = function(path, docValue, ast, options, callback) {
     
     var language = worker.language;
     var plugin = worker.getHandlerFor(path, language);
+    if (!plugin) // throwing would leave the analysis waiting for a callback
+        return callback(new Error("No handler for " + path + " (" + language + ")"));
     options.language = language;
     
     var watcher = setTimeout(function() {

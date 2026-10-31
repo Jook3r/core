@@ -150,6 +150,12 @@ worker.analyze = function(doc, ast, options, callback) {
     // since we can't handle multiple segments in the index atm
     var fullDoc = this.doc.getValue();
     this.language = this.doc.$language;
+    
+    // an analysis that started before a switch to another file gets here
+    // with the new file, which handlesLanguage() checked with the old
+    // file's language
+    if (!this.getHandlerFor(worker.path, this.language))
+        return callback();
         
     fileIndexer.analyzeCurrent(worker.path, fullDoc, ast, options, function(err, result, imports, markers) {
         if (err)

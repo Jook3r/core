@@ -777,6 +777,26 @@ describe("jsonalyzer handler", function() {
         assert(handler.getHandlerFor(handler.path));
         done();
     });
+    it("analyzes nothing when the editor went to another file during an analysis", function(done) {
+        // started for a .js file (handlesLanguage() said yes), now on a .ts file
+        handler.path = "/typed.ts";
+        handler.language = "javascript";
+        var doc = new Document("const count: number = 'three';");
+        doc.$language = "typescript";
+        handler.analyze(doc, null, {}, function(markers) {
+            assert(!markers, "No markers expected");
+            assert(!index.get("/typed.ts"));
+            done();
+        });
+    });
+    it("calls back with an error for a file no handler takes", function(done) {
+        handler.path = "/typed.ts";
+        handler.language = "typescript";
+        fileIndexer.analyzeCurrent(handler.path, "const count = 3;", null, {}, function(err) {
+            assert(err, "Error expected");
+            done();
+        });
+    });
 });
 
 if (typeof onload !== "undefined")
