@@ -405,6 +405,42 @@ define(function(require, exports, module) {
             return list;
         }
         
+        // The keys of the IDE that a page in a frame (a preview) hands back
+        // to it. That page is not trusted, and it can ask without a key
+        // being pressed: only commands that move between tabs and panes or
+        // show a panel, and closing the tab, which is the page's own. None
+        // that runs something or closes other work.
+        var FRAME_COMMANDS = [
+            "openpreferences", "commands", "navigate", "searchinfiles",
+            "findinfiles", "toggleconsole", "switchterminal", "revealtab",
+            "closetab", "gototabright", "gototableft", "movetabright",
+            "movetableft", "movetabup", "movetabdown", "nexttab", "previoustab",
+            "nextpane", "previouspane", "gotopaneleft", "gotopaneright",
+            "gotopaneup", "gotopanedown", "tab1", "tab2", "tab3", "tab4",
+            "tab5", "tab6", "tab7", "tab8", "tab9", "tab0"
+        ];
+        
+        function getFrameBindings() {
+            return getExceptionBindings().filter(function(item) {
+                return FRAME_COMMANDS.indexOf(item.command) != -1;
+            });
+        }
+        
+        function execFromFrame(name, frame) {
+            // a key was pressed in the frame only if it has the keyboard,
+            // which a page gets from the user, not by itself
+            if (document.activeElement !== frame)
+                return false;
+            
+            // (several commands can have the same key)
+            var names = Array.isArray(name) ? name : [name];
+            for (var i = names.length; i--;) {
+                if (FRAME_COMMANDS.indexOf(names[i]) != -1 && exec(names[i]))
+                    return true;
+            }
+            return false;
+        }
+        
         // commandManager.bindKey = bindKey;
         
         /***** Lifecycle *****/
@@ -687,7 +723,27 @@ define(function(require, exports, module) {
             /**
              * 
              */
-            getExceptionBindings: getExceptionBindings
+            getExceptionBindings: getExceptionBindings,
+            
+            /**
+             * The key bindings to give to a page that the IDE shows in a
+             * frame (a preview), for it to hand these keys back to the IDE
+             * with {@link #execFromFrame}: those of {@link 
+             * #getExceptionBindings} whose commands such a page may run.
+             */
+            getFrameBindings: getFrameBindings,
+            
+            /**
+             * Runs a command for a page in a frame, in which its key was
+             * pressed. The page is not trusted: only the commands of {@link
+             * #getFrameBindings} run, and only while the frame has the
+             * keyboard focus.
+             * @param {String}      name   the name of the command (or an
+             *   array of names: the last one that is available runs)
+             * @param {HTMLElement} frame  the iframe the page is in
+             * @return {Boolean} whether the command ran
+             */
+            execFromFrame: execFromFrame
         });
         
         register(null, {

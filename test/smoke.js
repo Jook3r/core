@@ -182,6 +182,18 @@ async function main() {
     var tmuxDir = path.join(tmp, "tmux");
     [home, workspace, tmuxDir].forEach(function(dir) { fs.mkdirSync(dir); });
     fs.writeFileSync(path.join(workspace, "hello.js"), "// smoke-needle\nconsole.log('hello');\n");
+    // for the previews: pages that try to use the IDE around them to run a
+    // command (in the preview's sandbox they can't), and say how that went
+    // in their title
+    var escaped = path.join(tmp, "escaped.txt");
+    var escape = "try { parent.app.proc.execFile('sh', { args: ['-c', 'echo ran > " + escaped + "'] }, function() {});"
+        + " document.title = 'reached the IDE'; } catch (e) { document.title = 'blocked ' + self.origin; }";
+    fs.writeFileSync(path.join(workspace, "page.html"), "<!doctype html>\n<link rel=\"stylesheet\" href=\"page.css\">\n"
+        + "<h1 id=\"title\">Page</h1>\n<a id=\"next\" href=\"next.html\">next</a>\n<script>" + escape + "</script>\n");
+    fs.writeFileSync(path.join(workspace, "next.html"), "<!doctype html>\n<link rel=\"stylesheet\" href=\"page.css\">\n"
+        + "<h1 id=\"title\">Next</h1>\n");
+    fs.writeFileSync(path.join(workspace, "page.css"), "h1 { color: rgb(1, 2, 3); }\n");
+    fs.writeFileSync(path.join(workspace, "notes.md"), "# Notes\n\n<img src=\"x\" onerror=\"" + escape + "\">\n");
 
     if (!fs.existsSync(path.join(ROOT, "build/standalone")))
         throw new Error("No packed client: run scripts/install-sdk.sh first");
@@ -216,6 +228,25 @@ async function main() {
         assert.equal((await get(port, "/ide.html", USER, PASSWORD, "198.51.100.24")).status, 200, "right password from another address");
     });
 
+    await check("only the IDE's page is sent without a sandbox", async function() {
+        var sandboxed = /^sandbox allow-scripts(?!.*allow-same-origin)(?!.*allow-top-navigation)/;
+        var res = await get(port, "/ide.html", USER, PASSWORD);
+        assert.equal(res.headers["content-security-policy"], "frame-ancestors 'none'");
+        assert.equal(res.headers["x-frame-options"], "DENY");
+        // a file of the workspace, by the addresses it has; a page of the
+        // IDE's files; an error that repeats the request
+        var documents = ["/preview/page.html", "/vfs/1/preview/page.html", "/preview/",
+            "/static/plugins/c9.ide.preview.markdown/markdown.html",
+            "/preview/<script>alert(1)</script>"];
+        for (var i = 0; i < documents.length; i++) {
+            res = await get(port, encodeURI(documents[i]), USER, PASSWORD);
+            assert(sandboxed.test(res.headers["content-security-policy"]),
+                documents[i] + ": " + res.headers["content-security-policy"]);
+        }
+        res = await get(port, "/static/mini_require.js", USER, PASSWORD);
+        assert.equal(res.headers["content-security-policy"], undefined, "a script");
+    });
+
     await check("ide.html loads a config by its name only", async function() {
         // (the name is part of the path of a file that the server loads)
         var loaded = path.join(tmp, "config-loaded.txt");
@@ -224,6 +255,7 @@ async function main() {
         var name = "x/../" + path.relative(path.join(ROOT, "configs"), path.join(workspace, "config"));
         var res = await get(port, "/ide.html?workspacetype=" + encodeURIComponent(name), USER, PASSWORD);
         assert.equal(res.status, 422);
+        assert(/^sandbox /.test(res.headers["content-security-policy"]), "the error page: " + res.headers["content-security-policy"]);
         assert(!fs.existsSync(loaded), "the server loaded a file of the workspace");
     });
 
@@ -424,6 +456,152 @@ async function main() {
         });
         assert(/^Smoke Author \xB7 .* \xB7 First version$/.test(cells[0]), JSON.stringify(cells));
         assert.equal(cells[1], "Not committed yet");
+    });
+
+    // the frame of a preview, by its address
+    function frameOf(pattern) {
+        return until("the preview's frame", function() {
+            return page.frames().filter(function(frame) { return pattern.test(frame.url()); })[0];
+        });
+    }
+    function openPreview(file) {
+        return page.evaluate(function(file) {
+            return new Promise(function(resolve) { window.app.preview.openPreview(file, null, true, resolve); });
+        }, file);
+    }
+
+    await check("preview: a page of the workspace can't reach the IDE or run a command", async function() {
+        await openPreview("/page.html");
+        var frame = await frameOf(/\/preview\/page\.html/);
+        // in the pane, with its style sheet
+        assert.equal(await until("the page", function() { return frame.title(); }), "blocked null");
+        assert.equal(await frame.evaluate(function() {
+            return getComputedStyle(document.getElementById("title")).color;
+        }), "rgb(1, 2, 3)");
+        // and in a tab of its own, where it tries the IDE in a frame too
+        var tab = await context.newPage();
+        await tab.goto("http://127.0.0.1:" + port + "/preview/page.html");
+        assert.equal(await tab.title(), "blocked null");
+        var framed = await tab.evaluate(function() {
+            return new Promise(function(resolve) {
+                var frame = document.createElement("iframe");
+                frame.src = "/ide.html";
+                frame.onload = function() {
+                    try { resolve(typeof frame.contentWindow.app); } catch (e) { resolve("blocked"); }
+                };
+                document.body.appendChild(frame);
+            });
+        });
+        assert.equal(framed, "blocked");
+        await tab.close();
+        await wait(500);
+        assert(!fs.existsSync(escaped), "the page ran a command");
+    });
+
+    await check("preview: live CSS, and the IDE follows a link in the page", async function() {
+        var frame = await frameOf(/\/preview\/page\.html/);
+        await until("the page to connect to the IDE", function() {
+            return page.evaluate(function() {
+                var session = window.app.tabManager.findTab("preview-/page.html").document.getSession();
+                return session.styleSheets && session.styleSheets.length == 1 && session.html;
+            });
+        });
+        await page.evaluate(function() {
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/page.css", true, resolve); });
+        });
+        await until("the style sheet", function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.findTab("/page.css");
+                return tab && tab.editor.ace && tab.editor.ace.getValue().length > 0;
+            });
+        });
+        // two edits of a value, not saved: the page gets the style sheet,
+        // then a rule
+        var colors = ["rgb(1, 2, 3)", "rgb(4, 5, 6)", "rgb(7, 8, 9)"];
+        for (var i = 1; i < colors.length; i++) {
+            await page.evaluate(function(colors) {
+                var ace = window.app.tabManager.findTab("/page.css").editor.ace;
+                ace.find(colors[0]);
+                ace.insert(colors[1]);
+            }, [colors[i - 1], colors[i]]);
+            await until("the color " + colors[i] + " in the preview", function() {
+                return frame.evaluate(function(color) {
+                    return getComputedStyle(document.getElementById("title")).color == color;
+                }, colors[i]);
+            });
+        }
+        await page.evaluate(function() {
+            return new Promise(function(resolve) {
+                var tab = window.app.tabManager.findTab("/page.css");
+                window.app.save.save(tab, {}, function() {
+                    tab.close();
+                    window.app.tabManager.focusTab(window.app.tabManager.findTab("preview-/page.html"));
+                    resolve();
+                });
+            });
+        });
+        await frame.click("#next");
+        await until("the tab to show the next page", function() {
+            return page.evaluate(function() {
+                return window.app.tabManager.findTab("preview-/page.html").title == "[B] /next.html";
+            });
+        });
+    });
+
+    await check("preview: a page can't run what it likes in the IDE, or get other files", async function() {
+        await openPreview("/page.html");
+        var frame = await frameOf(/\/preview\/page\.html/);
+        await page.evaluate(function() {
+            window.smokeCommands = [];
+            window.app.commands.on("afterExec", function(e) { window.smokeCommands.push(e.command.name); });
+        });
+        // the page asks, with the keyboard focus (as if keys were pressed
+        // in it), for commands and for the text of files as its own
+        await frame.click("#title");
+        await frame.evaluate(function() {
+            var id = /_c9_id=(\w+)/.exec(location.search)[1];
+            ["run", "build", "closealltabs", "openterminal", "toggleconsole"].forEach(function(command) {
+                parent.postMessage({ id: id, message: "exec", command: command }, "*");
+            });
+            parent.postMessage({ id: id, message: "html.ready", data: {
+                styles: ["/page.css", "/hello.js", "~/.c9/user.settings"], scripts: ["/typed.ts"], href: "/hello.js"
+            }}, "*");
+        });
+        // another window than the preview's asks too
+        await page.evaluate(function() {
+            var other = window.open("about:blank");
+            other.eval("opener.postMessage({ id: 'livepreview0', message: 'exec', command: 'nexttab' }, '*')");
+            other.close();
+        });
+        await until("the one command a page may run", function() {
+            return page.evaluate(function() { return window.smokeCommands.length; });
+        });
+        await wait(500);
+        var state = await page.evaluate(function() {
+            return { commands: window.smokeCommands, documents: Object.keys(window.app.remote.documents).sort() };
+        });
+        assert.deepEqual(state.commands, ["toggleconsole"]);
+        assert.deepEqual(state.documents, ["/page.css", "/page.html"]);
+        await page.evaluate(function() { window.app.commands.exec("toggleconsole"); });
+    });
+
+    await check("preview: HTML in a Markdown file can't reach the IDE", async function() {
+        await openPreview("/notes.md");
+        var frame = await frameOf(/markdown\.html/);
+        await until("the Markdown", function() {
+            return frame.evaluate(function() {
+                var heading = document.querySelector("#preview h1");
+                return heading && heading.textContent == "Notes" && /^blocked/.test(document.title);
+            });
+        });
+        assert.equal(await frame.title(), "blocked null");
+        await wait(500);
+        assert(!fs.existsSync(escaped), "the Markdown file ran a command");
+        await page.evaluate(function() {
+            window.app.tabManager.getTabs().forEach(function(tab) {
+                if (tab.editorType == "preview") tab.close();
+            });
+        });
     });
 
     await check("Plugins: one ticked in Preferences loads at startup", async function() {

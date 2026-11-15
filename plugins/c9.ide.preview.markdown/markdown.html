@@ -148,7 +148,8 @@
                             return;
                         }
             
-                        sourceLikeDiv.innerHTML = str;
+                        // (a line of the source is text, not HTML)
+                        sourceLikeDiv.textContent = str;
                         var sStyle = getComputedStyle(sourceLikeDiv);
                         h = parseFloat(sStyle.height);
                         lh = parseFloat(sStyle.fontSize);
@@ -249,7 +250,9 @@
                 
                 var scrollMap, lastValue, highlightStyle;
                 window.addEventListener("message", function(e){
-                    if (host != "local" && e.origin !== host)
+                    // only from the IDE that shows this page (host is part
+                    // of the address: whoever opens the page chooses it)
+                    if (e.source !== parent || host != "local" && e.origin !== host)
                         return;
                     
                     if (e.data.type == "document") {

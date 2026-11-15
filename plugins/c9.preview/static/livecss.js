@@ -6,23 +6,27 @@ if (!parent) return;
 var host = (location.search.match(/_c9_host=(.*?)(?:$|&)/) || false)[1];
 var id = (location.search.match(/[?&]_c9_id=([a-zA-Z0-9]+)(?:$|&)/) || false)[1];
 
-if (!host || !id) {
-    var cookies = document.cookie.split(";");
-    cookies.forEach(function(c) {
-        var parts = c.split("=");
-        var key = parts.shift().replace(/^\s+/, "");
-        
-        if (key == "_c9_host") host = parts.join(";");
-        else if (key == "_c9_id") id = parts.join(";");
-    });
-    
-    if (!host || !id)
-        return;
-}
-else {
-    document.cookie = "_c9_host=" + host;
-    document.cookie = "_c9_id=" + id;
-}
+// (in the preview's sandbox a page has no cookies: a link takes the
+// parameters along, see below)
+try {
+    if (!host || !id) {
+        var cookies = document.cookie.split(";");
+        cookies.forEach(function(c) {
+            var parts = c.split("=");
+            var key = parts.shift().replace(/^\s+/, "");
+            
+            if (key == "_c9_host") host = parts.join(";");
+            else if (key == "_c9_id") id = parts.join(";");
+        });
+    }
+    else {
+        document.cookie = "_c9_host=" + host;
+        document.cookie = "_c9_id=" + id;
+    }
+} catch (e) {}
+
+if (!host || !id)
+    return;
 
 var mainPath = location.href.split("?")[0];
 var isHosted = mainPath.indexOf("/preview") == -1;
@@ -425,6 +429,34 @@ window.addEventListener("focus", function() {
     send({ message: "focus" });
     removeHighlight();
 });
+
+// A link to another page of the preview takes along the parameters that
+// connect this page to the IDE: the next page is connected as well, and
+// tells the IDE where the preview is now (the IDE can't look into the
+// preview's sandbox, and the page can't keep the parameters in a cookie).
+document.addEventListener("click", function(e) {
+    var link = e.target;
+    while (link && link.nodeName != "A" && link.nodeName != "AREA")
+        link = link.parentNode;
+    
+    if (!link || typeof link.href != "string" || link.hasAttribute("download")
+      || link.target && link.target != "_self" || window.opener
+      || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)
+        return;
+    
+    // another page, of the preview, that doesn't have them yet
+    if (link.origin != location.origin || link.pathname.indexOf("/preview/") !== 0
+      || /[?&]_c9_id=/.test(link.search)
+      || link.pathname == location.pathname && link.search == location.search)
+        return;
+    
+    var href = link.getAttribute("href");
+    link.search += (link.search ? "&" : "?") + "_c9_id=" + id + "&_c9_host=" + host;
+    // (the page's own link stays as it was)
+    setTimeout(function() {
+        link.setAttribute("href", href);
+    });
+}, true);
 
 // Highlight
 

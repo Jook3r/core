@@ -110,6 +110,39 @@ the line numbers for Revert Change and Show Git Blame. The Changes panel
 shows the current branch: click it to switch branches or create one
 ([plugins/c9.ide.scm](plugins/c9.ide.scm/README.md)).
 
+#### Previews ####
+
+Preview (next to Run) shows an HTML, Markdown, SVG or PDF file of the
+workspace in a pane, and follows it while you edit. A page in the preview is
+not trusted: it is in the browser's sandbox, where its scripts run with an
+origin of their own. It can't reach the IDE around it, and it can't use
+your login to read or write files or to run commands on the server. The
+same goes for the HTML in a Markdown file, for a file opened by its address
+(`/preview/...`, also in a tab of its own), and for every page the server
+sends except the IDE itself, which no page can show in a frame.
+
+In the sandbox a page's ordinary scripts, style sheets and images load, the
+page shows a change to its style sheet as you type, and the preview's
+address bar follows the links you click. A page can't, there:
+
+- load ES modules (`<script type="module">`), web fonts or its own files
+  with `fetch` (the browser asks for these without your login, and the
+  server refuses them);
+- use cookies, `localStorage` or workers.
+
+Of the IDE's keys, those that switch tabs and panes, close the preview and
+open a panel work while the keyboard focus is in the page; Run and Build
+don't.
+
+For a page that needs more, serve its folder from a terminal:
+
+    cd ~/workspace/site && python3 -m http.server $PORT --bind $IP
+
+and open it with Preview > Preview Running Application
+([deploy/README.md](deploy/README.md), "Your app"), or type its address,
+like `http://localhost:8080`, in the preview's address bar. There the page
+has an address, and so an origin, of its own.
+
 #### Running Tests ####
 
     scripts/run-tests.sh
@@ -117,8 +150,9 @@ shows the current branch: click it to switch branches or create one
 runs the server-side tests (`*_test.js`) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
-`c9 open`, the Welcome page, a DeepSeek inline completion, and a chat in the
-Claude and DeepSeek panels against a mock API (skipped without Claude Code).
+`c9 open`, the Welcome page, the previews' sandbox, a DeepSeek inline
+completion, and a chat in the Claude and DeepSeek panels against a mock API
+(skipped without Claude Code).
 It needs Node.js 18+ and,
 once, Chromium for Playwright:
 

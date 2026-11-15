@@ -221,10 +221,18 @@ define(function(require, exports, module) {
                                 value: css
                             };
                             
-                            transports.forEach(function(transport) {
-                                transport.updateStyleRule(path, rule);
+                            // (a page that can't change the rule gets
+                            // the whole style sheet)
+                            var rest = transports.filter(function(transport) {
+                                return transport.updateStyleRule(path, rule) === false;
                             });
-                        
+                            if (!rest.length)
+                                return;
+                            
+                            value = doc && doc.value || "";
+                            rest.forEach(function(transport) {
+                                transport.updateStyleSheet(path, value);
+                            });
                             return;
                         }
                     }

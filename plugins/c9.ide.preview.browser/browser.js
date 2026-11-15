@@ -36,6 +36,13 @@ define(function(require, exports, module) {
         var BASEPATH = preview.previewUrl;
         var counter = 0;
         
+        // What a page in the preview may do. The server sends the pages it
+        // serves with a sandbox of its own (plugins/c9.vfs.standalone/
+        // sandbox.js); this one also keeps a page from another address from
+        // replacing the IDE around it.
+        var SANDBOX = "allow-forms allow-pointer-lock allow-popups allow-scripts"
+            + " allow-modals allow-popups-to-escape-sandbox";
+        
         /***** Methods *****/
         
         function calcRootedPath(url) {
@@ -62,6 +69,16 @@ define(function(require, exports, module) {
         function calcAbsolutepath(url) {
             if (url[0] == "/") return BASEPATH + url;
             return url;
+        }
+        
+        // Whether a page has the address of the IDE itself (a file of the
+        // workspace, a page among the IDE's files)
+        function isOwnOrigin(url) {
+            try {
+                return new URL(url, location.href).origin == location.origin;
+            } catch (e) {
+                return true;
+            }
         }
         
         function loadPreviewSession(session, allowAutoFocus) {
@@ -92,19 +109,25 @@ define(function(require, exports, module) {
             var mainPath = url.match(/^[^?#]*/)[0];
             var noSandbox = /\.(pdf)$/.test(mainPath);
             
+            if (!options.local && window.location.protocol == "https:" && url.startsWith("http://"))
+                url = options.staticPrefix + "/nohttps.html#" + url;
+            
             // dissallow top navigation
             if (!options.local) {
                 if (noSandbox) {
                     iframe.removeAttribute("sandbox");
                 } else {
-                    iframe.setAttribute("sandbox", "allow-forms allow-pointer-lock allow-popups"
-                        + " allow-same-origin allow-scripts allow-modals allow-popups-to-escape-sandbox");
+                    // A page with the IDE's own address is not the IDE: it
+                    // gets an origin of its own, or it could use the IDE
+                    // around it (window.app) and the server as the user. A
+                    // page from elsewhere, like the app that runs in the
+                    // workspace, keeps the origin it has.
+                    iframe.setAttribute("sandbox", SANDBOX
+                        + (isOwnOrigin(url) ? "" : " allow-same-origin"));
                 }
             }
             
-            if (!options.local && window.location.protocol == "https:" && url.startsWith("http://"))
-                url = options.staticPrefix + "/nohttps.html#" + url;
-            
+            session.lastSrc = null;
             iframe.src = url;
         }
         
@@ -194,9 +217,17 @@ define(function(require, exports, module) {
                 var src = getIframeSrc(iframe);
                 var path = calcRootedPath(cleanIframeSrc(src));
                 
-                tab.title = 
-                tab.tooltip = "[B] " + path;
+                // The IDE can't look into a page in the sandbox: src is
+                // then the address the IDE opened, also once a link in the
+                // page has led elsewhere. Where it is after that, the page
+                // tells itself (the transport's "ready").
+                var opened = src != session.lastSrc;
                 session.lastSrc = src;
+                
+                if (opened || options.local) {
+                    tab.title = 
+                    tab.tooltip = "[B] " + path;
+                }
                 
                 if (options.local) {
                     var url = cleanIframeSrc(getIframeSrc(iframe));
@@ -210,7 +241,7 @@ define(function(require, exports, module) {
                     
                     iframe.contentWindow.postMessage("start-c9-livecss", "*");
                 }
-                else if (!~path.indexOf(options.staticPrefix)) {
+                else if (opened && !~path.indexOf(options.staticPrefix)) {
                     editor.setLocation(path);
                 }
                 
@@ -230,8 +261,16 @@ define(function(require, exports, module) {
                     session.scripts = sources.scripts.map(function(path) {
                         return new JSDocument(path).addTransport(session.transport);
                     });
-                    session.html = new HTMLDocument(sources.html)
+                    session.html = sources.html && new HTMLDocument(sources.html)
                         .addTransport(session.transport);
+                    
+                    // the page in the frame, which a link may have changed
+                    if (sources.location && !options.local) {
+                        tab.title = 
+                        tab.tooltip = "[B] " + sources.location;
+                        if (plugin.activeSession == session)
+                            session.editor.setLocation(sources.location);
+                    }
                 });
             }, doc);
             session.transport.on("focus", function() {
@@ -340,11 +379,16 @@ define(function(require, exports, module) {
             loadPreviewSession(session, tabManager.focussedTab == session.tab);
         });
         plugin.on("popout", function() {
-            var src = getIframeSrc(plugin.activeSession.iframe);
+            var session = plugin.activeSession;
+            var src = getIframeSrc(session.iframe);
             if (!src)
-                src = plugin.activeSession.url;
-            if (!plugin.activeSession.disableInjection)
-                window.open(src);
+                src = session.url;
+            if (!session.disableInjection) {
+                // (its page is connected to the IDE like the frame's)
+                var win = window.open(src);
+                if (session.transport)
+                    session.transport.addWindow(win);
+            }
             else
                 util.openNewWindow(src);
         });

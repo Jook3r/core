@@ -19,6 +19,7 @@ var extend = Object.assign;
 var resolve = require("path").resolve;
 var basename = require("path").basename;
 var frontdoor = require("frontdoor");
+var sandbox = require("./sandbox");
 
 function plugin(options, imports, register) {
     var previewHandler = imports["preview.handler"];
@@ -26,6 +27,19 @@ function plugin(options, imports, register) {
     
     assert(options.workspaceDir, "Option 'workspaceDir' is required");
     assert(options.options, "Option 'options' is required");
+    
+    // Only the IDE's page is a document of the IDE's origin: what else a
+    // browser may show (a file in the preview, an error page) is sandboxed.
+    // The client-side tests (test mode: no login, a mock workspace) run in
+    // a page of their own, which shows a test in a frame. Not for the
+    // desktop version, whose window is not a browser's.
+    var testing = options.options.testing;
+    if (!options.local) {
+        imports.connect.useStart(sandbox({
+            pages: ["/ide.html"].concat(testing ? ["/static/test.html"] : []),
+            framed: testing
+        }));
+    }
     
     // browsers attach the cached basic auth credentials to cross-site
     // requests and websockets, so only accept requests from our own origin
@@ -193,7 +207,7 @@ function plugin(options, imports, register) {
     ]);
     
     api.get("/preview", function(req, res, next) {
-        res.redirect(req.url + "/");
+        res.redirect(req.url.replace(/^[^?]*/, "$&/"));
     });
 
     api.get("/vfs-root", function(req, res, next) {

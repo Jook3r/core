@@ -88,6 +88,12 @@ Apache 2.4.47 and newer proxy the IDE's websocket with `upgrade=websocket`;
 `mod_proxy_wstunnel` is not needed. The IDE has to be at the root of its
 hostname (it can't live under a sub-path).
 
+Cloud9 sends a `Content-Security-Policy` header with every page: the sandbox
+that keeps a file in the preview from using the IDE (see "Previews" in the
+[README](../README.md)), and for the IDE's page that no site may show it in
+a frame. If you add headers of your own in Apache, don't set that one for
+the IDE's hostname: `Header set` replaces Cloud9's.
+
 Firewall: only SSH, 80 and 443 need to be reachable.
 
     sudo ufw allow OpenSSH

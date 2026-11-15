@@ -125,6 +125,15 @@ define(function(require, exports, module) {
             
             iframe.setAttribute("nwfaketop", true);
             iframe.setAttribute("nwdisable", true);
+            
+            // The page shows the HTML of the Markdown file, which is not
+            // the IDE's: it gets an origin of its own, or a script in the
+            // file could use the IDE around it (the server sends the page
+            // with a sandbox as well, plugins/c9.vfs.standalone/sandbox.js)
+            if (!options.local) {
+                iframe.setAttribute("sandbox", "allow-forms allow-pointer-lock allow-popups"
+                    + " allow-scripts allow-modals allow-popups-to-escape-sandbox");
+            }
 
             iframe.style.width = "100%";
             iframe.style.height = "100%";
@@ -151,32 +160,49 @@ define(function(require, exports, module) {
                 if (c9.hosted && e.origin !== previewOrigin)
                     return;
                 
-                if (e.data.id != session.id)
+                // Only the preview's own frame, or a window the IDE opened
+                // for it: any window that has the IDE's can send it a
+                // message. The page isn't trusted either: it shows the
+                // HTML of the Markdown file, in a sandbox.
+                var inFrame = e.source && e.source === iframe.contentWindow;
+                if (!inFrame && (session.popouts || []).indexOf(e.source) == -1)
                     return;
                 
-                if (e.data.message == "exec") {
-                    commands.exec(e.data.command);
+                var data = e.data;
+                if (!data || data.id != session.id)
+                    return;
+                
+                if (data.message == "exec") {
+                    // a key of the IDE was pressed in the page
+                    if (inFrame && document.activeElement === iframe) {
+                        tabManager.focusTab(tab);
+                        commands.execFromFrame(data.command, iframe);
+                    }
                 }
-                else if (e.data.message == "focus") {
-                    tabManager.focusTab(tab);
+                else if (data.message == "focus") {
+                    // the page has the keyboard
+                    if (inFrame && document.activeElement === iframe)
+                        tabManager.focusTab(tab);
                 }
-                else if (e.data.message == "highlight") {
-                    var mode = (modelist.modesByName[e.data.lang] 
-                        || modelist.getModeForPath("file." + e.data.lang) 
-                        || 0).mode || "ace/mode/" + e.data.lang;
+                else if (data.message == "highlight") {
+                    // (a mode of the editor: its name is not part of a path)
+                    var lang = String(data.lang || "");
+                    var mode = (modelist.modesByName.hasOwnProperty(lang)
+                        ? modelist.modesByName[lang]
+                        : modelist.getModeForPath("file." + lang)).mode;
                     var theme = "ace/theme/cloud9_day";
-                    var value = e.data.content.replace(/[\n\r]*$/, "");
+                    var value = String(data.content || "").replace(/[\n\r]*$/, "");
                     
                     highlighter.render(value, mode, theme, 0, true, function (highlighted) {
-                        session.source.postMessage({
+                        e.source.postMessage({
                             type: "highlight",
-                            hid: e.data.hid,
+                            hid: data.hid,
                             html: highlighted.html,
                             css: highlighted.css
                         }, "*");
                     });
                 }
-                else if (e.data.message == "stream.document") {
+                else if (data.message == "stream.document") {
                     session.source = e.source;
                     
                     if (session.previewTab) {
@@ -203,7 +229,7 @@ define(function(require, exports, module) {
                     
                     session.source.postMessage({
                         type: "keys",
-                        keys: commands.getExceptionBindings()
+                        keys: commands.getFrameBindings()
                     }, "*");
                     
                     tab.classList.remove("loading");
@@ -294,8 +320,12 @@ define(function(require, exports, module) {
             iframe.src = iframe.src;
         });
         plugin.on("popout", function() {
-            var src = plugin.activeSession.iframe.src;
-            window.open(src);
+            var session = plugin.activeSession;
+            var src = session.iframe.src;
+            // (the IDE takes messages from the windows it opened itself)
+            var win = window.open(src);
+            if (win)
+                (session.popouts || (session.popouts = [])).push(win);
         });
         plugin.on("enable", function() {
             

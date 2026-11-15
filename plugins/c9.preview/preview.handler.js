@@ -230,7 +230,9 @@ define(function(require, exports, module) {
                         var statusCode = request.statusCode;
 
                         if (body.indexOf("EISDIR") !== -1) {
-                            res.redirect(req.url + "/");
+                            // (before the query: with the slash after it
+                            // the folder is asked for again, forever)
+                            res.redirect(req.url.replace(/^[^?]*/, "$&/"));
                         } else if (body.indexOf("ENOENT") !== -1 || statusCode == 404) {
                             next(new error.NotFound("File '" + path + "' could not be found!"));
                         } else {
