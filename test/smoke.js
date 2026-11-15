@@ -216,6 +216,17 @@ async function main() {
         assert.equal((await get(port, "/ide.html", USER, PASSWORD, "198.51.100.24")).status, 200, "right password from another address");
     });
 
+    await check("ide.html loads a config by its name only", async function() {
+        // (the name is part of the path of a file that the server loads)
+        var loaded = path.join(tmp, "config-loaded.txt");
+        fs.writeFileSync(path.join(workspace, "config.js"),
+            "require('fs').writeFileSync(" + JSON.stringify(loaded) + ", 'loaded'); module.exports = function() { return []; };\n");
+        var name = "x/../" + path.relative(path.join(ROOT, "configs"), path.join(workspace, "config"));
+        var res = await get(port, "/ide.html?workspacetype=" + encodeURIComponent(name), USER, PASSWORD);
+        assert.equal(res.status, 422);
+        assert(!fs.existsSync(loaded), "the server loaded a file of the workspace");
+    });
+
     browser = await playwright.chromium.launch();
     var context = await browser.newContext({
         viewport: { width: 1400, height: 850 },

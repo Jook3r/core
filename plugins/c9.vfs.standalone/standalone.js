@@ -80,7 +80,10 @@ function plugin(options, imports, register) {
     
     api.get("/ide.html", {
         params: {
+            // the name of a config: it becomes part of the path of a file
+            // that the server loads (getConfig)
             workspacetype: {
+                type: /^[\w-]+$/,
                 source: "query",
                 optional: true
             },
