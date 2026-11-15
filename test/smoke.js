@@ -194,6 +194,17 @@ async function main() {
         + "<h1 id=\"title\">Next</h1>\n");
     fs.writeFileSync(path.join(workspace, "page.css"), "h1 { color: rgb(1, 2, 3); }\n");
     fs.writeFileSync(path.join(workspace, "notes.md"), "# Notes\n\n<img src=\"x\" onerror=\"" + escape + "\">\n");
+    // a saved Run tab, as the IDE keeps one in the workspace, that asks to
+    // be started when it is shown again
+    var restored = path.join(tmp, "restored.txt");
+    fs.mkdirSync(path.join(workspace, ".c9"));
+    fs.writeFileSync(path.join(workspace, ".c9/state.settings"), JSON.stringify({ console: { "@expanded": true, "json()": {
+        type: "pane", skin: "editor_tab", skinset: "default", name: "pane1",
+        nodes: [{ type: "tab", name: "tab1", path: "", editorType: "output", active: true, document: {
+            title: "Run", changed: false, filter: true,
+            output: { id: "output_smoke", config: { name: "saved", command: "touch " + restored, runner: "Shell command" }, run: true }
+        }}]
+    }}}));
 
     if (!fs.existsSync(path.join(ROOT, "build/standalone")))
         throw new Error("No packed client: run scripts/install-sdk.sh first");
@@ -279,6 +290,16 @@ async function main() {
             return window.app && window.app.vfs && window.app.vfs.connected && window.app.tabManager
                 && window.app.find && window.app.claude && window.app.deepseek;
         }, null, { timeout: 120000 });
+    });
+
+    await check("a saved Run tab is shown again, not started again", async function() {
+        await until("the saved tab", function() {
+            return page.evaluate(function() {
+                return window.app.tabManager.getTabs().some(function(tab) { return tab.editorType == "output"; });
+            });
+        });
+        await wait(3000);
+        assert(!fs.existsSync(restored), "the command of the saved tab ran");
     });
 
     await check("files: write and read back", async function() {

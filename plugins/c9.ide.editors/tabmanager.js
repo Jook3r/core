@@ -754,6 +754,14 @@ define(function(require, module, exports) {
                             state.pane = parent.cloud9pane;
                             state.init = init;
                             
+                            // A saved tab is shown again, not started
+                            // again: "run" in the state of a Run tab starts
+                            // its command (c9.ide.run/output.js), which is
+                            // for a tab that Run opens. The saved state is
+                            // a file of the workspace, anyone's to write.
+                            if (state.document && state.document.output)
+                                delete state.document.output.run;
+                            
                             count++;
                             open(state, function(err, tab) {
                                 if (!--count)
