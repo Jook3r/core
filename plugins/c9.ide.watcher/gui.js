@@ -287,6 +287,14 @@ define(function(require, exports, module) {
                     resolve(doc, path);
                     
                     return;
+                } else if (!doc.changed && doc.meta.$merge == undefined) {
+                    // Nothing of the user's is in the editor that the file
+                    // doesn't have: show the file as it is now, without
+                    // asking (a tool wrote it: a formatter, git, Claude)
+                    doc.meta.$mergeRoot = data;
+                    doc.setBookmarkedValue(data, true);
+                    resolve(doc, path);
+                    return;
                 } else {
                     // if this is the first time change notification comes
                     // remember undomanger state for deciding to merge or not

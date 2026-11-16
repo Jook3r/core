@@ -706,6 +706,60 @@ async function main() {
         assert.equal(await page.evaluate(function() { return window.app.settings.trusted; }), true);
     });
 
+    await check("a file changed on disk: shown at once in a tab without unsaved changes, asked about otherwise", async function() {
+        var file = path.join(workspace, "ondisk.js");
+        fs.writeFileSync(file, "var a = 1;\nvar b = 2;\nvar c = 3;\n");
+        await page.evaluate(function() {
+            return new Promise(function(resolve) {
+                window.app.tabManager.open({ path: "/ondisk.js", focus: true }, function(err, tab) {
+                    tab.editor.ace.gotoLine(3, 4);
+                    resolve();
+                });
+            });
+        });
+        var state = function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.findTab("/ondisk.js");
+                return {
+                    value: tab.document.value,
+                    changed: !!tab.document.changed,
+                    row: tab.editor.ace.getCursorPosition().row,
+                    asked: /has been changed on disk/.test(document.body.innerText)
+                };
+            });
+        };
+        // (the watcher of a file starts a moment after it is opened)
+        await wait(1500);
+        fs.writeFileSync(file, "var a = 1;\nvar b = 20;\nvar c = 3;\n");
+        await until("the editor to show the file", async function() {
+            return (await state()).value == "var a = 1;\nvar b = 20;\nvar c = 3;\n";
+        });
+        var now = await state();
+        assert.equal(now.asked, false);
+        assert.equal(now.changed, false);
+        assert.equal(now.row, 2, "the cursor stays");
+
+        // with text of the user's that is not saved: asked, nothing replaced
+        await page.evaluate(function() {
+            window.app.tabManager.findTab("/ondisk.js").editor.ace.insert("mine ");
+        });
+        fs.writeFileSync(file, "var a = 1;\nvar b = 300;\nvar c = 3;\n");
+        await until("the question", async function() { return (await state()).asked; });
+        assert.ok(/mine /.test((await state()).value));
+        // (the caption is under another layer of the button)
+        await page.getByText("Keep Mine", { exact: true }).click({ force: true });
+        await until("the question to go", async function() { return !(await state()).asked; });
+        assert.ok(/mine /.test((await state()).value));
+        await page.evaluate(function() {
+            return new Promise(function(resolve) {
+                var tab = window.app.tabManager.findTab("/ondisk.js");
+                tab.document.undoManager.bookmark();
+                tab.close();
+                resolve();
+            });
+        });
+    });
+
     await check("Claude Code IDE bridge: the selection, a diff to accept or reject, no files from elsewhere", async function() {
         // in the place of a `claude` in a terminal: what it would find and do
         var lockDir = path.join(home, ".claude/ide");

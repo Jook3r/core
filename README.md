@@ -189,7 +189,8 @@ in a browser, by `test/client.js`; those that have been failing since before
 this fork are listed there and left out) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
-`c9 open`, the Welcome page, the previews' sandbox, another folder as the
+`c9 open`, the Welcome page, the previews' sandbox, a file changed on disk,
+another folder as the
 workspace, the Claude Code IDE bridge, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).
 The tests in a browser need Node.js 18+ and,
