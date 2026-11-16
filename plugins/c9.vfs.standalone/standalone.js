@@ -20,6 +20,7 @@ var resolve = require("path").resolve;
 var basename = require("path").basename;
 var frontdoor = require("frontdoor");
 var sandbox = require("./sandbox");
+var workspace = require("./workspace");
 
 function plugin(options, imports, register) {
     var previewHandler = imports["preview.handler"];
@@ -303,7 +304,8 @@ function plugin(options, imports, register) {
         if (!options._projects) {
             options._projects = [options.workspaceDir];
         }
-        var wd = options._projects[pid] || options._projects[0];
+        // (a project's id is its place in the list, from 1)
+        var wd = options._projects[pid - 1] || options._projects[0];
         
         return {
             workspaceDir: wd,
@@ -311,7 +313,7 @@ function plugin(options, imports, register) {
                 user: user,
                 project: {
                     id: pid,
-                    name: pid + "-" + options._projects[pid]
+                    name: pid + "-" + wd
                 },
                 readonly: user.id > 100
             }
@@ -325,7 +327,7 @@ function plugin(options, imports, register) {
         user.name = id ? "user" + id : "johndoe";
         user.email = id ? "user" + id + "@c9.io" : "johndoe@example.org";
         user.fullname = id ? "User " + id : "John Doe";
-        opts.workspaceDir = params.w ? params.w : options.workspaceDir;
+        opts.workspaceDir = requestedWorkspace(params.w, options.workspaceDir);
         opts.projectName = basename(opts.workspaceDir);
         if (!options._projects) {
             options._projects = [options.workspaceDir];
@@ -334,7 +336,10 @@ function plugin(options, imports, register) {
         var pid = options._projects.indexOf(opts.workspaceDir);
         if (pid == -1)
             pid = options._projects.push(opts.workspaceDir) - 1;
-        project.id = pid;
+        // From 1: the client takes 0, the configured workspace's, for 1,
+        // which was the first other folder's. Either then got the files of
+        // the other, whichever was opened first.
+        project.id = pid + 1;
     };
     
     imports.connect.setGlobalOption("apiBaseUrl", "");
@@ -381,6 +386,28 @@ function getConfigName(requested, options) {
     return name;
 }
 
+// The folder that ?w= asks for, if the browser may open it: the configured
+// workspace, or a folder in it or in the home folder (see workspace.js).
+// Anything else, or a folder that doesn't exist, is the configured workspace.
+function requestedWorkspace(w, configured) {
+    if (!w || typeof w != "string")
+        return configured;
+    
+    var requestedReal, configuredReal, homeReal;
+    try {
+        requestedReal = fs.realpathSync(w);
+        configuredReal = fs.realpathSync(configured);
+    } catch (e) {
+        return configured;
+    }
+    try {
+        homeReal = process.env.HOME && fs.realpathSync(process.env.HOME);
+    } catch (e) {}
+    
+    var folder = workspace.resolveWorkspace(requestedReal, configuredReal, homeReal);
+    return folder == configuredReal ? configured : folder;
+}
+
 function getSettings(configName, options) {
     var installPath = options.settingDir || options.installPath || "";
     var workspaceDir = options.options.workspaceDir;
@@ -399,6 +426,27 @@ function getSettings(configName, options) {
         }
         settings[type] = data;
     }
+    
+    // A folder's own project and state settings can run commands on the
+    // server (a formatter, the linter's options, a restored Run tab): they
+    // are for the configured workspace, and for a folder the user approved
+    // (workspace.js). For another folder the IDE starts without them and
+    // asks (plugins/c9.ide.configuration/configure.js).
+    var trusted = true;
+    var trustPath = workspaceDir;
+    if (!options.local) {
+        var configuredReal = options.workspaceDir;
+        try {
+            trustPath = fs.realpathSync(workspaceDir);
+            configuredReal = fs.realpathSync(options.workspaceDir);
+        } catch (e) {}
+        trusted = workspace.isTrusted(trustPath, configuredReal,
+            workspace.trustedFolders(settings.user));
+        if (!trusted)
+            settings.project = settings.state = "";
+    }
+    options.options.workspaceTrusted = trusted;
+    options.options.workspaceTrustPath = trustPath;
     options.options.settings = settings;
     options.options.configName = configName;
     options.options.manifest = {

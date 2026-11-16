@@ -71,7 +71,11 @@ module.exports = function(options) {
             packagePath: "plugins/c9.core/settings",
             settings: options.settings,
             userConfigPath: options.settingDir,
-            hosted: hosted
+            hosted: hosted,
+            // whether the workspace's own settings are applied, and the
+            // folder to approve if not (plugins/c9.vfs.standalone/workspace.js)
+            workspaceTrusted: options.workspaceTrusted !== false,
+            workspaceTrustPath: options.workspaceTrustPath
         },
         "plugins/c9.core/ext",
         {

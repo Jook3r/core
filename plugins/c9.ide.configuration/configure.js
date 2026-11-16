@@ -3,7 +3,7 @@ define(function(require, exports, module) {
         "Plugin", "dialog.error", "ui", "settings", "tabManager", "save", 
         "menus", "preferences.keybindings", "preferences.general",
         "preferences.project", "c9", "commands", "watcher", "fs", 
-        "tree.favorites", "util", "app"
+        "tree.favorites", "util", "app", "dialog.question"
     ];
     main.provides = ["configure"];
     return main;
@@ -24,6 +24,7 @@ define(function(require, exports, module) {
         var prjprefs = imports["preferences.project"];
         var services = imports.app.services;
         var showError = imports["dialog.error"].show;
+        var question = imports["dialog.question"];
         var favs = imports["tree.favorites"];
         var util = imports.util;
         
@@ -173,10 +174,24 @@ define(function(require, exports, module) {
                 return false;
             }, plugin);
             
+            // A folder that is not the server's workspace and that the user
+            // has not approved: its settings are not applied (they can run
+            // commands), also not when the file changes. Ask.
+            if (!settings.trusted) {
+                menus.addItemByPath("Cloud9/Trust This Folder...", new ui.item({
+                    onclick: askToTrust
+                }), 390, plugin);
+                
+                if (tabManager.isReady)
+                    askToTrust();
+                else
+                    tabManager.once("ready", askToTrust);
+            }
+            
             // Load initial project settings from disk and match against latest from database
             var initWatcher, projectPath;
             settings.on("read", function() {
-                if (initWatcher) return;
+                if (initWatcher || !settings.trusted) return;
                 initWatcher = true;
                 
                 // Keep project file consistent with changes on disk
@@ -251,6 +266,27 @@ define(function(require, exports, module) {
         }
         
         /***** Methods *****/
+        
+        function askToTrust() {
+            question.show("Restricted Mode",
+                "Do you trust the folder " + settings.workspacePath + "?",
+                "The settings this folder has for Cloud9 (in its .c9 folder) are not "
+                + "applied: they can run commands on the server, such as a code "
+                + "formatter when you save a file, or a command of a Run tab that "
+                + "was open. Trust the folder only if you know where its files "
+                + "come from.\n\n"
+                + "Until then Cloud9 works with its default settings here, and "
+                + "doesn't keep settings or open tabs for this folder.",
+                function() {
+                    settings.trust(function(err) {
+                        if (err)
+                            return showError("Could not save your settings: " + (err.message || err));
+                        location.reload();
+                    });
+                },
+                function() {},
+                { yes: "Trust Folder", no: "Not Now" });
+        }
         
         function insertCss(css, staticPrefix, plugin) {
             // we do not use ui.insertCss to make sure user stylesheet is 

@@ -40,6 +40,14 @@ define(function(require, exports, module) {
         if (resetSettings && window.history)
             window.history.pushState(null, null, location.href.replace(/reset=([\w\|]*)/, ""));
         
+        // The project and state settings are files of the workspace, and can
+        // run commands (a formatter, the linter's options, a restored Run
+        // tab). For a folder that is not the server's own workspace and that
+        // the user has not approved, the server leaves them out
+        // (plugins/c9.vfs.standalone/workspace.js) and they are not read,
+        // watched or written here: the files stay as they are.
+        var workspaceTrusted = options.workspaceTrusted !== false;
+        
         var TEMPLATE = options.template || { user: {}, project: {}, state: {}};
         var INTERVAL = 1000;
         var PATH = {
@@ -189,6 +197,9 @@ define(function(require, exports, module) {
                     var node = model[type];
                     if (!node) return;
                     
+                    // (not over the files of a folder that isn't trusted)
+                    if (!workspaceTrusted && type != "user") return;
+                    
                     // Get XML string
                     var json = stringify(node, type);
                     if (cache[type] == json) return; // Ignore if same as cache
@@ -293,6 +304,7 @@ define(function(require, exports, module) {
                 return;
             
             KEYS.forEach(function(type) {
+                if (!workspaceTrusted && type != "user") return;
                 if (copy.settings[type] && copy.paths[type] == PATH[type])
                     json[type] = copy.settings[type];
             });
@@ -602,6 +614,26 @@ define(function(require, exports, module) {
             saveToFile();
         }
     
+        function trust(callback) {
+            var folder = options.workspaceTrustPath;
+            var folders = [];
+            try {
+                folders = JSON.parse(get("user/workspaceTrust/@folders")) || [];
+            } catch (e) {}
+            if (!folder || folders.indexOf(folder) != -1)
+                return callback && callback();
+            
+            folders.push(folder);
+            set("user/workspaceTrust/@folders", JSON.stringify(folders));
+            
+            // written now, not with the next tick's save: the server reads
+            // the file when the IDE loads again
+            cache.user = stringify(model.user, "user");
+            fs.writeFile(PATH.user, cache.user, function(err) {
+                callback && callback(err);
+            });
+        }
+    
         /***** Lifecycle *****/
         
         plugin.on("load", function() {
@@ -675,6 +707,32 @@ define(function(require, exports, module) {
              * 
              */
             get paths() { return PATH; },
+            
+            /**
+             * Whether the workspace's own settings (project and state) are
+             * applied. They are not for a folder other than the server's
+             * workspace until the user has approved it: see {@link #trust}.
+             * @property {Boolean} trusted
+             * @readonly
+             */
+            get trusted() { return workspaceTrusted; },
+            
+            /**
+             * The folder of the workspace, as the server knows it (its real
+             * path): what {@link #trust} approves.
+             * @property {String} workspacePath
+             * @readonly
+             */
+            get workspacePath() { return options.workspaceTrustPath; },
+            
+            /**
+             * Approves the workspace's folder: adds it to the user's trusted
+             * folders (user/workspaceTrust/@folders, in the user's own
+             * settings). Its project and state settings apply from the next
+             * load of the IDE.
+             * @param {Function} callback  called when the setting is on disk
+             */
+            trust: trust,
             
             /**
              * 

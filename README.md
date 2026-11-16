@@ -110,6 +110,26 @@ the line numbers for Revert Change and Show Git Blame. The Changes panel
 shows the current branch: click it to switch branches or create one
 ([plugins/c9.ide.scm](plugins/c9.ide.scm/README.md)).
 
+#### Other folders ####
+
+`/ide.html?w=/path/to/folder` opens the IDE with another folder than the
+workspace: a folder inside the workspace or inside your home folder (any
+other path opens the workspace).
+
+A folder keeps its settings for Cloud9 in its `.c9` folder
+(`project.settings`, `state.settings`), and some of them run commands on the
+server: a code formatter when a file is saved, the options of the Python
+linter. So for a folder that is not the workspace, Cloud9 starts in
+Restricted Mode: without the folder's settings, without writing any, and it
+asks whether you trust the folder. **Trust Folder** (later: Cloud9 > Trust
+This Folder...) adds it to your trusted folders (`workspaceTrust` in
+`~/.c9/user.settings`) and loads the IDE again with the folder's settings.
+Trust a folder only if you know where its files come from. The workspace the
+server was started with (`-w`) is always trusted.
+
+A Run tab that was open when you left is shown again, with its output; its
+command is not started again.
+
 #### Previews ####
 
 Preview (next to Run) shows an HTML, Markdown, SVG or PDF file of the
@@ -150,9 +170,9 @@ has an address, and so an origin, of its own.
 runs the server-side tests (`*_test.js`) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
-`c9 open`, the Welcome page, the previews' sandbox, a DeepSeek inline
-completion, and a chat in the Claude and DeepSeek panels against a mock API
-(skipped without Claude Code).
+`c9 open`, the Welcome page, the previews' sandbox, another folder as the
+workspace, a DeepSeek inline completion, and a chat in the Claude and
+DeepSeek panels against a mock API (skipped without Claude Code).
 It needs Node.js 18+ and,
 once, Chromium for Playwright:
 

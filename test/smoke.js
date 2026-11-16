@@ -205,6 +205,12 @@ async function main() {
             output: { id: "output_smoke", config: { name: "saved", command: "touch " + restored, runner: "Shell command" }, run: true }
         }}]
     }}}));
+    // another folder to open as the workspace (?w=), with settings of its own
+    var other = path.join(workspace, "other");
+    fs.mkdirSync(path.join(other, ".c9"), { recursive: true });
+    fs.writeFileSync(path.join(other, "only-here.txt"), "in the other folder\n");
+    var otherSettings = JSON.stringify({ ace: { "@tabSize": 3 } }, null, 4);
+    fs.writeFileSync(path.join(other, ".c9/project.settings"), otherSettings);
 
     if (!fs.existsSync(path.join(ROOT, "build/standalone")))
         throw new Error("No packed client: run scripts/install-sdk.sh first");
@@ -623,6 +629,74 @@ async function main() {
                 if (tab.editorType == "preview") tab.close();
             });
         });
+    });
+
+    // the IDE with another folder as its workspace, in a tab of its own
+    var otherPage;
+    async function openWorkspace(folder) {
+        if (!otherPage)
+            otherPage = await context.newPage();
+        await otherPage.goto("http://127.0.0.1:" + port + "/ide.html?w=" + encodeURIComponent(folder),
+            { waitUntil: "load", timeout: 120000 });
+        await otherPage.waitForFunction(function() {
+            return window.app && window.app.vfs && window.app.vfs.connected && window.app.tabManager
+                && window.app.settings.inited;
+        }, null, { timeout: 120000 });
+        return otherPage.evaluate(function() {
+            return new Promise(function(resolve) {
+                window.app.fs.readFile("/only-here.txt", "utf8", function(err, data) {
+                    resolve({
+                        dir: window.app.c9.workspaceDir,
+                        file: err ? "ERROR " + err.message : data,
+                        trusted: window.app.settings.trusted,
+                        tabSize: window.app.settings.getNumber("project/ace/@tabSize")
+                    });
+                });
+            });
+        });
+    }
+
+    await check("?w=: another folder is opened with its own files", async function() {
+        var state = await openWorkspace(other);
+        assert.equal(state.dir, other);
+        assert.equal(state.file, "in the other folder\n");
+        // and the configured workspace, opened after it, with its own
+        state = await openWorkspace(workspace);
+        assert.equal(state.dir, workspace);
+        assert(/^ERROR /.test(state.file), "the workspace has the other folder's files: " + state.file);
+    });
+
+    await check("?w=: only a folder in the workspace or the home folder", async function() {
+        var state = await openWorkspace("/etc");
+        assert.equal(state.dir, workspace);
+        state = await openWorkspace(path.join(tmp, "nothing-here"));
+        assert.equal(state.dir, workspace);
+    });
+
+    await check("?w=: a folder's own settings wait until the folder is trusted", async function() {
+        var state = await openWorkspace(other);
+        assert.equal(state.trusted, false);
+        assert.notEqual(state.tabSize, 3);
+        var button = otherPage.getByText("Trust Folder", { exact: true }).last();
+        await button.waitFor({ timeout: 30000 });
+        // settings changed here are not written over the folder's
+        await otherPage.evaluate(function() {
+            window.app.settings.set("project/ace/@tabSize", 5);
+            window.app.settings.save(true);
+        });
+        await wait(2500);
+        assert.equal(fs.readFileSync(path.join(other, ".c9/project.settings"), "utf8"), otherSettings);
+        assert(!fs.existsSync(path.join(other, ".c9/state.settings")), "state.settings was written");
+
+        await Promise.all([otherPage.waitForNavigation({ timeout: 60000 }), button.click()]);
+        state = await openWorkspace(other);
+        assert.equal(state.trusted, true);
+        assert.equal(state.tabSize, 3);
+        var user = JSON.parse(fs.readFileSync(path.join(home, ".c9/user.settings"), "utf8"));
+        assert.deepEqual(JSON.parse(user.workspaceTrust["@folders"]), [fs.realpathSync(other)]);
+        await otherPage.close();
+        // the configured workspace needed no approval
+        assert.equal(await page.evaluate(function() { return window.app.settings.trusted; }), true);
     });
 
     await check("Plugins: one ticked in Preferences loads at startup", async function() {
