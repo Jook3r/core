@@ -21,8 +21,15 @@ resetColor=$'\e[0m'
 # tests that need services this repo doesn't have: the hosted collab
 # server (sqlite3) and the hosted API (c9.api)
 SKIP="plugins/c9.ide.collab/server/collab-server_test.js plugins/c9.preview/preview_test.js"
-# tests of the editor, Ace, for what Cloud9 changed in it (ghost text)
-ACE_TESTS="plugins/node_modules/ace/lib/ace/virtual_renderer_test.js"
+# The tests of the editor, Ace (plugins/node_modules/ace). Not these: one
+# that needs a package Ace's own repository has (plist), one that is a tool
+# with arguments, one that expects to run without a DOM, and one whose
+# assertion Node.js no longer takes
+ACE_SKIP="plugins/node_modules/ace/tool/regexp_tokenizer_test.js
+plugins/node_modules/ace/lib/ace/mode/_test/highlight_rules_test.js
+plugins/node_modules/ace/lib/ace/ext/static_highlight_test.js
+plugins/node_modules/ace/lib/ace/config_test.js"
+ACE_TESTS=$(git ls-files 'plugins/node_modules/ace/**_test.js' | grep -vxF "$ACE_SKIP" | sort)
 
 installTestPackages() {
     if [ ! -d test/node_modules ] || [ test/package.json -nt test/node_modules ]; then

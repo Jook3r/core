@@ -27,6 +27,9 @@ Object.defineProperty(globalThis, "navigator", {
 });
 
 require("amd-loader");
+// Ace's stand-in for the browser (window, document): with a navigator, Ace
+// takes itself to be in a browser, also in the tests that ask for no DOM
+require("ace/test/mockdom");
 var asyncjs = require("asyncjs");
 var files = process.argv.slice(2);
 var failed = 0;
