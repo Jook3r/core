@@ -1,5 +1,5 @@
 /**
- * Markdown and code rendering for the Claude panel.
+ * Markdown and code rendering for the agent panels.
  *
  * Model output is rendered with remarkable (raw HTML disabled), parsed in an
  * inert document and then filtered through a whitelist of tags and
@@ -104,7 +104,7 @@ define(function(require, exports, module) {
                 }
                 else if (target && target.path && onFileLink) {
                     child.setAttribute("href", "#");
-                    child.className = "claude-file-link";
+                    child.className = "agent-file-link";
                     child.setAttribute("data-path", target.path);
                     if (target.line) child.setAttribute("data-line", String(target.line));
                 }

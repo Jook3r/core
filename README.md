@@ -202,6 +202,13 @@ once, Chromium for Playwright:
 the tests need go to `test/node_modules`. GitHub Actions runs them on every
 push (`.github/workflows/tests.yml`).
 
+#### The Claude and DeepSeek panels ####
+
+The two chat panels are one panel (`plugins/c9.ide.agent`) with a provider
+each: see `plugins/c9.ide.claude/README.md` and
+`plugins/c9.ide.deepseek/README.md` for what they do, and
+`plugins/c9.ide.agent/README.md` for how they are built.
+
 #### Claude Code in a terminal ####
 
 A `claude` (Claude Code) started in a Cloud9 terminal connects to the IDE:

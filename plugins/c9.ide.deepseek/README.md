@@ -144,14 +144,13 @@ changes them; **Reset to DeepSeek's models** restores the list.
 
 ## How it works
 
-- `deepseek.js`: the panel (from `claude.js`, under the `ds-` CSS prefix and
-  `user/deepseek` settings). `peak.js`: the schedule (parsing, whether a
-  moment is peak, the next change). `deepseek.less`: the styles, in
-  DeepSeek's blue.
-- `inline.js`: inline completions. The ghost text is a backport of Ace
-  1.15's `editor.setGhostText()` to the bundled Ace 1.3.3
-  (`virtual_renderer.js`, `editor.js`, `css/editor.css`; its tests in
-  `virtual_renderer_test.js` run with `scripts/run-tests.sh server`). The
+- `deepseek.js`: what is DeepSeek's own about the panel (its models and
+  prices, its peak hours, the texts about API keys). The panel itself is
+  `../c9.ide.agent/panel.js`, shared with the Claude panel: see
+  `../c9.ide.agent/README.md`. `../c9.ide.agent/peak.js`: the schedule
+  (parsing, whether a moment is peak, the next change).
+- `inline.js`: inline completions. The ghost text is Ace's own
+  (`editor.setGhostText()`). The
   service's `complete()` sends the request (`POST /beta/completions`); a
   newer one cancels the one before.
 - `../c9.ide.agent/service.js` (the vfs process; shared with the Claude panel) starts `claude` with

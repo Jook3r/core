@@ -163,7 +163,7 @@ define(function(require, exports, module) {
                         "This session": {
                             type: "custom",
                             position: 700,
-                            node: statsBar = new ui.bar({ "class": "ds-inline-stats" })
+                            node: statsBar = new ui.bar({ "class": "agent-inline-stats" })
                         }
                     }
                 }

@@ -1,5 +1,5 @@
 /**
- * Image attachments for the Claude panel: reads image files (paste, drop,
+ * Image attachments for the agent panels: reads image files (paste, drop,
  * file picker) and downscales large ones in the browser so that messages stay
  * small. The API recommends at most ~1568px on the long edge.
  */

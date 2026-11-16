@@ -167,11 +167,15 @@ Preferences > User Settings > Claude.
 
 ## How it works
 
-- `claude.js`: the panel (plain DOM, styles in `claude.less` built into every
-  skin). Markdown is rendered with remarkable (raw HTML off) and filtered
-  through a whitelist (`markdown.js`); code is highlighted with Ace's
-  tokenizers.
-- `../c9.ide.agent/service.js` (shared with the DeepSeek panel): runs in the vfs process (`ext.loadRemotePlugin`). It
+- `claude.js`: what is Claude's own about the panel (its name, its place in
+  the menus, the default account, the texts about logging in). The panel
+  itself is `../c9.ide.agent/panel.js`, shared with the DeepSeek panel: see
+  `../c9.ide.agent/README.md`. Plain DOM, styles in `panel.less` built into
+  every skin. Markdown is rendered with remarkable (raw HTML off) and
+  filtered through a whitelist (`markdown.js`); code is highlighted with
+  Ace's tokenizers.
+- `../c9.ide.agent/service.js` (shared too): runs in the vfs process
+  (`ext.loadRemotePlugin`). It
   spawns `claude -p --input-format stream-json --output-format stream-json
   --verbose --include-partial-messages --permission-prompt-tool stdio` with an
   argument list built from whitelisted values only, and relays its output.

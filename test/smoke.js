@@ -429,7 +429,7 @@ async function main() {
             ace.focus();
             ace.selection.selectLine();
             window.app.commands.exec("askclaude");
-            return document.querySelector("textarea.claude-input").value;
+            return document.querySelector(".agent-claude textarea.agent-input").value;
         });
         assert(/^Fix this error in typed\.ts, line 1:\n\nerror: .*not assignable/.test(text), text);
         assert(/In typed\.ts, line 1:\n\n```ts\nconst count: number = "three";\n```/.test(text), text);
@@ -955,29 +955,40 @@ async function main() {
     });
 
     // the panels: a chat through Claude Code to the mock API
-    var panels = [["deepseek", "ds"], ["claude", "claude"]];
+    // (one panel for both providers: c9.ide.agent; its root has the provider's class)
+    var panels = [["deepseek", ".agent-deepseek"], ["claude", ".agent-claude"]];
     for (var i = 0; i < panels.length; i++) {
-        await (function(name, prefix) {
+        await (function(name, rootSelector) {
             return check(name + " panel: a chat answer", async function() {
                 await page.evaluate(function(name) { window.app[name].show(); }, name);
-                var input = page.locator("textarea." + prefix + "-input");
+                var input = page.locator(rootSelector + " textarea.agent-input");
                 await input.waitFor({ timeout: 30000 });
                 var state = await until("the panel to find claude", function() {
-                    return page.evaluate(function(prefix) {
-                        var root = document.querySelector("." + prefix + "-root");
+                    return page.evaluate(function(rootSelector) {
+                        var root = document.querySelector(rootSelector);
                         var text = root ? root.innerText : "";
                         if (/claude CLI was not found/.test(text)) return "missing";
                         if (/\(Claude Code\)/.test(text)) return "found";
-                    }, prefix);
+                    }, rootSelector);
                 }, 30000);
                 if (state == "missing")
                     return "skipped: the claude CLI is not installed";
                 await input.fill("ping");
                 await input.press("Enter");
-                await page.waitForFunction(function(prefix) {
-                    var root = document.querySelector("." + prefix + "-root");
+                await page.waitForFunction(function(rootSelector) {
+                    var root = document.querySelector(rootSelector);
                     return root && /\bpong\b/.test(root.innerText);
-                }, prefix, { timeout: 90000 });
+                }, rootSelector, { timeout: 90000 });
+                // what the answer cost: the CLI's own figure in the Claude
+                // panel, an estimate with DeepSeek's prices in the other
+                var footer = await until("the answer's footer", function() {
+                    return page.evaluate(function(rootSelector) {
+                        var el = document.querySelector(rootSelector + " .agent-turn-footer");
+                        return el && el.textContent;
+                    }, rootSelector);
+                }, 30000);
+                if (name == "deepseek") assert(/≈\$[\d.]+ · (off-)?peak/.test(footer), footer);
+                else assert(!/≈|peak/.test(footer), footer);
             });
         })(panels[i][0], panels[i][1]);
     }
