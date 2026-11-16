@@ -171,7 +171,7 @@ Preferences > User Settings > Claude.
   skin). Markdown is rendered with remarkable (raw HTML off) and filtered
   through a whitelist (`markdown.js`); code is highlighted with Ace's
   tokenizers.
-- `claude-service.js`: runs in the vfs process (`ext.loadRemotePlugin`). It
+- `../c9.ide.agent/service.js` (shared with the DeepSeek panel): runs in the vfs process (`ext.loadRemotePlugin`). It
   spawns `claude -p --input-format stream-json --output-format stream-json
   --verbose --include-partial-messages --permission-prompt-tool stdio` with an
   argument list built from whitelisted values only, and relays its output.

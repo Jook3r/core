@@ -510,7 +510,7 @@ module.exports = function(vfs, options, register) {
     // the process may end with the IDE's connection: leave no lock file
     // (the CLI also removes one whose process is gone)
     // One set of handlers per process, shared with the chat panel's service
-    // (claude-service.js, which has the same lines): the vfs process is
+    // (c9.ide.agent/service.js, which has the same lines): the vfs process is
     // ended with a signal when its IDE is gone.
     var KEY = "__c9ClaudeServiceCleanup";
     if (!process[KEY]) {

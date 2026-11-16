@@ -154,7 +154,7 @@ changes them; **Reset to DeepSeek's models** restores the list.
   `virtual_renderer_test.js` run with `scripts/run-tests.sh server`). The
   service's `complete()` sends the request (`POST /beta/completions`); a
   newer one cancels the one before.
-- `deepseek-service.js` (the vfs process) starts `claude` with
+- `../c9.ide.agent/service.js` (the vfs process; shared with the Claude panel) starts `claude` with
   `ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`,
   `ANTHROPIC_AUTH_TOKEN=<the account's key>`, `CLAUDE_CONFIG_DIR=<the
   account's folder>`, the chosen model as `--model` and as the CLI's default

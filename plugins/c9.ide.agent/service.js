@@ -1,15 +1,18 @@
 /**
- * Server half of the DeepSeek chat panel (c9.ide.deepseek).
+ * Server half of the agent chat panels (c9.ide.claude, c9.ide.deepseek;
+ * their browser half is c9.ide.agent/panel.js).
  *
- * Loaded into the vfs process with ext.loadRemotePlugin("deepseek", ...). It
- * runs the user's own `claude` CLI (Claude Code) in headless streaming mode,
- * pointed at DeepSeek's Anthropic-compatible API (ANTHROPIC_BASE_URL, with
- * the account's DeepSeek API key as ANTHROPIC_AUTH_TOKEN):
+ * Loaded into the vfs process with ext.loadRemotePlugin(<provider>, ...). It
+ * runs the user's own `claude` CLI (Claude Code) in headless streaming mode
+ * for one of the panels (options.provider, see PROVIDERS): with the user's
+ * Claude login for the Claude panel, or pointed at another service's
+ * Anthropic-compatible API with that service's API key (ANTHROPIC_BASE_URL
+ * and ANTHROPIC_AUTH_TOKEN) for a "keyed" provider such as DeepSeek:
  *
  *   claude -p --input-format stream-json --output-format stream-json --verbose
  *          --include-partial-messages --permission-prompt-tool stdio
- *          --model <id> [--permission-mode <mode>] [--effort <level>]
- *          [--resume <uuid>] --append-system-prompt <who answers>
+ *          [--permission-mode <mode>] [--model <alias or id>] [--effort <level>]
+ *          [--resume <uuid>] [--append-system-prompt <who answers>]
  *
  * and relays its stdout (one JSON message per line) to the IDE client over a
  * vfs stream. One CLI process per chat, started lazily by the first message,
@@ -19,22 +22,27 @@
  * --resume <session id>.
  *
  * A chat runs as one account and in one folder, both fixed when it starts.
- * An account is a Claude Code config folder of its own (its settings,
- * history and DeepSeek API key), never Claude Code's ~/.claude: the default
- * one is ~/.claude-deepseek, others are folders in the home folder that the
- * user named (e.g. ~/.deepseek-work), passed to the CLI as CLAUDE_CONFIG_DIR.
- * The folder is the CLI's working directory: the workspace, or any existing
- * folder the user picked.
+ * An account is a Claude Code config folder (its settings, history, and its
+ * login or API key), passed to the CLI as CLAUDE_CONFIG_DIR. The folder is
+ * the CLI's working directory: the workspace, or any existing folder the
+ * user picked.
  *
- * The API key is kept in the account's folder (KEY_FILE, mode 0600) and only
- * ever goes to the CLI's environment and to DeepSeek; it is never sent to the
- * IDE client. Anthropic credentials and provider switches in the server's
- * environment are removed from the CLI's, so that they cannot reach DeepSeek
- * (the CLI sends ANTHROPIC_API_KEY to whatever ANTHROPIC_BASE_URL is).
+ * - Claude: the default account is Claude Code's own, as in a terminal
+ *   (~/.claude); others are folders in the home folder that the user named
+ *   (e.g. ~/.claude-work), each with its own login.
+ * - A keyed provider never uses Claude Code's ~/.claude: its default
+ *   account is a folder of its own (~/.claude-deepseek), others are folders
+ *   the user named. The API key is kept in the account's folder (mode 0600)
+ *   and only ever goes to the CLI's environment and to the provider; it is
+ *   never sent to the IDE client. Anthropic credentials and provider
+ *   switches in the server's environment are removed from the CLI's, so
+ *   that they cannot reach the provider (the CLI sends ANTHROPIC_API_KEY to
+ *   whatever ANTHROPIC_BASE_URL is).
  *
  * Nothing from the client reaches the command line except values picked from
- * whitelists (permission mode, effort) or validated (model id, session UUID,
- * the path of the claude binary from the user's settings, an account folder
+ * whitelists (permission mode, effort) or validated (model alias or id,
+ * session UUID, the path of the claude binary from the user's settings, an
+ * account folder
  * name, a chat folder). The CLI is spawned with an argument array, never
  * through a shell.
  */
@@ -46,6 +54,40 @@ module.exports = function(vfs, options, register) {
     var path = require("path");
     var os = require("os");
     var Stream = require("stream");
+
+    /***** Providers *****/
+
+    // What differs between the panels. "keyed": the CLI talks to another
+    // service's Anthropic-compatible API with an API key of that service
+    // (see the top of this file). The provider is chosen by the name of a
+    // panel's plugin, never by anything a chat sends.
+    var PROVIDERS = {
+        claude: {
+            id: "claude",
+            name: "Claude",
+            keyed: false
+        },
+        deepseek: {
+            id: "deepseek",
+            name: "DeepSeek",
+            keyed: true,
+            defaultDir: ".claude-deepseek",
+            baseUrl: "https://api.deepseek.com/anthropic",
+            baseUrlEnv: "DEEPSEEK_ANTHROPIC_BASE_URL",
+            keyFile: ".deepseek-api-key",
+            keyEnv: "DEEPSEEK_API_KEY",
+            defaultModel: "deepseek-flash[1m]",
+            fastModel: "deepseek-flash",
+            fimModel: "deepseek-flash",
+            compactWindow: 786432,
+            identity: "You are running on a DeepSeek model through DeepSeek's Anthropic-compatible API, "
+                + "not on an Anthropic Claude model. If asked which model you are, say that you are a DeepSeek model."
+        }
+    };
+    var P = Object.prototype.hasOwnProperty.call(PROVIDERS, options.provider) ? PROVIDERS[options.provider] : null;
+    if (!P)
+        return register(new Error("Unknown provider: " + String(options.provider).slice(0, 40)));
+    var KEYED = P.keyed;
 
     /***** Constants *****/
 
@@ -70,6 +112,7 @@ module.exports = function(vfs, options, register) {
     var SESSION_FILE_LIMIT = 100000;        // transcripts looked at (dates only) per list
     var SESSION_PEEK = 64 * 1024;           // bytes read at the head and the tail of each
     var TITLE_CACHE_MAX = 20000;            // transcripts whose title and folder are kept
+    var CONFIG_MAX_SIZE = 32 * 1024 * 1024; // an account's .claude.json read for its email
     var LINK_LIMIT = 50;                    // workspace links reported to the panel
     var RECENT_MS = 2 * 60 * 1000;          // written this recently: probably open elsewhere
     var RECORD_LIMIT = 200;                 // live-process records read (<config>/sessions)
@@ -81,15 +124,15 @@ module.exports = function(vfs, options, register) {
     var FIM_MAX = 256 * 1024;               // bytes of a completion's answer read
     var FIM_INPUT_MAX = 100000;             // characters of code before and after the cursor
     var FIM_TEXT_MAX = 16000;               // characters of a suggestion
-    var FIM_MAX_TOKENS = 4096;              // DeepSeek's limit
+    var FIM_MAX_TOKENS = 4096;              // (DeepSeek's limit)
 
-    // model ids ("deepseek-flash[1m]": [1m] tells the CLI the model has a
-    // 1M-token context); a letter first, so that a value can never pass as
-    // an option
+    // model aliases and ids ("sonnet", "claude-opus-4-8", "deepseek-flash[1m]":
+    // [1m] tells the CLI the model has a 1M-token context); a letter first,
+    // so that a value can never pass as an option
     var MODEL_RE = /^[a-z][a-z0-9.\-]{0,63}(\[1m\])?$/i;
-    // until the panel says otherwise (Preferences > DeepSeek > Models)
-    var DEFAULT_MODEL = "deepseek-flash[1m]";
-    var DEFAULT_FAST_MODEL = "deepseek-flash";
+    // (keyed) until the panel says otherwise (Preferences > Models)
+    var DEFAULT_MODEL = P.defaultModel;
+    var DEFAULT_FAST_MODEL = P.fastModel;
     var EFFORTS = { low: true, medium: true, high: true, xhigh: true, max: true };
     var CONTROL_TIMEOUT = 10000;
     // no mode: the CLI uses the account's own defaultMode (its settings.json)
@@ -97,42 +140,48 @@ module.exports = function(vfs, options, register) {
     var IMAGE_TYPES = { "image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true };
     var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     var TRANSCRIPT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i;
-    // the name of an account's folder in the home folder (".deepseek-work")
+    // the name of an account's folder in the home folder (".claude-work")
     var ACCOUNT_RE = /^[A-Za-z0-9._-]{1,64}$/;
-    var DEFAULT_ACCOUNT_DIR = ".claude-deepseek";
+    // A login the server was started with (an API key, a token) would win
+    // over an added account's own login: those accounts run without it.
+    var AUTH_ENV = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
+    // (keyed) the default account's folder in the home folder
+    var DEFAULT_ACCOUNT_DIR = P.defaultDir;
 
-    // DeepSeek's Anthropic-compatible API. The server's environment may
-    // point it elsewhere (a proxy, a test server); the panel cannot.
-    var DEFAULT_BASE_URL = "https://api.deepseek.com/anthropic";
-    var BASE_URL = checkBaseUrl(process.env.DEEPSEEK_ANTHROPIC_BASE_URL) || DEFAULT_BASE_URL;
-    // DeepSeek's recommended auto-compact point for its 1M-token models
-    var COMPACT_WINDOW = 786432;
+    // (keyed) The provider's Anthropic-compatible API. The server's environment
+    // may point it elsewhere (a proxy, a test server); the panel cannot.
+    var BASE_URL = KEYED ? checkBaseUrl(process.env[P.baseUrlEnv]) || P.baseUrl : null;
+    // the auto-compact point the provider recommends for its 1M-token models
+    var COMPACT_WINDOW = P.compactWindow;
     // the account's API key, in its folder
-    var KEY_FILE = ".deepseek-api-key";
+    var KEY_FILE = P.keyFile;
     var KEY_RE = /^[\x21-\x7e]{8,512}$/;
     // the default account can also take its key from the server's environment
-    var KEY_ENV = "DEEPSEEK_API_KEY";
+    var KEY_ENV = P.keyEnv;
     // Claude Code's system prompt says it is Claude; the model is not
-    var IDENTITY = "You are running on a DeepSeek model through DeepSeek's Anthropic-compatible API, "
-        + "not on an Anthropic Claude model. If asked which model you are, say that you are a DeepSeek model.";
+    var IDENTITY = P.identity;
+
 
     // No ANTHROPIC_*, CLAUDE_* or CCR_* variable of the server reaches the
     // CLI; it gets only what this service sets. They carry credentials (the
-    // CLI sends ANTHROPIC_API_KEY to DeepSeek next to the DeepSeek key, and
+    // CLI sends ANTHROPIC_API_KEY to the provider next to the provider's key, and
     // with CLAUDE_CODE_REMOTE, as when Cloud9 itself runs in a Claude Code
-    // cloud session, it uses that session's token instead of the DeepSeek
+    // cloud session, it uses that session's token instead of the provider's
     // key), switch to other providers (CLAUDE_CODE_USE_BEDROCK, ...) or
     // override the panel (CLAUDE_CODE_EFFORT_LEVEL beats --effort and every
     // change made in the panel). CLI settings go in the account's
     // settings.json ("env") instead.
     var STRIP_ENV_RE = /^((ANTHROPIC|CLAUDE|CCR)_\w*|CLAUDECODE)$/;
-    // what an account can take from Claude Code's own folder (~/.claude):
-    // folders as links; CLAUDE.md through an import line (see share()).
-    // Not settings.json: its env and apiKeyHelper could send another key
-    // to DeepSeek, or the DeepSeek key elsewhere.
+    // What an added account can take from the default one (Claude), or an
+    // account from Claude Code's own folder, ~/.claude (keyed): folders as
+    // links; CLAUDE.md through an import line (see share()). Claude: also
+    // settings.json. Not for a keyed provider: its env and apiKeyHelper
+    // could send another key to the provider, or the provider's key elsewhere.
     var SHARE_LINKS = { agents: "agents", commands: "commands", skills: "skills",
         outputStyles: "output-styles" };
-    var LOGIN_HINT_RE = /api key|authentication|unauthorized|\b40[12]\b|insufficient balance/i;
+    if (!KEYED) SHARE_LINKS.settings = "settings.json";
+    var LOGIN_HINT_RE = KEYED ? /api key|authentication|unauthorized|\b40[12]\b|insufficient balance/i
+        : /\/login|not logged in|api key|authentication|oauth/i;
     var BASE64_RE = /^[A-Za-z0-9+\/]*={0,2}$/;
 
     // Variables that tie a process to the Claude Code session that started
@@ -226,7 +275,7 @@ module.exports = function(vfs, options, register) {
         try {
             client.emit("data", JSON.stringify(events));
         } catch (e) {
-            console.error("[deepseek] could not send events", e);
+            console.error("[" + P.id + "] could not send events", e);
         }
     }
 
@@ -313,7 +362,8 @@ module.exports = function(vfs, options, register) {
     function cleanEnv(bin) {
         var env = {};
         Object.keys(process.env).forEach(function(key) {
-            if (LEAKED_ENV.indexOf(key) == -1 && !LEAKED_ENV_RE.test(key) && !STRIP_ENV_RE.test(key) && key != KEY_ENV)
+            if (LEAKED_ENV.indexOf(key) == -1 && !LEAKED_ENV_RE.test(key)
+              && !(KEYED && (STRIP_ENV_RE.test(key) || key == KEY_ENV)))
                 env[key] = process.env[key];
         });
         // MCP servers connect in the background: the first answer does not
@@ -379,7 +429,7 @@ module.exports = function(vfs, options, register) {
         try { return checkUserPath(userPath); } catch (e) { return null; }
     }
 
-    /***** DeepSeek *****/
+    /***** A keyed provider's API *****/
 
     // an http(s) URL without credentials, or null
     function checkBaseUrl(value) {
@@ -389,7 +439,7 @@ module.exports = function(vfs, options, register) {
             if ((url.protocol == "https:" || url.protocol == "http:") && !url.username && !url.password)
                 return url.href.replace(/\/+$/, "");
         } catch (e) {}
-        console.error("[deepseek] ignoring DEEPSEEK_ANTHROPIC_BASE_URL: not an http(s) URL without credentials");
+        console.error("[" + P.id + "] ignoring " + P.baseUrlEnv + ": not an http(s) URL without credentials");
         return null;
     }
 
@@ -400,15 +450,20 @@ module.exports = function(vfs, options, register) {
     /***** Accounts and folders *****/
 
     // Claude Code's own folder (the user's Claude login and settings), as in
-    // a terminal: ~/.claude, or the server's CLAUDE_CONFIG_DIR. DeepSeek
-    // accounts never run in it; they can share some of it (SHARE_LINKS).
+    // a terminal: ~/.claude, or the server's CLAUDE_CONFIG_DIR. The Claude
+    // panel's default account; the accounts of a keyed provider never run in
+    // it, they can share some of it (SHARE_LINKS).
     function claudeDir() {
         return path.normalize(process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"));
     }
 
-    // The default account: ~/.claude-deepseek, made on first use
+    // The default account. Claude: Claude Code's own folder, which runs with
+    // the environment as it is (setting CLAUDE_CONFIG_DIR=~/.claude would
+    // make the CLI look for ~/.claude/.claude.json instead of
+    // ~/.claude.json). Keyed: a folder of its own, made on first use.
     function defaultConfigDir() {
-        return path.join(home, DEFAULT_ACCOUNT_DIR);
+        return KEYED ? path.join(home, DEFAULT_ACCOUNT_DIR)
+            : process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
     }
 
     // An account: "" (the default one) or the name of its folder in the home
@@ -417,11 +472,13 @@ module.exports = function(vfs, options, register) {
         if (account == null || account === "") return "";
         if (typeof account != "string" || !ACCOUNT_RE.test(account) || /^\.+$/.test(account))
             throw refusal("Invalid account folder: " + String(account).slice(0, 80), "EINVAL");
-        if (path.join(home, account) == defaultConfigDir())
+        if (path.join(home, account) == path.normalize(defaultConfigDir()))
             throw refusal("~/" + account + " is the folder of the default account", "EINVAL");
-        if (path.join(home, account) == claudeDir() || account == ".claude")
-            throw refusal("~/" + account + " is Claude Code's own folder (your Claude login); "
-                + "a DeepSeek account needs a folder of its own", "EINVAL");
+        if (KEYED) {
+            if (path.join(home, account) == claudeDir() || account == ".claude")
+                throw refusal("~/" + account + " is Claude Code's own folder (your Claude login); "
+                    + "a " + P.name + " account needs a folder of its own", "EINVAL");
+        }
         return account;
     }
 
@@ -439,6 +496,17 @@ module.exports = function(vfs, options, register) {
         return account ? path.join(home, account) : defaultConfigDir();
     }
 
+    function globalConfigFile(account) {
+        if (account) return path.join(configDir(account), ".claude.json");
+        return process.env.CLAUDE_CONFIG_DIR ? path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json")
+            : path.join(home, ".claude.json");
+    }
+
+    // what an account shares comes from here
+    function shareSource() {
+        return KEYED ? claudeDir() : defaultConfigDir();
+    }
+
     // The account's folder, made (0700) when it is the default one or
     // create is set; an error when it is missing or not a folder.
     function ensureAccountDir(account, create) {
@@ -448,7 +516,7 @@ module.exports = function(vfs, options, register) {
             return refusal(tilde(dir) + " exists and is not a folder", "ENOTDIR");
         if (st) return null;
         if (account && !create)
-            return refusal("The account folder " + tilde(dir) + " does not exist. Set the account up in Preferences > DeepSeek.", "ENOACCOUNT");
+            return refusal("The account folder " + tilde(dir) + " does not exist. Set the account up in Preferences > " + P.name + ".", "ENOACCOUNT");
         try { fs.mkdirSync(dir, { mode: 448 /* 0700 */ }); }
         catch (e) { return new Error("Could not create " + tilde(dir) + ": " + e.message); }
         return null;
@@ -518,7 +586,7 @@ module.exports = function(vfs, options, register) {
         callback = callback || function() {};
         try { account = accountKey(account); } catch (e) { return callback(e); }
         var k = readKey(account);
-        if (!k) return callback(refusal("This account has no DeepSeek API key", "ENOKEY"));
+        if (!k) return callback(refusal("This account has no " + P.name + " API key", "ENOKEY"));
         var url;
         try { url = new URL("/user/balance", BASE_URL); } catch (e) { return callback(e); }
         var lib = require(url.protocol == "http:" ? "http" : "https");
@@ -540,10 +608,10 @@ module.exports = function(vfs, options, register) {
                 var data = null;
                 try { data = JSON.parse(body); } catch (e) {}
                 if (res.statusCode == 401 || res.statusCode == 403)
-                    return finish(refusal("DeepSeek rejected the API key (" + res.statusCode + ")", "EAUTH"));
+                    return finish(refusal(P.name + " rejected the API key (" + res.statusCode + ")", "EAUTH"));
                 if (res.statusCode != 200 || !data || typeof data != "object") {
                     var message = data && data.error && typeof data.error.message == "string" ? data.error.message : "";
-                    return finish(new Error("DeepSeek answered " + res.statusCode + (message ? ": " + message.slice(0, 200) : "")));
+                    return finish(new Error(P.name + " answered " + res.statusCode + (message ? ": " + message.slice(0, 200) : "")));
                 }
                 finish(null, {
                     available: data.is_available === true,
@@ -559,7 +627,7 @@ module.exports = function(vfs, options, register) {
             });
             res.on("error", finish);
         });
-        req.on("timeout", function() { req.destroy(new Error("DeepSeek did not answer in time")); });
+        req.on("timeout", function() { req.destroy(new Error(P.name + " did not answer in time")); });
         req.on("error", function(e) { finish(new Error("Could not reach " + url.host + ": " + e.message)); });
         req.end();
 
@@ -569,7 +637,7 @@ module.exports = function(vfs, options, register) {
         }
     }
 
-    // A suggestion for the editor (inline completion): DeepSeek's
+    // A suggestion for the editor (inline completion): the provider's (DeepSeek's)
     // fill-in-the-middle API, POST /beta/completions with the account's key.
     // opts: { account, model, prompt (the code before the cursor), suffix
     // (after it), maxTokens }. callback(err, { text, finishReason, usage: {
@@ -585,9 +653,9 @@ module.exports = function(vfs, options, register) {
         var account;
         try { account = accountKey(opts.account); } catch (e) { return callback(e); }
         var k = readKey(account);
-        if (!k) return callback(refusal("This account has no DeepSeek API key", "ENOKEY"));
+        if (!k) return callback(refusal("This account has no " + P.name + " API key", "ENOKEY"));
         var model = typeof opts.model == "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(opts.model)
-            ? opts.model : "deepseek-flash";
+            ? opts.model : P.fimModel;
         var prompt = typeof opts.prompt == "string" ? opts.prompt.slice(-FIM_INPUT_MAX) : "";
         var suffix = typeof opts.suffix == "string" ? opts.suffix.slice(0, FIM_INPUT_MAX) : "";
         var maxTokens = Math.floor(Number(opts.maxTokens));
@@ -629,14 +697,14 @@ module.exports = function(vfs, options, register) {
                 var message = json && json.error && typeof json.error.message == "string"
                     ? json.error.message.slice(0, 300) : "";
                 if (res.statusCode == 401 || res.statusCode == 403)
-                    return finish(refusal("DeepSeek rejected the API key (" + res.statusCode + ")", "EAUTH"));
+                    return finish(refusal(P.name + " rejected the API key (" + res.statusCode + ")", "EAUTH"));
                 if (res.statusCode == 402)
-                    return finish(refusal("DeepSeek: " + (message || "insufficient balance") + " (402)", "EBALANCE"));
+                    return finish(refusal(P.name + ": " + (message || "insufficient balance") + " (402)", "EBALANCE"));
                 if (res.statusCode == 429)
-                    return finish(refusal("DeepSeek: " + (message || "too many requests") + " (429)", "ERATE"));
+                    return finish(refusal(P.name + ": " + (message || "too many requests") + " (429)", "ERATE"));
                 var choice = json && Array.isArray(json.choices) && json.choices[0];
                 if (res.statusCode != 200 || !choice || typeof choice.text != "string")
-                    return finish(new Error("DeepSeek answered " + res.statusCode + (message ? ": " + message : "")));
+                    return finish(new Error(P.name + " answered " + res.statusCode + (message ? ": " + message : "")));
                 var usage = json.usage || {};
                 finish(null, {
                     text: choice.text.slice(0, FIM_TEXT_MAX),
@@ -650,7 +718,7 @@ module.exports = function(vfs, options, register) {
             });
             res.on("error", function(e) { finish(e); });
         });
-        req.on("timeout", function() { req.destroy(new Error("DeepSeek did not answer in time")); });
+        req.on("timeout", function() { req.destroy(new Error(P.name + " did not answer in time")); });
         req.on("error", function(e) { finish(new Error("Could not reach " + url.host + ": " + e.message)); });
         req.end(body);
 
@@ -667,7 +735,7 @@ module.exports = function(vfs, options, register) {
         try { return fs.lstatSync(p); } catch (e) { return null; }
     }
 
-    // "~/.deepseek-work" for a path in the home folder
+    // "~/.claude-work" for a path in the home folder
     function tilde(p) {
         var h = home.replace(/\/$/, "");
         return p == h ? "~" : p.indexOf(h + "/") === 0 ? "~" + p.slice(h.length) : p;
@@ -714,9 +782,9 @@ module.exports = function(vfs, options, register) {
         return links;
     }
 
-    // What the panel shows about each account: its folder, its API key (set
-    // or not, where from, its last characters; never the key) and what it
-    // shares with Claude Code's folder.
+    // What the panel shows about each account: its folder; whether it is
+    // logged in and as whom (Claude) or its API key (keyed: set or not, where
+    // from, its last characters; never the key); and what it shares.
     function accounts(list, callback) {
         if (typeof list == "function") { callback = list; list = null; }
         callback = callback || function() {};
@@ -726,17 +794,52 @@ module.exports = function(vfs, options, register) {
         keys.forEach(function(key) {
             var dir = configDir(key);
             var st = statSafe(dir);
-            var info = { dir: tilde(dir), exists: !!(st && st.isDirectory()), key: keyInfo(key), share: null };
-            if (info.exists) info.share = shareState(key);
+            if (KEYED) {
+                var info = { dir: tilde(dir), exists: !!(st && st.isDirectory()), key: keyInfo(key), share: null };
+                if (info.exists) info.share = shareState(key);
+            }
+            else {
+                var info = { dir: tilde(dir), exists: !!(st && st.isDirectory()), loggedIn: false, auth: null,
+                    email: null, org: null, share: null };
+                var creds = lstatSafe(path.join(dir, ".credentials.json"));
+                if (creds && creds.isFile()) {
+                    info.loggedIn = true;
+                    info.auth = "login";
+                }
+                else if (!key && AUTH_ENV.some(function(name) { return process.env[name]; })) {
+                    info.loggedIn = true;
+                    info.auth = "env";
+                }
+                var config = readJson(globalConfigFile(key), CONFIG_MAX_SIZE);
+                var account = config && config.oauthAccount;
+                if (account && typeof account == "object") {
+                    if (typeof account.emailAddress == "string") info.email = account.emailAddress.slice(0, 200);
+                    if (typeof account.organizationName == "string") info.org = account.organizationName.slice(0, 200);
+                }
+                if (key && info.exists) info.share = shareState(key);
+            }
             out[key] = info;
         });
-        callback(null, { accounts: out, home: home, defaultDir: tilde(defaultConfigDir()), claudeDir: tilde(claudeDir()),
-            keyFile: KEY_FILE, keyEnv: KEY_ENV, apiHost: apiHost() });
+        if (KEYED) {
+            callback(null, { accounts: out, home: home, defaultDir: tilde(defaultConfigDir()), claudeDir: tilde(claudeDir()),
+                keyFile: KEY_FILE, keyEnv: KEY_ENV, apiHost: apiHost() });
+        }
+        else {
+            // defaultEnv: the server's own CLAUDE_CONFIG_DIR (a terminal needs it too)
+            callback(null, { accounts: out, home: home, defaultDir: tilde(defaultConfigDir()),
+                defaultEnv: process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : null });
+        }
     }
 
-    // CLAUDE.md of an account imports Claude Code's
+    function readJson(file, max) {
+        var st = lstatSafe(file);
+        if (!st || !st.isFile() || st.size > max) return null;
+        try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return null; }
+    }
+
+    // CLAUDE.md of an account imports the one it shares
     function importLine() {
-        return "@" + tilde(path.join(claudeDir(), "CLAUDE.md"));
+        return "@" + tilde(path.join(shareSource(), "CLAUDE.md"));
     }
 
     // For each shareable item: true (shared), false, or "own" (the account
@@ -757,7 +860,7 @@ module.exports = function(vfs, options, register) {
             var p = path.join(dir, SHARE_LINKS[item]);
             var st = lstatSafe(p);
             if (!st) state[item] = false;
-            else if (st.isSymbolicLink() && readLink(p) == path.join(claudeDir(), SHARE_LINKS[item])) state[item] = true;
+            else if (st.isSymbolicLink() && readLink(p) == path.join(shareSource(), SHARE_LINKS[item])) state[item] = true;
             else state[item] = "own";
         });
         return state;
@@ -777,9 +880,24 @@ module.exports = function(vfs, options, register) {
         opts = opts || {};
         var key;
         try { key = accountKey(opts.account); } catch (e) { return callback(e); }
+        if (!(KEYED)) {
+            if (!key) return callback(refusal("The default account is set up by Claude Code itself", "EINVAL"));
+        }
         var dir = configDir(key);
-        var err = ensureAccountDir(key, !!opts.create);
-        if (err) return callback(err);
+        if (KEYED) {
+            var err = ensureAccountDir(key, !!opts.create);
+            if (err) return callback(err);
+        }
+        else {
+            var st = lstatSafe(dir);
+            if (st && !st.isDirectory() && !(st.isSymbolicLink() && statSafe(dir) && statSafe(dir).isDirectory()))
+                return callback(refusal(tilde(dir) + " exists and is not a folder", "ENOTDIR"));
+            if (!st) {
+                if (!opts.create) return callback(refusal(tilde(dir) + " does not exist", "ENOENT"));
+                try { fs.mkdirSync(dir, { mode: 448 /* 0700 */ }); }
+                catch (e) { return callback(new Error("Could not create " + tilde(dir) + ": " + e.message)); }
+            }
+        }
         var warnings = [];
         var share = opts.share && typeof opts.share == "object" ? opts.share : {};
         try {
@@ -815,7 +933,7 @@ module.exports = function(vfs, options, register) {
 
     function shareLink(dir, name, on, warnings) {
         var p = path.join(dir, name);
-        var source = path.join(claudeDir(), name);
+        var source = path.join(shareSource(), name);
         var st = lstatSafe(p);
         var ours = st && st.isSymbolicLink() && readLink(p) == source;
         if (on && !st) fs.symlinkSync(source, p);
@@ -835,28 +953,46 @@ module.exports = function(vfs, options, register) {
         } catch (e) {
             return callback(e);
         }
-        var dirError = ensureAccountDir(account, false);
-        if (dirError) return callback(dirError);
-        var key = readKey(account);
-        if (!key)
-            return callback(refusal("No DeepSeek API key for this account. Set it in Preferences > DeepSeek > Accounts"
-                + (account ? "." : " (or start Cloud9 with " + KEY_ENV + " set)."), "ENOKEY"));
-        var model = validModel(opts.model) ? opts.model : DEFAULT_MODEL;
-        var fastModel = validModel(opts.fastModel) ? opts.fastModel : DEFAULT_FAST_MODEL;
-        // the Anthropic credentials are gone (cleanEnv): only this key is sent
+        var model, fastModel, key;
+        if (KEYED) {
+            var dirError = ensureAccountDir(account, false);
+            if (dirError) return callback(dirError);
+            key = readKey(account);
+            if (!key)
+                return callback(refusal("No " + P.name + " API key for this account. Set it in Preferences > " + P.name + " > Accounts"
+                    + (account ? "." : " (or start Cloud9 with " + KEY_ENV + " set)."), "ENOKEY"));
+            model = validModel(opts.model) ? opts.model : DEFAULT_MODEL;
+            fastModel = validModel(opts.fastModel) ? opts.fastModel : DEFAULT_FAST_MODEL;
+        }
+        else {
+            model = validModel(opts.model) ? opts.model : null;
+        }
+        // (keyed) the Anthropic credentials are gone (cleanEnv): only this key is sent
         var env = cleanEnv(bin);
-        env.CLAUDE_CONFIG_DIR = configDir(account);
-        env.ANTHROPIC_BASE_URL = BASE_URL;
-        env.ANTHROPIC_AUTH_TOKEN = key.key;
-        // the CLI's aliases: its default and its bigger models are the chosen
-        // model; sub-agents and background tasks (titles, summaries) use the
-        // fast one
-        env.ANTHROPIC_MODEL = model;
-        env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
-        env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
-        env.ANTHROPIC_DEFAULT_HAIKU_MODEL = fastModel;
-        env.CLAUDE_CODE_SUBAGENT_MODEL = fastModel;
-        env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(COMPACT_WINDOW);
+        if (KEYED) {
+            env.CLAUDE_CONFIG_DIR = configDir(account);
+            env.ANTHROPIC_BASE_URL = BASE_URL;
+            env.ANTHROPIC_AUTH_TOKEN = key.key;
+            // the CLI's aliases: its default and its bigger models are the chosen
+            // model; sub-agents and background tasks (titles, summaries) use the
+            // fast one
+            env.ANTHROPIC_MODEL = model;
+            env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
+            env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
+            env.ANTHROPIC_DEFAULT_HAIKU_MODEL = fastModel;
+            env.CLAUDE_CODE_SUBAGENT_MODEL = fastModel;
+            env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(COMPACT_WINDOW);
+        }
+        else {
+            if (account) {
+                var st = statSafe(configDir(account));
+                if (!st || !st.isDirectory())
+                    return callback(refusal("The account folder " + tilde(configDir(account))
+                        + " does not exist. Set the account up in Preferences > Claude.", "ENOACCOUNT"));
+                env.CLAUDE_CONFIG_DIR = configDir(account);
+                AUTH_ENV.forEach(function(name) { delete env[name]; });
+            }
+        }
         var runCwd = plan.cwd || folder || cwd;
         var args = [
             "-p",
@@ -871,7 +1007,8 @@ module.exports = function(vfs, options, register) {
         var mode = has(MODES, opts.mode) ? opts.mode : null;
         if (mode)
             args.push("--permission-mode", mode);
-        args.push("--model", model);
+        if (model)
+            args.push("--model", model);
         if (has(EFFORTS, opts.effort))
             args.push("--effort", opts.effort);
         // ultracode is a settings key; --settings adds it for this session
@@ -884,7 +1021,9 @@ module.exports = function(vfs, options, register) {
         var fork = !!(resume && opts.fork === true);
         if (fork)
             args.push("--fork-session");
-        args.push("--append-system-prompt", IDENTITY);
+        if (KEYED) {
+            args.push("--append-system-prompt", IDENTITY);
+        }
 
         var child;
         try {
@@ -915,7 +1054,7 @@ module.exports = function(vfs, options, register) {
             account: account,
             fork: fork,
             mode: mode,
-            model: model,
+            model: model || "default",
             fastModel: fastModel,
             effort: has(EFFORTS, opts.effort) ? opts.effort : null,
             ultracode: opts.ultracode === true,
@@ -1009,8 +1148,13 @@ module.exports = function(vfs, options, register) {
                 send({ ev: "notice", kind: "resume-failed", sessionId: state.resume,
                     text: "Could not resume the previous session; started a new one." });
                 var sent = state.sent;
-                return spawnCli(bin, { mode: state.mode, model: state.model, fastModel: state.fastModel,
-                    effort: state.effort, ultracode: state.ultracode, account: state.account }, function(err, fresh) {
+                var again = { mode: state.mode, model: state.model, account: state.account };
+                if (KEYED) {
+                    again.fastModel = state.fastModel;
+                    again.effort = state.effort;
+                    again.ultracode = state.ultracode;
+                }
+                return spawnCli(bin, again, function(err, fresh) {
                     if (err)
                         return send({ ev: "error", message: err.message });
                     sent.forEach(function(line) { writeLine(fresh, line, true); });
@@ -1272,7 +1416,7 @@ module.exports = function(vfs, options, register) {
                 if (typeof msg.request_id == "string") {
                     writeJson(state, { type: "control_response", response: {
                         subtype: "error", request_id: msg.request_id,
-                        error: "Not supported by the Cloud9 DeepSeek panel"
+                        error: "Not supported by the Cloud9 " + P.name + " panel"
                     } });
                 }
                 return;
@@ -1300,9 +1444,11 @@ module.exports = function(vfs, options, register) {
                     result: typeof msg.result == "string" ? msg.result.slice(0, MAX_RESULT_TEXT) : msg.result,
                     errors: msg.errors,
                     session_id: msg.session_id,
-                    // the CLI's own cost uses Anthropic's prices: the panel
-                    // prices these tokens with DeepSeek's
-                    turn_usage: turnUsage(state, msg),
+                    // Claude: the CLI's own cost. Keyed: that uses Anthropic's
+                    // prices, so the panel prices these tokens with the provider's
+                    total_cost_usd: KEYED ? undefined : msg.total_cost_usd,
+                    turn_cost_usd: KEYED ? undefined : turnCost(msg),
+                    turn_usage: KEYED ? turnUsage(state, msg) : undefined,
                     duration_ms: msg.duration_ms,
                     duration_api_ms: msg.duration_api_ms,
                     num_turns: msg.num_turns,
@@ -1337,19 +1483,30 @@ module.exports = function(vfs, options, register) {
     }
 
     // The context window of the main agent's model: { size, max_output }.
-    // Usage is keyed by the model as chosen ("deepseek-flash[1m]"), the
-    // answers name it without the suffix. The CLI compacts at
-    // COMPACT_WINDOW (CLAUDE_CODE_AUTO_COMPACT_WINDOW) but still reports
-    // the model's whole window.
+    // Keyed: usage is keyed by the model as chosen ("deepseek-flash[1m]"), the
+    // answers name it without the suffix; and the CLI compacts at
+    // COMPACT_WINDOW (CLAUDE_CODE_AUTO_COMPACT_WINDOW) but still reports the
+    // model's whole window.
     function contextWindow(state, modelUsage) {
         if (!modelUsage || typeof modelUsage != "object") return null;
         var keys = Object.keys(modelUsage);
-        var key = [state.model, state.lastModel].filter(function(m) { return m && has(modelUsage, m); })[0]
+        var key = !KEYED ? (state.lastModel && has(modelUsage, state.lastModel) ? state.lastModel : keys.length == 1 ? keys[0] : null)
+            : [state.model, state.lastModel].filter(function(m) { return m && has(modelUsage, m); })[0]
             || keys.filter(function(k) { return state.lastModel && bareModel(k) == bareModel(state.lastModel); })[0]
             || (keys.length == 1 ? keys[0] : null);
         var usage = key && modelUsage[key];
         if (!usage || typeof usage.contextWindow != "number" || usage.contextWindow <= 0) return null;
-        return { size: Math.min(usage.contextWindow, COMPACT_WINDOW), max_output: +usage.maxOutputTokens || 0 };
+        return { size: KEYED ? Math.min(usage.contextWindow, COMPACT_WINDOW) : usage.contextWindow, max_output: +usage.maxOutputTokens || 0 };
+    }
+
+    function turnCost(msg) {
+        var usage = msg.model_usage_since_last_result;
+        if (!usage || typeof usage != "object") return null;
+        var total = 0;
+        Object.keys(usage).forEach(function(model) {
+            total += +(usage[model] && usage[model].costUSD) || 0;
+        });
+        return total;
     }
 
     function bareModel(id) {
@@ -2228,7 +2385,7 @@ module.exports = function(vfs, options, register) {
     // one: same boot, same start time, its own group leader, our user, and
     // the exact flags this service starts claude with. Groups whose leader
     // has already exited are left alone: their pid could have been reused.
-    var RECORD_DIR = path.join(home, ".c9", "deepseek-panel");
+    var RECORD_DIR = path.join(home, ".c9", P.id + "-panel");
     var CLI_FLAGS = ["-p", "--input-format", "stream-json", "--output-format", "stream-json",
         "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"].join("\0");
 
@@ -2319,7 +2476,7 @@ module.exports = function(vfs, options, register) {
                 if (owner && owner.start === rec.ownerStart)
                     return; // its vfs process is alive: not an orphan
                 if (isOurCli(rec)) {
-                    console.error("[deepseek] stopping claude " + rec.pid + " left by vfs process " + rec.owner);
+                    console.error("[" + P.id + "] stopping claude " + rec.pid + " left by vfs process " + rec.owner);
                     try { process.kill(-rec.pid, "SIGTERM"); } catch (e) {}
                     setTimeout(function() {
                         if (isOurCli(rec)) {
@@ -2349,7 +2506,7 @@ module.exports = function(vfs, options, register) {
 
     // One set of process handlers per vfs process, whatever the number of
     // times this extension is (re)defined in it.
-    var KEY = "__c9DeepseekServiceCleanup";
+    var KEY = "__c9ClaudeServiceCleanup";
     if (!process[KEY]) {
         var cleanups = process[KEY] = [];
         var runAll = function() {
@@ -2381,7 +2538,7 @@ module.exports = function(vfs, options, register) {
         client = null;
     }
 
-    register(null, {
+    var api = {
         status: status,
         connect: connect,
         send: sendMessage,
@@ -2395,13 +2552,17 @@ module.exports = function(vfs, options, register) {
         deleteSession: deleteSession,
         accounts: accounts,
         setupAccount: setupAccount,
-        setApiKey: setApiKey,
-        balance: balance,
-        complete: complete,
         checkFolder: checkFolder,
         stop: stop,
         history: history,
         sessions: sessions,
         destroy: destroy
-    });
+    };
+    // the provider's own API, with the account's key
+    if (KEYED) {
+        api.setApiKey = setApiKey;
+        api.balance = balance;
+        api.complete = complete;
+    }
+    register(null, api);
 };

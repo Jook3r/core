@@ -1,7 +1,7 @@
 /**
  * DeepSeek chat panel: a right side panel that drives the user's own
  * `claude` CLI (Claude Code) in headless streaming mode against DeepSeek's
- * Anthropic-compatible API, through deepseek-service.js.
+ * Anthropic-compatible API, through c9.ide.agent/service.js.
  *
  * The models, their prices and DeepSeek's peak hours are user settings
  * (Preferences > DeepSeek); the panel prices each answer from its tokens and
@@ -173,7 +173,7 @@ define(function(require, exports, module) {
         var logEl, welcomeEl, jumpBtn, composer, composerBox, noteEl, promptSlot, attachRow, chipPreview;
         var textarea, btnAttach, btnSend, fileInput, dropOverlay;
 
-        // connection with deepseek-service.js
+        // connection with the service (c9.ide.agent/service.js)
         var api = null;
         var stream = null;
         var connecting = false;
@@ -422,8 +422,9 @@ define(function(require, exports, module) {
             connecting = true;
             updateStatus();
             ext.loadRemotePlugin("deepseek", {
-                file: useCode ? undefined : "c9.ide.deepseek/deepseek-service.js",
-                code: useCode ? require("text!./deepseek-service.js") : undefined
+                file: useCode ? undefined : "c9.ide.agent/service.js",
+                code: useCode ? require("text!../c9.ide.agent/service.js") : undefined,
+                provider: "deepseek"
             }, function(err, remote) {
                 connecting = false;
                 // When the service is already loaded in this vfs (a

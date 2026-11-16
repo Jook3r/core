@@ -1,6 +1,6 @@
 /**
  * Claude chat panel: a right side panel that drives the user's own `claude`
- * CLI (Claude Code) in headless streaming mode through claude-service.js.
+ * CLI (Claude Code) in headless streaming mode through c9.ide.agent/service.js.
  *
  * Plain DOM inside the panel, styled by claude.less with the skin's
  * variables. Model output, tool input and tool output are only ever inserted
@@ -152,7 +152,7 @@ define(function(require, exports, module) {
         var logEl, welcomeEl, jumpBtn, composer, composerBox, noteEl, promptSlot, attachRow, chipPreview;
         var textarea, btnAttach, btnSend, fileInput, dropOverlay;
 
-        // connection with claude-service.js
+        // connection with the service (c9.ide.agent/service.js)
         var api = null;
         var stream = null;
         var connecting = false;
@@ -358,8 +358,9 @@ define(function(require, exports, module) {
             connecting = true;
             updateStatus();
             ext.loadRemotePlugin("claude", {
-                file: useCode ? undefined : "c9.ide.claude/claude-service.js",
-                code: useCode ? require("text!./claude-service.js") : undefined
+                file: useCode ? undefined : "c9.ide.agent/service.js",
+                code: useCode ? require("text!../c9.ide.agent/service.js") : undefined,
+                provider: "claude"
             }, function(err, remote) {
                 connecting = false;
                 // When the service is already loaded in this vfs (a
