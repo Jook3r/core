@@ -310,7 +310,10 @@ define(function(require, exports, module) {
                     return;
                 
                 var doc = session.previewTab.document;
-                doc.getSession().session._emit("changeScrollTop");
+                // (a tab that is being restored has no editor session yet)
+                var aceSession = doc.getSession().session;
+                if (aceSession)
+                    aceSession._emit("changeScrollTop");
             }, 100);
         });
         plugin.on("reload", function() {
