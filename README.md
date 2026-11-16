@@ -201,4 +201,11 @@ once, Chromium for Playwright:
 the tests need go to `test/node_modules`. GitHub Actions runs them on every
 push (`.github/workflows/tests.yml`).
 
+#### The editor ####
+
+The editor is [Ace](https://github.com/ajaxorg/ace) 1.45.2, in
+`plugins/node_modules/ace`. `scripts/vendor-ace.js` puts another release
+there and applies Cloud9's few changes to it again; see
+`plugins/node_modules/ace/CLOUD9.md`.
+
 Happy coding, Cloud9

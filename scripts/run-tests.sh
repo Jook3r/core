@@ -25,12 +25,12 @@ resetColor=$'\e[0m'
 SKIP="plugins/c9.ide.collab/server/collab-server_test.js plugins/c9.preview/preview_test.js"
 # The tests of the editor, Ace (plugins/node_modules/ace). Not these: one
 # that needs a package Ace's own repository has (plist), one that is a tool
-# with arguments, one that expects to run without a DOM, and one whose
-# assertion Node.js no longer takes
+# with arguments, one that expects to run without a DOM, and one of the
+# module loader of Ace's worker, in whose place Cloud9 has its own
 ACE_SKIP="plugins/node_modules/ace/tool/regexp_tokenizer_test.js
 plugins/node_modules/ace/lib/ace/mode/_test/highlight_rules_test.js
 plugins/node_modules/ace/lib/ace/ext/static_highlight_test.js
-plugins/node_modules/ace/lib/ace/config_test.js"
+plugins/node_modules/ace/lib/ace/worker/worker_test.js"
 ACE_TESTS=$(git ls-files 'plugins/node_modules/ace/**_test.js' | grep -vxF "$ACE_SKIP" | sort)
 
 installTestPackages() {

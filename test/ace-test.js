@@ -13,9 +13,9 @@ var path = require("path");
 var Module = require("module");
 
 var ACE = path.join(__dirname, "../plugins/node_modules/ace/lib");
-// amd-loader, Ace's modules as "ace/...", and its runner as "asyncjs"
-process.env.NODE_PATH = [path.join(__dirname, "../node_modules"), ACE, path.join(ACE, "ace/test")]
-    .join(path.delimiter);
+// amd-loader. Not Ace's modules as "ace/...": Ace asks for a mode by such
+// a name first, and where that fails loads it later, which its tests expect
+process.env.NODE_PATH = path.join(__dirname, "../node_modules");
 Module._initPaths();
 
 // Node.js 21 and later have a navigator of their own, without what Ace's
@@ -29,17 +29,17 @@ Object.defineProperty(globalThis, "navigator", {
 require("amd-loader");
 // Ace's stand-in for the browser (window, document): with a navigator, Ace
 // takes itself to be in a browser, also in the tests that ask for no DOM
-require("ace/test/mockdom");
-var asyncjs = require("asyncjs");
-var files = process.argv.slice(2);
-var failed = 0;
+require(path.join(ACE, "ace/test/mockdom"));
+// Ace's runner; each test file hands itself to it (as a file that was not
+// started by itself, without effect), so the suites are collected here
+var runner = require(path.join(ACE, "ace/test/run"));
+var suites = process.argv.slice(2).map(function(file) {
+    var suite = require(path.resolve(file));
+    suite.name = file;
+    return suite;
+});
 
-(function next(i) {
-    // the editors' render loops keep timers going
-    if (i == files.length) process.exit(failed ? 1 : 0);
-    var tests = require(path.resolve(files[i]));
-    asyncjs.test.testcase(tests, files[i]).run().report().summary(function(err, passed) {
-        if (err || !passed) failed++;
-        next(i + 1);
-    });
-})(0);
+runner.watchErrors();
+runner.prepareSteps(suites, "");
+// exits when done, with 1 if a test failed
+runner.runSteps();

@@ -6,6 +6,8 @@
 define(function(require, exports, module) {
 var snippetManager = require("ace/snippets").snippetManager;
 var config = require("ace/config");
+// the modes that have a file of snippets
+var available = require("ace/snippets/c9_list");
 
 exports.init = function(worker) {
     var loadSnippetsForMode = function(mode) {
@@ -22,6 +24,8 @@ exports.init = function(worker) {
             return;
         var snippetFilePath = id.replace(/\/modes?\//, /snippets/);
         snippetManager.files[id] = {};
+        if (/^ace\/snippets\//.test(snippetFilePath) && available.indexOf(snippetFilePath.slice(13)) == -1)
+            return;
         config.loadModule(snippetFilePath, function(m) {
             if (m) {
                 snippetManager.files[id] = m;

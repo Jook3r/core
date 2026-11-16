@@ -18,7 +18,7 @@ handler.analyze = function(value, ast, options, callback) {
         return callback();
     
     if (!CSSLint) {
-        return require(["ace/mode/css/csslint"], function(m) {
+        return require(["plugins/c9.ide.language.css/csslint"], function(m) {
             CSSLint = m.CSSLint;
             callback(handler.analyzeSync(value, ast));
         });

@@ -135,14 +135,15 @@
         }
         
         function addCornerStyles(theme) {
-            var sheet = document.getElementById(theme.cssClass).sheet;
-            sheet.insertRule(
+            // in a sheet of its own: Ace adds a theme's when an editor
+            // first uses it
+            dom.importCssString(
                 "." + theme.cssClass + " .ace_corner" + "{"
                 + "background: radial-gradient(at 5px 5px, "
                 + (theme.isDark ? "rgba(0,0,0,0)" : "rgba(250,250,250,0)")
                 + "5.5px," + theme.bg + "6px)"
                 + "}",
-                sheet.cssRules.length
+                theme.cssClass + "-corner"
             );
         }
         
@@ -350,6 +351,23 @@
             },
             canRedo: function() {
                 return this.$aceUndo.canRedo();
+            },
+            // what Ace itself reads of a session's undo manager (the touch
+            // menu, vim, linked cursors of ace/placeholder)
+            hasUndo: function() {
+                return this.$aceUndo.canUndo();
+            },
+            hasRedo: function() {
+                return this.$aceUndo.canRedo();
+            },
+            get $undoStack() {
+                return this.$aceUndo.$undoStack;
+            },
+            get $redoStack() {
+                return this.$aceUndo.$redoStack;
+            },
+            get $lastDelta() {
+                return this.$aceUndo.$lastDelta;
             },
             clearUndo: function() {
                 this.$aceUndo.$undoStack = [];

@@ -102,6 +102,11 @@ async function runFile(port, file) {
     var context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     var page = await context.newPage();
     var result;
+    var errors = [];
+    page.on("pageerror", function(e) { errors.push(String(e.stack || e).split("\n").slice(0, 4).join("\n")); });
+    page.on("console", function(msg) {
+        if (msg.type() == "error") errors.push(msg.text().slice(0, 400));
+    });
     try {
         await page.goto("http://127.0.0.1:" + port + "/static/test.html?" + file, { waitUntil: "load", timeout: 30000 });
         var handle = await page.waitForFunction(function() {
@@ -109,7 +114,9 @@ async function runFile(port, file) {
             return report && report.stats && {
                 passes: report.stats.passes,
                 failures: report.stats.failures,
-                titles: (report.failures || []).map(function(f) { return f.fullTitle || f.title; }).slice(0, 5)
+                titles: [].concat(report.failures || []).map(function(f) {
+                    return (f.fullTitle || f.title || "") + ": " + String(f.error || (f.err && (f.err.stack || f.err.message)) || f.stack || "").slice(0, 600);
+                }).slice(0, 5)
             };
         }, null, { timeout: TIMEOUT });
         result = await handle.jsonValue();
@@ -117,6 +124,7 @@ async function runFile(port, file) {
         result = { passes: 0, failures: 1, error: String(e.message || e).split("\n")[0] };
     }
     await context.close().catch(function() {});
+    result.errors = errors.slice(0, 8);
     return result;
 }
 
@@ -157,6 +165,8 @@ async function main() {
             console.log("not ok - " + files[i] + " (" + (result.passes || 0) + " passed, " + result.failures + " failed)");
             (result.titles || []).forEach(function(title) { console.log("    # " + title); });
             if (result.error) console.log("    # " + result.error);
+            // with files as arguments: what the page reported as well
+            if (only.length) result.errors.forEach(function(e) { console.log("    ! " + e.replace(/\n/g, "\n    ! ")); });
         } else {
             console.log("ok - " + files[i] + " (" + result.passes + ")");
         }
