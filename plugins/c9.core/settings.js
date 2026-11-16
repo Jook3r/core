@@ -616,21 +616,23 @@ define(function(require, exports, module) {
     
         function trust(callback) {
             var folder = options.workspaceTrustPath;
-            var folders = [];
-            try {
-                folders = JSON.parse(get("user/workspaceTrust/@folders")) || [];
-            } catch (e) {}
-            if (!folder || folders.indexOf(folder) != -1)
-                return callback && callback();
-            
-            folders.push(folder);
-            set("user/workspaceTrust/@folders", JSON.stringify(folders));
-            
-            // written now, not with the next tick's save: the server reads
-            // the file when the IDE loads again
-            cache.user = stringify(model.user, "user");
-            fs.writeFile(PATH.user, cache.user, function(err) {
-                callback && callback(err);
+            // next to user.settings, in a file of its own: every open IDE
+            // tab writes user.settings whole, without what another added
+            var path = PATH.user.replace(/[^\/]*$/, "trusted.folders");
+            fs.readFile(path, function(err, data) {
+                var folders = [];
+                try {
+                    folders = JSON.parse(data);
+                } catch (e) {}
+                if (!Array.isArray(folders))
+                    folders = [];
+                if (!folder || folders.indexOf(folder) != -1)
+                    return callback && callback();
+                
+                folders.push(folder);
+                fs.writeFile(path, JSON.stringify(folders, null, 4) + "\n", function(err) {
+                    callback && callback(err);
+                });
             });
         }
     
@@ -727,8 +729,7 @@ define(function(require, exports, module) {
             
             /**
              * Approves the workspace's folder: adds it to the user's trusted
-             * folders (user/workspaceTrust/@folders, in the user's own
-             * settings). Its project and state settings apply from the next
+             * folders (~/.c9/trusted.folders). Its project and state settings apply from the next
              * load of the IDE.
              * @param {Function} callback  called when the setting is on disk
              */

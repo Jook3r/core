@@ -440,8 +440,12 @@ function getSettings(configName, options) {
             trustPath = fs.realpathSync(workspaceDir);
             configuredReal = fs.realpathSync(options.workspaceDir);
         } catch (e) {}
+        var approved = "";
+        try {
+            approved = fs.readFileSync(join(installPath, "trusted.folders"), "utf8");
+        } catch (e) {}
         trusted = workspace.isTrusted(trustPath, configuredReal,
-            workspace.trustedFolders(settings.user));
+            workspace.trustedFolders(approved));
         if (!trusted)
             settings.project = settings.state = "";
     }

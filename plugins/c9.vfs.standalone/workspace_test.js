@@ -68,19 +68,15 @@ describe(__filename, function() {
     });
 
     describe("trustedFolders", function() {
-        it("reads the approved folders from a user.settings string", function() {
-            var user = JSON.stringify({ workspaceTrust: { "@folders": JSON.stringify(["/a", "/b"]) } });
-            assert.deepEqual(workspace.trustedFolders(user), ["/a", "/b"]);
+        it("reads the approved folders", function() {
+            assert.deepEqual(workspace.trustedFolders(JSON.stringify(["/a", "/b"])), ["/a", "/b"]);
         });
-        it("takes an already parsed object too", function() {
-            assert.deepEqual(workspace.trustedFolders({ workspaceTrust: { "@folders": "[\"/a\"]" } }), ["/a"]);
-        });
-        it("returns [] for missing, empty or broken settings", function() {
+        it("returns [] for a missing, empty or broken file", function() {
             assert.deepEqual(workspace.trustedFolders(""), []);
-            assert.deepEqual(workspace.trustedFolders("{"), []);
+            assert.deepEqual(workspace.trustedFolders(undefined), []);
+            assert.deepEqual(workspace.trustedFolders("["), []);
             assert.deepEqual(workspace.trustedFolders("{}"), []);
-            assert.deepEqual(workspace.trustedFolders(JSON.stringify({ workspaceTrust: { "@folders": "oops" } })), []);
-            assert.deepEqual(workspace.trustedFolders(JSON.stringify({ workspaceTrust: { "@folders": [1, "/a", 2] } })), ["/a"]);
+            assert.deepEqual(workspace.trustedFolders(JSON.stringify([1, "/a", null])), ["/a"]);
         });
     });
 });

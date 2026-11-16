@@ -692,9 +692,14 @@ async function main() {
         state = await openWorkspace(other);
         assert.equal(state.trusted, true);
         assert.equal(state.tabSize, 3);
-        var user = JSON.parse(fs.readFileSync(path.join(home, ".c9/user.settings"), "utf8"));
-        assert.deepEqual(JSON.parse(user.workspaceTrust["@folders"]), [fs.realpathSync(other)]);
         await otherPage.close();
+        // the approval is not in a file that the IDE's other tab writes
+        await page.evaluate(function() {
+            window.app.settings.set("user/general/@smoke", Date.now());
+            window.app.settings.save(true);
+        });
+        await wait(2500);
+        assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, ".c9/trusted.folders"), "utf8")), [fs.realpathSync(other)]);
         // the configured workspace needed no approval
         assert.equal(await page.evaluate(function() { return window.app.settings.trusted; }), true);
     });

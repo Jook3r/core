@@ -11,8 +11,8 @@
  * - The configured workspace (the one the server was started with, -w) is the
  *   operator's own, so it is trusted and its settings apply as before.
  * - Any other folder, opened with ?w=, is trusted only once the user has
- *   approved it (the approved folders are kept in the user's own settings,
- *   ~/.c9/user.settings, not in the workspace). Until then its project and
+ *   approved it (the approved folders are kept in the user's own
+ *   ~/.c9/trusted.folders, not in the workspace). Until then its project and
  *   state settings are left out.
  *
  * And ?w= may only choose the configured workspace or a folder inside it or
@@ -49,14 +49,12 @@ function isTrusted(workspaceReal, configuredReal, approved) {
         || (Array.isArray(approved) && approved.indexOf(workspaceReal) !== -1);
 }
 
-// The approved folders in a user.settings file (its text), or [] if there are
-// none or it can't be read. Stored at user/workspaceTrust/@folders as a JSON
-// array of real paths.
-function trustedFolders(userSettings) {
+// The approved folders in the text of ~/.c9/trusted.folders (a JSON array of
+// real paths), or [] if there are none or it can't be read. A file of its
+// own: user.settings is written whole by every open IDE tab.
+function trustedFolders(text) {
     try {
-        var user = typeof userSettings == "string" ? JSON.parse(userSettings) : userSettings;
-        var raw = user && user.workspaceTrust && user.workspaceTrust["@folders"];
-        var list = typeof raw == "string" ? JSON.parse(raw) : raw;
+        var list = JSON.parse(text);
         return Array.isArray(list) ? list.filter(function(p) { return typeof p == "string"; }) : [];
     } catch (e) {
         return [];

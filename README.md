@@ -122,10 +122,10 @@ server: a code formatter when a file is saved, the options of the Python
 linter. So for a folder that is not the workspace, Cloud9 starts in
 Restricted Mode: without the folder's settings, without writing any, and it
 asks whether you trust the folder. **Trust Folder** (later: Cloud9 > Trust
-This Folder...) adds it to your trusted folders (`workspaceTrust` in
-`~/.c9/user.settings`) and loads the IDE again with the folder's settings.
-Trust a folder only if you know where its files come from. The workspace the
-server was started with (`-w`) is always trusted.
+This Folder...) adds it to your trusted folders (`~/.c9/trusted.folders`)
+and loads the IDE again with the folder's settings. Trust a folder only if
+you know where its files come from. The workspace the server was started
+with (`-w`) is always trusted.
 
 A Run tab that was open when you left is shown again, with its output; its
 command is not started again.
