@@ -512,9 +512,9 @@ define(function(require, exports, module) {
                     span = this.dom.createElement("span");
                     span.appendChild(text);
 
-                    bgColor = data & 0x1ff;
-                    fgColor = (data >> 9) & 0x1ff;
-                    flags = data >> 18;
+                    bgColor = Terminal.attrBg(data);
+                    fgColor = Terminal.attrFg(data);
+                    flags = Terminal.attrFlags(data);
 
                     if (flags & 1) {
                         if (this.$fontMetrics.allowBoldFonts)
@@ -524,19 +524,22 @@ define(function(require, exports, module) {
                             fgColor += 8;
                     }
 
-                    if (flags & 2)
-                        span.style.textDecoration = "underline";
+                    if (flags & Terminal.UNDERLINE)
+                        span.style.textDecoration = flags & Terminal.STRIKE
+                            ? "underline line-through" : "underline";
+                    else if (flags & Terminal.STRIKE)
+                        span.style.textDecoration = "line-through";
+
+                    if (flags & Terminal.ITALIC)
+                        span.style.fontStyle = "italic";
 
                     if (bgColor === 256) {
                         if (fgColor !== 257)
-                            span.style.color = (
-                                Terminal.overridenColors[fgColor] ||
-                                Terminal.colors[fgColor]
-                            );
+                            span.style.color = Terminal.color(fgColor, true);
                     } else {
-                        span.style.backgroundColor = Terminal.colors[bgColor];
+                        span.style.backgroundColor = Terminal.color(bgColor);
                         if (fgColor !== 257)
-                            span.style.color = Terminal.colors[fgColor];
+                            span.style.color = Terminal.color(fgColor);
                         span.style.display = "inline-block" 
                         span.className = "aceterm-line-bg";
                     }

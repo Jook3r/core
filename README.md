@@ -89,6 +89,12 @@ opens a file in an editor tab (a file in the workspace or the home folder).
 With Preferences > User Settings > Terminal > Use Cloud9 as the Default
 Editor, `git commit` opens the message in a tab and waits until you close it.
 
+The terminals draw 24-bit colors, italics and crossed out text, and set
+`COLORTERM=truecolor`. Terminals of a tmux server that was started before
+this was added keep 256 colors until that server is gone: after a reboot,
+or `tmux -L cloud93.4 kill-server` (with the number of `tmux -V`), which
+ends what runs in the terminals.
+
 JavaScript and TypeScript files get error markers, completion, parameter
 hints and jump to definition from TypeScript 7's language server
 ([plugins/c9.ide.language.lsp](plugins/c9.ide.language.lsp/README.md)).

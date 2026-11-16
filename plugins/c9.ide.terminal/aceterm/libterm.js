@@ -96,7 +96,7 @@ function Terminal(cols, rows, handler) {
   this.readable = true;
   this.writable = true;
 
-  this.defAttr = (257 << 9) | 256;
+  this.defAttr = Terminal.attr(0, 257, 256);
   this.curAttr = this.defAttr;
   this.ch = [this.defAttr, ""];
 
@@ -128,6 +128,72 @@ Terminal.prototype = new EventEmitter();
 Terminal.colors = [];
 Terminal.setColors = require("./term_colors");
 Terminal.setColors();
+
+/**
+ * The attributes of a cell: one number, made of the background color, the
+ * foreground color and the flags. A color is an index: 0-255 in
+ * Terminal.colors, 256 and 257 the default background and foreground, and
+ * from 258 a 24-bit color in Terminal.rgbColors. With 17 bits for each
+ * color the number has more than 32 bits, so it is taken apart with
+ * arithmetic, not with bitwise operators.
+ */
+var COLOR = 131072; // 2^17
+var FLAGS = COLOR * COLOR;
+var RGB = 258;
+
+Terminal.BOLD = 1;
+Terminal.UNDERLINE = 2;
+Terminal.INVERSE = 4;
+Terminal.ITALIC = 8;
+Terminal.STRIKE = 16;
+
+Terminal.attr = function(flags, fg, bg) {
+  return flags * FLAGS + fg * COLOR + bg;
+};
+Terminal.attrBg = function(attr) {
+  return attr % COLOR;
+};
+Terminal.attrFg = function(attr) {
+  return Math.floor(attr / COLOR) % COLOR;
+};
+Terminal.attrFlags = function(attr) {
+  return Math.floor(attr / FLAGS);
+};
+
+// The 24-bit colors in use, as CSS colors, and where each is
+Terminal.rgbColors = [];
+var rgbIndex = Object.create(null);
+
+// The index of a 24-bit color. Once there is no room for another one, the
+// nearest of the 256 colors.
+Terminal.rgbColor = function(r, g, b) {
+  r = Math.max(0, Math.min(255, r | 0));
+  g = Math.max(0, Math.min(255, g | 0));
+  b = Math.max(0, Math.min(255, b | 0));
+  var key = (r << 16) | (g << 8) | b;
+  var index = rgbIndex[key];
+  if (index === undefined) {
+    if (RGB + Terminal.rgbColors.length >= COLOR)
+      return nearestColor(r, g, b);
+    index = rgbIndex[key] = RGB + Terminal.rgbColors.length;
+    Terminal.rgbColors.push("rgb(" + r + "," + g + "," + b + ")");
+  }
+  return index;
+};
+
+function nearestColor(r, g, b) {
+  // (the 6x6x6 cube of the 256 colors, 16-231)
+  function level(v) { return v < 48 ? 0 : v < 115 ? 1 : Math.min(5, Math.floor((v - 35) / 40)); }
+  return 16 + 36 * level(r) + 6 * level(g) + level(b);
+}
+
+// The CSS color of an index; foreground colors can be adapted to the
+// background (Terminal.overridenColors)
+Terminal.color = function(index, isFg) {
+  if (index >= RGB)
+    return Terminal.rgbColors[index - RGB];
+  return isFg && Terminal.overridenColors[index] || Terminal.colors[index];
+};
 /**
  * Options
  */
@@ -1974,82 +2040,95 @@ Terminal.prototype.eraseInLine = function(params) {
 Terminal.prototype.charAttributes = function(params) {
   var l = params.length
     , i = 0
-    , bg
-    , fg
-    , p;
+    , attr = this.curAttr
+    , flags = Terminal.attrFlags(attr)
+    , fg = Terminal.attrFg(attr)
+    , bg = Terminal.attrBg(attr)
+    , p
+    , swap;
 
   for (; i < l; i++) {
     p = params[i];
     if (p >= 30 && p <= 37) {
       // fg color 8
-      this.curAttr = (this.curAttr & ~(0x1ff << 9)) | ((p - 30) << 9);
+      fg = p - 30;
     } else if (p >= 40 && p <= 47) {
       // bg color 8
-      this.curAttr = (this.curAttr & ~0x1ff) | (p - 40);
+      bg = p - 40;
     } else if (p >= 90 && p <= 97) {
       // fg color 16
-      p += 8;
-      this.curAttr = (this.curAttr & ~(0x1ff << 9)) | ((p - 90) << 9);
+      fg = p - 90 + 8;
     } else if (p >= 100 && p <= 107) {
       // bg color 16
-      p += 8;
-      this.curAttr = (this.curAttr & ~0x1ff) | (p - 100);
+      bg = p - 100 + 8;
     } else if (p === 0) {
       // default
-      this.curAttr = this.defAttr;
+      flags = Terminal.attrFlags(this.defAttr);
+      fg = Terminal.attrFg(this.defAttr);
+      bg = Terminal.attrBg(this.defAttr);
     } else if (p === 1) {
       // bold text
-      this.curAttr = this.curAttr | (1 << 18);
-    } else if (p === 4) {
-      // underlined text
-      this.curAttr = this.curAttr | (2 << 18);
+      flags |= Terminal.BOLD;
+    } else if (p === 3) {
+      // italic text
+      flags |= Terminal.ITALIC;
+    } else if (p === 4 || p === 21) {
+      // underlined text (21: doubly)
+      flags |= Terminal.UNDERLINE;
+    } else if (p === 9) {
+      // crossed out text
+      flags |= Terminal.STRIKE;
     } else if (p === 7 || p === 27) {
       // inverse and positive
       // test with: echo -e '\e[31m\e[42mhello\e[7mworld\e[27mhi\e[m'
       if (p === 7) {
-        if ((this.curAttr >> 18) & 4) continue;
-        this.curAttr = this.curAttr | (4 << 18);
-      } else if (p === 27) {
-        if (~(this.curAttr >> 18) & 4) continue;
-        this.curAttr = this.curAttr & ~(4 << 18);
+        if (flags & Terminal.INVERSE) continue;
+        flags |= Terminal.INVERSE;
+      } else {
+        if (!(flags & Terminal.INVERSE)) continue;
+        flags &= ~Terminal.INVERSE;
       }
-
-      bg = this.curAttr & 0x1ff;
-      fg = (this.curAttr >> 9) & 0x1ff;
-
-      this.curAttr = (this.curAttr & ~0x3ffff) | ((bg << 9) | fg);
+      swap = fg;
+      fg = bg;
+      bg = swap;
     } else if (p === 22) {
       // not bold
-      this.curAttr = this.curAttr & ~(1 << 18);
+      flags &= ~Terminal.BOLD;
+    } else if (p === 23) {
+      // not italic
+      flags &= ~Terminal.ITALIC;
     } else if (p === 24) {
       // not underlined
-      this.curAttr = this.curAttr & ~(2 << 18);
+      flags &= ~Terminal.UNDERLINE;
+    } else if (p === 29) {
+      // not crossed out
+      flags &= ~Terminal.STRIKE;
     } else if (p === 39) {
       // reset fg
-      this.curAttr = this.curAttr & ~(0x1ff << 9);
-      this.curAttr = this.curAttr | (((this.defAttr >> 9) & 0x1ff) << 9);
+      fg = Terminal.attrFg(this.defAttr);
     } else if (p === 49) {
       // reset bg
-      this.curAttr = this.curAttr & ~0x1ff;
-      this.curAttr = this.curAttr | (this.defAttr & 0x1ff);
-    } else if (p === 38) {
-      // fg color 256
-      if (params[i+1] !== 5) continue;
-      i += 2;
-      p = params[i] & 0xff;
-      // convert 88 colors to 256
-      // if (this.is('rxvt-unicode') && p < 88) p = p * 2.9090 | 0;
-      this.curAttr = (this.curAttr & ~(0x1ff << 9)) | (p << 9);
-    } else if (p === 48) {
-      // bg color 256
-      if (params[i+1] !== 5) continue;
-      i += 2;
-      p = params[i] & 0xff;
-      // convert 88 colors to 256
-      // if (this.is('rxvt-unicode') && p < 88) p = p * 2.9090 | 0;
-      this.curAttr = (this.curAttr & ~0x1ff) | p;
+      bg = Terminal.attrBg(this.defAttr);
+    } else if (p === 38 || p === 48 || p === 58) {
+      // a color: 5 ; index of the 256, or 2 ; red ; green ; blue.
+      // 38 the foreground's, 48 the background's, 58 the underline's (not
+      // drawn; its parameters are not attributes of their own)
+      var color;
+      if (params[i + 1] === 5) {
+        color = params[i + 2] & 0xff;
+        i += 2;
+      } else if (params[i + 1] === 2) {
+        color = Terminal.rgbColor(params[i + 2], params[i + 3], params[i + 4]);
+        i += 4;
+      } else {
+        continue;
+      }
+      if (p === 38) fg = color;
+      else if (p === 48) bg = color;
     }
   }
+
+  this.curAttr = Terminal.attr(flags, fg, bg);
 };
 
 // CSI Ps n  Device Status Report (DSR).
@@ -3561,9 +3640,9 @@ Terminal.prototype.logLine = function(line) {
         } else {
           style = "";
 
-          bgColor = data & 0x1ff;
-          fgColor = (data >> 9) & 0x1ff;
-          flags = data >> 18;
+          bgColor = Terminal.attrBg(data);
+          fgColor = Terminal.attrFg(data);
+          flags = Terminal.attrFlags(data);
 
           if (flags & 1) {
             if (this.allowBoldFonts)
@@ -3578,14 +3657,11 @@ Terminal.prototype.logLine = function(line) {
 
           if (bgColor === 256) {
             if (fgColor !== 257)
-              style += 'color:' + (
-                Terminal.overridenColors[fgColor] ||
-                Terminal.colors[fgColor]
-              ) + ';';
+              style += 'color:' + Terminal.color(fgColor, true) + ';';
           } else {
-            style += 'background-color:' + Terminal.colors[bgColor] + ';';
+            style += 'background-color:' + Terminal.color(bgColor) + ';';
             if (fgColor !== 257)
-              style += 'color:' + Terminal.colors[fgColor] + ';';
+              style += 'color:' + Terminal.color(fgColor) + ';';
             style += 'display:inline-block" class="aceterm-line-bg" l="' + i;
           }
         }
