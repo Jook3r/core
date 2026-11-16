@@ -37,7 +37,7 @@
         "through": "2.2.0",
         "tmp": "~0.2.7",
         "typescript-native": "npm:typescript@7.0.2",
-        "uglify-js": "~2.6.2",
+        "terser": "~5.51.2",
         "ws": "~8.22.0",
         "read": "~1.0.5",
         "limiter": "^1.1.0"

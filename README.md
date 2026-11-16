@@ -53,6 +53,11 @@ then reports two advisories, both in parts of connect 2.12 that Cloud9
 doesn't load: the `methodOverride` middleware (XSS) and the multipart
 parser (multiparty; uploads use their own parser).
 
+The packed client is minified with Terser. The client code and plugins can
+be written in current JavaScript (`const`, arrow functions, `async`,
+classes, `?.`): it is minified as it is, not turned into older syntax, so
+the browser has to know what the code uses.
+
 To run Cloud9 on a server behind Apache with HTTPS, see
 [deploy/README.md](deploy/README.md).
 

@@ -10,7 +10,7 @@ function plugin(options, imports, register) {
     var fs = require("fs");
     var spawn = require("child_process").spawn;
     var join = require("path").join;
-    var uglify = require.resolve("uglify-js/bin/uglifyjs");
+    var uglify = require.resolve("terser/bin/terser");
     var mkdirp = require("mkdirp");
     
     function execFile(cmd, args, callback) {
