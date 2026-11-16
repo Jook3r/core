@@ -51,6 +51,11 @@ define(function(require, exports, module) {
                             message: "-d all -e E -e F",
                             path: "project/python/@pylintFlags",
                         },
+                        "Use the pylintrc or pyproject.toml of a file's folder (it can run code: only for folders you trust)": {
+                            position: 335,
+                            type: "checkbox",
+                            path: "project/python/@pylintConfig",
+                        },
                         "PYTHONPATH": {
                             position: 340,
                             type: "textbox",
@@ -75,6 +80,7 @@ define(function(require, exports, module) {
                 settings.setDefaults("project/python", [
                     ["version", "python3"],
                     ["completion", true],
+                    ["pylintConfig", false],
                     ["path", options.pythonPath || ""],
                     // ruff from the venv that server/launch_command.sh sets up
                     ["formatter", '~/.c9/python3/bin/ruff format --stdin-filename "$file" -']
@@ -113,6 +119,7 @@ define(function(require, exports, module) {
                 pythonVersion: settings.get("project/python/@version"),
                 pythonPath: settings.get("project/python/@path"),
                 pylintFlags: settings.get("project/python/@pylintFlags"),
+                pylintConfig: settings.getBool("project/python/@pylintConfig"),
                 completion: settings.get("project/python/@completion"),
             });
         }

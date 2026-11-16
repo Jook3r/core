@@ -13,6 +13,7 @@ var handler = module.exports = Object.create(baseHandler);
 var pythonVersion = "python3";
 var pythonPath = "";
 var pylintFlags = "";
+var pylintConfig = false;
 var launchCommand;
 var hosted;
 var PYLINT_DEFAULTS = [
@@ -41,6 +42,7 @@ handler.init = function(callback) {
         pythonVersion = e.pythonVersion;
         pythonPath = e.pythonPath;
         pylintFlags = e.pylintFlags;
+        pylintConfig = e.pylintConfig;
     });
     emitter.on("set_python_scripts", function(e) {
         launchCommand = e.launchCommand;
@@ -55,7 +57,13 @@ handler.analyze = function(docValue, fullAst, options, callback) {
     var commands = hosted
         ? ["-c", pythonVersion === "python2" ? "pylint2" : "pylint3"]
         : ["-c", launchCommand, "--", pythonVersion, "$ENV/bin/pylint"];
-    commands[commands.length - 1] += " " + (pylintFlags || PYLINT_DEFAULTS.join(" "))
+    // Pylint runs in the file's folder and takes its configuration from
+    // there (pylintrc, pyproject.toml, setup.cfg, tox.ini), which can name
+    // Python code to run (init-hook, load-plugins): opening a file of a
+    // cloned repository would run what the repository says. So without a
+    // configuration file, unless the project's settings ask for it.
+    commands[commands.length - 1] += (pylintConfig ? "" : " --rcfile=/dev/null")
+        + " " + (pylintFlags || PYLINT_DEFAULTS.join(" "))
         + " " + PYLINT_CONFIG.join(" ")
         + " '$FILE'";
     if (!launchCommand)

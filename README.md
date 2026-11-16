@@ -127,6 +127,11 @@ and loads the IDE again with the folder's settings. Trust a folder only if
 you know where its files come from. The workspace the server was started
 with (`-w`) is always trusted.
 
+The Python linter doesn't read the `pylintrc` or `pyproject.toml` of a
+file's folder: such a file can name code to run, and a cloned repository
+would run its own when one of its files is opened. Project Settings > Python
+Support has a checkbox to use them, for a workspace whose folders you trust.
+
 A Run tab that was open when you left is shown again, with its output; its
 command is not started again.
 
