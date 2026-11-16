@@ -183,19 +183,22 @@ has an address, and so an origin, of its own.
 
     scripts/run-tests.sh
 
-runs the server-side tests (`*_test.js`) and a smoke test, `test/smoke.js`.
+runs the server-side tests (the `*_test.js` marked `"use server"`, and the
+tests of the editor, Ace), the client-side tests (the other `*_test.js`, each
+in a browser, by `test/client.js`; those that have been failing since before
+this fork are listed there and left out) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
 `c9 open`, the Welcome page, the previews' sandbox, another folder as the
 workspace, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).
-It needs Node.js 18+ and,
+The tests in a browser need Node.js 18+ and,
 once, Chromium for Playwright:
 
     npx --prefix test playwright install --with-deps chromium
 
-`scripts/run-tests.sh server` or `smoke` runs one of the two. The packages
-the tests need go to `test/node_modules`. GitHub Actions runs both on every
+`scripts/run-tests.sh server`, `client` or `smoke` runs one of the three. The packages
+the tests need go to `test/node_modules`. GitHub Actions runs them on every
 push (`.github/workflows/tests.yml`).
 
 Happy coding, Cloud9

@@ -2,13 +2,15 @@
 #
 # Runs the tests. Needs the setup done (scripts/install-sdk.sh).
 #
-#   scripts/run-tests.sh           the server-side tests, then the smoke test
+#   scripts/run-tests.sh           all three of these
 #   scripts/run-tests.sh server    the server-side tests (*_test.js marked "use server",
 #                                  and the Ace tests below)
+#   scripts/run-tests.sh client    the client-side tests (the other *_test.js), each
+#                                  in a browser (test/client.js)
 #   scripts/run-tests.sh smoke     the smoke test (test/smoke.js), in a browser
 #
 # The packages the tests need go to test/node_modules, apart from Cloud9's
-# own. The smoke test also needs Chromium for Playwright, once:
+# own. The tests in a browser also need Chromium for Playwright, once:
 #   npx --prefix test playwright install chromium
 # (with --with-deps on a machine without the browser's system libraries)
 
@@ -73,19 +75,23 @@ serverTests() {
     echo "${green}All $count server-side test files passed${resetColor}"
 }
 
-smokeTest() {
+# browserTest <name> <script>
+browserTest() {
     local major=$(node -p 'process.versions.node.split(".")[0]')
     if [ "$major" -lt 18 ]; then
-        echo "Skipping the smoke test: Playwright needs Node.js 18 or newer"
+        echo "Skipping the $1: Playwright needs Node.js 18 or newer"
         return 0
     fi
-    node test/smoke.js
+    node "$2"
 }
+clientTests() { browserTest "client-side tests" test/client.js; }
+smokeTest() { browserTest "smoke test" test/smoke.js; }
 
 installTestPackages
 case "$1" in
     server) serverTests ;;
+    client) clientTests ;;
     smoke) smokeTest ;;
-    "") serverTests && smokeTest ;;
-    *) echo "Usage: $0 [server|smoke]" >&2; exit 1 ;;
+    "") serverTests && clientTests && smokeTest ;;
+    *) echo "Usage: $0 [server|client|smoke]" >&2; exit 1 ;;
 esac
