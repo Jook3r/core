@@ -76,6 +76,7 @@ define(function(require, exports, module) {
             var diffview;
             var lastAce;
             var lblLeft, lblRight, btnNext, btnPrev, btnFold, container;
+            var actionsBox;
             var toolbar;
             
             plugin.on("draw", function(e) {
@@ -131,7 +132,15 @@ define(function(require, exports, module) {
                                     class: "buttons",
                                     childNodes: [ btnPrev, btnFold, btnNext ]
                                 }),
-                                lblRight
+                                lblRight,
+                                // the buttons of a diff that is opened with
+                                // "actions" (see documentLoad)
+                                actionsBox = new ui.hbox({
+                                    padding: 3,
+                                    align: "center",
+                                    class: "buttons actions",
+                                    visible: false
+                                })
                             ]
                         }),
                         container
@@ -202,9 +211,30 @@ define(function(require, exports, module) {
                 }
                 
                 var dirpath = dirname(path);
-                return (hash ? "<span class='hash'>" + hash + "</span>" : "") 
+                // (the label shows its caption as text, not as HTML)
+                return (hash ? hash + "  " : "") 
                     + basename(dirpath) + "/" + basename(path) 
-                    + "<span class='dirname'> - " + dirname(dirpath) + "</span>";
+                    + " - " + dirname(dirpath);
+            }
+            
+            // The buttons of the document that is shown
+            function showActions(session) {
+                actionsBox.childNodes.slice().forEach(function(node) {
+                    node.destroy(true, true);
+                });
+                var actions = session.actions || [];
+                actions.forEach(function(action) {
+                    actionsBox.appendChild(new ui.button({
+                        caption: action.caption,
+                        height: 24,
+                        skin: "c9-toolbarbutton-glossy",
+                        class: action.class || "",
+                        onclick: function() {
+                            action.onclick(diffview);
+                        }
+                    }));
+                });
+                actionsBox.setAttribute("visible", actions.length > 0);
             }
             
             function loadSession(session) {
@@ -227,7 +257,7 @@ define(function(require, exports, module) {
                     diffview.edit.session.setValue(diff.edit || "");
                 }
                 diffview.orig.setReadOnly(true);
-                diffview.edit.setReadOnly(true);
+                diffview.edit.setReadOnly(!diff.editable);
                  
                 var syntax = ace.getSyntaxForPath(session.newPath);
                 if (syntax && syntax.indexOf("/") == -1) syntax = "ace/mode/" + syntax;
@@ -258,6 +288,16 @@ define(function(require, exports, module) {
                     session.oldPath = e.state.oldPath;
                 if (e.state.newPath)
                     session.newPath = e.state.newPath;
+                // A diff of two given texts (not of the repository), opened
+                // by another plugin:
+                //   diff:    { orig, edit, editable } (editable: the right side)
+                //   labels:  { left, right, title } in place of the paths
+                //   actions: [{ caption, onclick(diffview) }], buttons in the toolbar
+                if (e.state.diff && typeof e.state.diff.edit == "string") {
+                    session.diff = e.state.diff;
+                    session.labels = e.state.labels;
+                    session.actions = e.state.actions;
+                }
                 
                 doc.title = "Compare Files...";
                 
@@ -290,10 +330,12 @@ define(function(require, exports, module) {
                 if (!session.newPath) return;
                 
                 var newFilename = (session.newPath + "").split("/").pop();
-                e.doc.title = "Compare " + newFilename;
+                var labels = session.labels || {};
+                e.doc.title = labels.title || "Compare " + newFilename;
                 
-                lblLeft.setAttribute("caption", getLabelValue(session.oldPath));
-                lblRight.setAttribute("caption", getLabelValue(session.newPath));
+                lblLeft.setAttribute("caption", labels.left || getLabelValue(session.oldPath));
+                lblRight.setAttribute("caption", labels.right || getLabelValue(session.newPath));
+                showActions(session);
                 
                 if (session.diff)
                     return loadSession(session);
@@ -323,6 +365,7 @@ define(function(require, exports, module) {
             });
             plugin.on("getState", function(e) {
                 var session = e.doc.getSession();
+                if (session.labels) return;
                 e.state.oldPath = session.oldPath;
                 e.state.newPath = session.newPath;
             });

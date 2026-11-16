@@ -190,7 +190,7 @@ this fork are listed there and left out) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
 `c9 open`, the Welcome page, the previews' sandbox, another folder as the
-workspace, a DeepSeek inline completion, and a chat in the Claude and
+workspace, the Claude Code IDE bridge, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).
 The tests in a browser need Node.js 18+ and,
 once, Chromium for Playwright:
@@ -200,6 +200,14 @@ once, Chromium for Playwright:
 `scripts/run-tests.sh server`, `client` or `smoke` runs one of the three. The packages
 the tests need go to `test/node_modules`. GitHub Actions runs them on every
 push (`.github/workflows/tests.yml`).
+
+#### Claude Code in a terminal ####
+
+A `claude` (Claude Code) started in a Cloud9 terminal connects to the IDE:
+it knows the file and selection you are looking at, shows the changes it
+proposes as a diff in a tab to accept or reject, and is told the editor's
+markers for the files it edits. See "Claude Code in a terminal" in
+`plugins/c9.ide.claude/README.md`.
 
 #### The editor ####
 

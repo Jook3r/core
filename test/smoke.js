@@ -20,6 +20,8 @@ var http = require("http");
 var os = require("os");
 var path = require("path");
 
+var wsClient = require("./ws-client");
+
 var ROOT = path.resolve(__dirname, "..");
 var KEEP = process.argv.indexOf("--keep") != -1;
 var USER = "smoke";
@@ -702,6 +704,120 @@ async function main() {
         assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, ".c9/trusted.folders"), "utf8")), [fs.realpathSync(other)]);
         // the configured workspace needed no approval
         assert.equal(await page.evaluate(function() { return window.app.settings.trusted; }), true);
+    });
+
+    await check("Claude Code IDE bridge: the selection, a diff to accept or reject, no files from elsewhere", async function() {
+        // in the place of a `claude` in a terminal: what it would find and do
+        var lockDir = path.join(home, ".claude/ide");
+        // (the folder that an earlier check opened as a workspace of its
+        // own has a bridge and a lock file too)
+        var lockName, lock;
+        // (an earlier check opened this workspace in a second page, whose
+        // bridge had the lock file while it was there; the window that is
+        // used gets it back)
+        await page.evaluate(function() { window.dispatchEvent(new Event("focus")); });
+        await until("the bridge's lock file", function() {
+            if (!fs.existsSync(lockDir)) return false;
+            return fs.readdirSync(lockDir).some(function(name) {
+                lockName = name;
+                lock = JSON.parse(fs.readFileSync(path.join(lockDir, name), "utf8"));
+                return lock.workspaceFolders[0] == fs.realpathSync(workspace);
+            });
+        });
+        assert.equal(lock.ideName, "Cloud9");
+        assert.equal(fs.statSync(path.join(lockDir, lockName)).mode & 63, 0, "the token is for the user only");
+        var bridgePort = parseInt(lockName, 10);
+        var refused = await new Promise(function(resolve) {
+            wsClient(bridgePort, {}, function(err, res) { resolve(res && res.status); });
+        });
+        assert.equal(refused, 401);
+        var cli = await new Promise(function(resolve, reject) {
+            wsClient(bridgePort, { "x-claude-code-ide-authorization": lock.authToken }, function(err, client) {
+                if (err || client.status != 101) return reject(err || new Error("refused: " + client.status));
+                resolve(client);
+            });
+        });
+        try {
+            cli.send({ jsonrpc: "2.0", method: "ide_connected", params: { pid: process.pid }});
+            await until("the IDE to see the CLI", function() {
+                return page.evaluate(function() { return window.app["claude.ide"].clients == 1; });
+            });
+
+            // the selection of the focused editor
+            fs.writeFileSync(path.join(workspace, "bridge.js"), "var first = 1;\nvar second = 2;\n");
+            await page.evaluate(function() {
+                return new Promise(function(resolve) {
+                    window.app.tabManager.open({ path: "/bridge.js", focus: true }, function(err, tab) {
+                        tab.editor.ace.selection.setSelectionRange({ start: { row: 1, column: 4 }, end: { row: 1, column: 10 }});
+                        resolve();
+                    });
+                });
+            });
+            var file = path.join(fs.realpathSync(workspace), "bridge.js");
+            var selection = await cli.call("getCurrentSelection");
+            selection = JSON.parse(selection.content[0].text);
+            assert.equal(selection.text, "second");
+            assert.equal(selection.filePath, file);
+            assert.deepEqual(selection.selection.start, { line: 1, character: 4 });
+            await until("the selection to be sent", function() {
+                return cli.messages.some(function(m) {
+                    return m.method == "selection_changed" && m.params.text == "second" && m.params.filePath == file;
+                });
+            });
+            var editors = JSON.parse((await cli.call("getOpenEditors")).content[0].text);
+            assert.ok(editors.tabs.some(function(tab) { return tab.uri == "file://" + file && tab.isActive; }));
+            var diagnostics = JSON.parse((await cli.call("getDiagnostics", { uri: "file://" + file })).content[0].text);
+            assert.ok(Array.isArray(diagnostics));
+
+            // a proposed change: a diff in a tab; the proposed side is
+            // edited, then accepted
+            var proposal = { old_file_path: file, new_file_path: file, new_file_contents: "var first = 100;\nvar second = 2;\n", tab_name: "smoke diff" };
+            var answer = cli.call("openDiff", proposal);
+            await until("the diff", function() {
+                return page.evaluate(function() {
+                    var tab = window.app.tabManager.focussedTab;
+                    var view = tab && tab.editorType == "diffview" && tab.editor.diffview;
+                    return !!view && view.orig.session.getValue() == "var first = 1;\nvar second = 2;\n"
+                        && view.edit.session.getValue() == "var first = 100;\nvar second = 2;\n";
+                });
+            });
+            await page.evaluate(function() {
+                window.app.tabManager.focussedTab.editor.diffview.edit.session.insert({ row: 0, column: 0 }, "// seen\n");
+            });
+            await page.getByText("Accept", { exact: true }).click();
+            answer = await answer;
+            assert.equal(answer.content[0].text, "FILE_SAVED");
+            assert.equal(answer.content[1].text, "// seen\nvar first = 100;\nvar second = 2;\n");
+            // the CLI writes the file, not the IDE
+            assert.equal(fs.readFileSync(file, "utf8"), "var first = 1;\nvar second = 2;\n");
+            var diffTabs = function() {
+                return page.evaluate(function() {
+                    return window.app.tabManager.getTabs().filter(function(tab) { return tab.editorType == "diffview"; }).length;
+                });
+            };
+            await until("the diff to be closed", async function() { return await diffTabs() == 0; });
+
+            // rejected; and one that the CLI closes itself (answered in the terminal)
+            answer = cli.call("openDiff", proposal);
+            await until("the second diff", async function() { return await diffTabs() == 1; });
+            await page.getByText("Reject", { exact: true }).click();
+            assert.equal((await answer).content[0].text, "DIFF_REJECTED");
+            cli.call("openDiff", proposal);
+            await until("the third diff", async function() { return await diffTabs() == 1; });
+            cli.send({ jsonrpc: "2.0", id: "close", method: "tools/call", params: { name: "close_tab", arguments: { tab_name: "smoke diff" }}});
+            await until("the diff to be closed", async function() { return await diffTabs() == 0; });
+
+            // only files the editor may open
+            var outside = await cli.call("openFile", { filePath: "/etc/passwd" });
+            assert.equal(outside.isError, true);
+            outside = await cli.call("openDiff", { old_file_path: "/etc/passwd", new_file_path: "/etc/passwd", new_file_contents: "", tab_name: "x" });
+            assert.equal(outside.isError, true);
+        } finally {
+            cli.socket.destroy();
+        }
+        await until("the IDE to see the CLI go", function() {
+            return page.evaluate(function() { return window.app["claude.ide"].clients === 0; });
+        });
     });
 
     await check("Plugins: one ticked in Preferences loads at startup", async function() {

@@ -90,6 +90,45 @@ the chat's folder when the file is in it, otherwise absolute. Both are
 commands (`askclaude`, `fixwithclaude`) that can get a key in
 Preferences > Keybindings.
 
+### Claude Code in a terminal
+
+A `claude` started in one of Cloud9's terminals connects to the IDE, the way
+it does to VS Code (`/ide` in the CLI shows the connection; its prompt shows
+"⧉ 1 line selected"). The panel is not needed for this. Claude then
+
+- gets the file and the selection of the focused editor along with a
+  prompt, so "explain this" or "fix this" works without naming a file;
+- shows a change it proposes as a two-sided diff in a tab (when it asks
+  before edits), next to its question in the terminal. **Accept** applies
+  it, also after you edited the proposed side; **Reject** or closing the tab
+  declines it. Answering in the terminal closes the tab;
+- is told the markers (errors, warnings) the editor shows in a file after
+  it edited it, if the file is open in a tab.
+
+**Tools > Mention the Selection in Claude Code** (Ctrl-Alt-K, Cmd-Option-K)
+puts a reference to the selected lines (`@file#L3-8`) in the CLI's prompt.
+
+Preferences > General > Claude > **Connect Claude Code in a Terminal to the
+Editor** turns this off.
+
+How it works: `ide-service.js` runs next to the IDE's connection on the
+server, listens on a free port of 127.0.0.1 and writes
+`~/.claude/ide/<port>.lock` with a random token, which is how the CLI finds
+an editor. Only a process of your user can read the token, and a connection
+without it is refused. The CLI speaks MCP over a WebSocket; what it asks is
+answered by the IDE in the browser (`ide.js`). The bridge reads and writes
+no files itself: after "Accept" the CLI writes the file. It only opens files
+of the workspace and the home folder. Terminals get
+`CLAUDE_CODE_AUTO_CONNECT_IDE=true`, so that the CLI connects without being
+asked; a terminal that was open before this version needs `/ide` once, or to
+be opened again.
+
+Limits: with this workspace open in two browser tabs, the CLI connects to
+the one that was used last. The lock file is gone about half a minute after
+the IDE's tab is closed. A new file, or one that Claude replaces as a whole,
+loses the line break at its end when it is accepted in the IDE (the CLI
+does that; accepted in the terminal it keeps it).
+
 ### Accounts and folders
 
 A line above the input shows where the next chat runs: its **account** (once
