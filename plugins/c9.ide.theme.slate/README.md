@@ -13,6 +13,11 @@ What they look like:
   apart.
 - **Tabs are pills** inside their card: the active one is filled, the others
   show on hover.
+- **Any editor theme fits.** A card takes the colours of what its active
+  tab shows: with the Xcode editor theme an editor pane is a white card,
+  tab strip included, on the dark window; the pills and the tab text are
+  mixed from that theme's text colour. The console card does the same with
+  the terminal's colours.
 - **Icons are drawings, not a font or bitmaps**: SVG masks painted in the
   colours of the palette, sharp at any zoom. The interface's are
   [Lucide](https://lucide.dev)'s; a file has the mark of its language or
@@ -63,6 +68,14 @@ file's icon is its extension, or its name when it has none (`Dockerfile`,
 `Makefile`); `package.json` is `npm`. That is decided by `getIconClass` in
 `plugins/c9.ide.theme.jett/plugin.js`, which also puts the icons in the
 tree, the tabs and Navigate for this skin.
+
+The card colours come from `styleCodeServerTab` in
+`plugins/c9.ide.theme.jett/plugin.js`, which writes the active tab's body
+colours to the pane as `--cs-pane-bg` and `--cs-pane-fg`.
+
+The Welcome page's rules (`less/parts/welcome.less`) are shared with the
+Code Server skins, which import the file; it uses only Cloud9's base theme
+variables.
 
 Other plugins have a few colours per skin in tables of their own (the
 terminal, the output, previews, the diff editors): search for `slate-dark`.

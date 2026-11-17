@@ -191,3 +191,121 @@
 }
 
 @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(359deg); }}
+/* ---- The current look ------------------------------------------------------
+ * For every skin: the window colour of the skin (the classic skins keep
+ * their pattern), a drawn mark and the name in the system's font in place
+ * of the bitmap logo, a ring for the spinner. The rules above stay for
+ * what they still set (positions); these override the rest. */
+
+#loadingcontainer {
+    background: #ECEEF2;
+    color: #2A2E36;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Ubuntu", sans-serif;
+}
+#loadingcontainer.dark {
+    background: #111318;
+    color: #C5CAD3;
+}
+#loadingcontainer.code-server-dark { background: #191A1B; }
+#loadingcontainer.code-server-light { background: #FAFAFD; }
+#loadingcontainer.flat-light,
+#loadingcontainer.light,
+#loadingcontainer.light-gray {
+    background: url(images/loadingbgrepeat.png);
+    background-size: 1px 8px;
+}
+#loadingcontainer.flat-dark,
+#loadingcontainer.dark-gray,
+
+#loadingcontainer.jett-dark {
+    background: url(images/loadingbgrepeat_dark.png);
+    background-size: 1px 8px;
+}
+#loadingcontainer.slate-dark { background: #111318; }
+
+#c9logo,
+.dark #c9logo {
+    background: none;
+    position: absolute;
+    top: 38%;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+#c9logo .mark {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: rgba(47, 111, 222, 0.14);
+    position: relative;
+}
+#c9logo .mark:after {
+    content: "";
+    position: absolute;
+    left: 11px;
+    top: 11px;
+    width: 30px;
+    height: 30px;
+    background: #2F6FDE;
+    -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/></svg>") center / 30px 30px no-repeat;
+    mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/></svg>") center / 30px 30px no-repeat;
+}
+.dark #c9logo .mark {
+    background: rgba(127, 174, 255, 0.14);
+}
+.dark #c9logo .mark:after {
+    background: #7FAEFF;
+}
+#c9logo .name {
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+#loadingide .cool-message,
+#loadingide.dark .cool-message,
+.dark #loadingide .cool-message {
+    top: 38%;
+    margin-top: 72px;
+    font-family: inherit;
+    font-size: 15px;
+    color: inherit;
+    opacity: 0.6;
+}
+#loadingide .status {
+    top: 38%;
+    margin-top: 120px;
+}
+@media screen and (max-height: 600px) {
+    #loadingide .cool-message {
+        top: 38%;
+        margin-top: 72px;
+    }
+    #loadingide .status {
+        top: 38%;
+        margin-top: 120px;
+    }
+}
+#loadingide .spinner {
+    background: none;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    box-sizing: border-box;
+    opacity: 0.6;
+    animation: rotation 0.8s infinite linear;
+}
+@media (prefers-reduced-motion: reduce) {
+    #loadingide .spinner {
+        animation: none;
+    }
+}

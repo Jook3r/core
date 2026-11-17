@@ -1,0 +1,131 @@
+/* @file plugins/c9.ide.theme.slate/less/parts/welcome.less */
+/*
+ * The Welcome page, for the Slate and the Code Server skins (the Code Server
+ * skins import this file too: it uses only Cloud9's base theme variables,
+ * which both map, and colours mixed from the text colour).
+ *
+ * The base page has a 155x103 bitmap of the old Cloud9 cloud, a 60px
+ * "Myriad Pro" heading and boxes drawn with white at fixed alphas for a
+ * dark background. Here: a drawn mark in the link (accent) colour, the
+ * heading in the interface's font, and tints of the text colour, so the
+ * page reads on the light and the dark variants alike.
+ */
+
+@welcome-tint: color-mix(in srgb, currentColor 6%, transparent);
+@welcome-tint-strong: color-mix(in srgb, currentColor 11%, transparent);
+@welcome-line: color-mix(in srgb, currentColor 14%, transparent);
+@welcome-radius: 10px;
+
+.welcome {
+    font-family: @general-font-family;
+    background-image: none;
+}
+
+/* ---- Mark and heading ---------------------------------------------------- */
+
+.welcome .welcome-logo {
+    left: 35px;
+    top: 36px;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: color-mix(in srgb, @welcome-highlight-color 14%, transparent);
+}
+.welcome .welcome-logo:after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    width: 28px;
+    height: 28px;
+    background: @welcome-highlight-color;
+    -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/></svg>") center / 28px 28px no-repeat;
+    mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/></svg>") center / 28px 28px no-repeat;
+}
+.welcome .welcome-heading {
+    left: 99px;
+    top: 36px;
+    font-family: inherit;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 48px;
+    letter-spacing: -0.01em;
+}
+.welcome .intro {
+    margin-top: 104px;
+    font-family: inherit;
+    font-size: 13px;
+    color: color-mix(in srgb, currentColor 80%, transparent);
+}
+
+/* ---- Section headings ---------------------------------------------------- */
+
+.welcome h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid @welcome-line;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+}
+
+/* ---- Presets ------------------------------------------------------------- */
+
+.welcome .preset_container .preset,
+.welcome .preset_container .preset:hover,
+.welcome .preset_container .preset.active {
+    border-radius: @welcome-radius;
+    border: 1px solid @welcome-line;
+    background-color: @welcome-tint;
+    transition: background-color 0.1s linear, border-color 0.1s linear;
+}
+.welcome .preset_container .preset:hover {
+    background-color: @welcome-tint-strong;
+}
+.welcome .preset_container .preset.active {
+    border-color: @welcome-highlight-color;
+    box-shadow: 0 0 0 1px @welcome-highlight-color;
+}
+.welcome .preset_container .preset label,
+.welcome .preset_container .preset:hover label,
+.welcome .preset_container .preset.active label {
+    bottom: -26px;
+    border-radius: 6px;
+    background: none;
+    opacity: 0.65;
+}
+.welcome .preset_container .preset.active label {
+    opacity: 1;
+    font-weight: 600;
+    /* the base puts a check.gif sprite here */
+    background-image: none;
+    padding-left: 1px;
+}
+
+/* ---- Side panel (guides and tips) ---------------------------------------- */
+
+.welcome .sidepanel {
+    padding-top: 36px;
+    border-left: 1px solid @welcome-line;
+    background: @welcome-tint;
+}
+.welcome .sidepanel h4 {
+    color: @welcome-highlight-color;
+    font-weight: 600;
+}
+
+/* ---- The note shown after choosing the Minimal Editor ------------------- */
+
+.welcome .switched {
+    background: @welcome-background;
+    color: @welcome-color;
+    border: 1px solid @welcome-line;
+    border-radius: @welcome-radius;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+.welcome .switched h2 {
+    color: @welcome-color;
+    font-size: 16px;
+    font-weight: 600;
+}

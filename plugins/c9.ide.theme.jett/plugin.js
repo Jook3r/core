@@ -313,6 +313,24 @@ define(function(require, exports, module) {
                 style.removeProperty("--cs-tab-bg");
                 style.removeProperty("--cs-tab-fg");
             }
+            // The same colours on the pane, as --cs-pane-bg and --cs-pane-fg:
+            // the Slate skins paint the whole card (tab strip and pills) in
+            // the colours of what its active tab shows, so any editor theme
+            // (Xcode, Monokai, ...) gets a card of its own colours.
+            var pane = tab.pane && tab.pane.aml && tab.pane.aml.$ext;
+            if (!pane) return;
+            var paneStyle = pane.style;
+            if (colors && colors.bg) {
+                paneStyle.setProperty("--cs-pane-bg", colors.bg);
+                if (colors.fg)
+                    paneStyle.setProperty("--cs-pane-fg", colors.fg);
+                else
+                    paneStyle.removeProperty("--cs-pane-fg");
+            }
+            else if (mode != "code-server") {
+                paneStyle.removeProperty("--cs-pane-bg");
+                paneStyle.removeProperty("--cs-pane-fg");
+            }
         }
         
         var aceTextColors = {};

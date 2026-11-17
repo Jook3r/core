@@ -43,7 +43,12 @@ const UI = {
     "search": "search", "play": "play", "eye": "eye", "folder": "folder", "file": "file",
     "panel-workspace": "files", "panel-navigate": "search", "panel-commands": "command",
     "panel-changes": "git-branch", "panel-outline": "list-tree", "panel-debugger": "bug",
-    "panel-collab": "users", "panel-test": "flask-conical"
+    "panel-collab": "users", "panel-test": "flask-conical",
+    "spinner": "loader-circle",
+    "dbg-resume": "play", "dbg-pause": "pause", "dbg-step-over": "redo-dot",
+    "dbg-step-into": "arrow-down-to-dot", "dbg-step-out": "arrow-up-from-dot",
+    "dbg-breakpoints": "circle-off", "dbg-exceptions": "octagon-pause",
+    "dbg-remove": "circle-x", "dbg-scripts": "file-code"
 };
 
 // ---- file types: class of the icon (the file's extension, or the name of a

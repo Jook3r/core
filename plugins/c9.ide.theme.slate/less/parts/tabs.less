@@ -4,7 +4,7 @@
  *
  * The strip (@sl-tabstrip-height) is part of its card and has the card's
  * colour. Every tab is a pill, @sl-tab-height high and centred in the strip:
- * the active one is filled (@sl-tab-active-bg) with the strong text colour,
+ * the active one is filled (@sl-pill-active) with the card's text colour,
  * the others show a fill on hover only. No line under or over a tab.
  * The close button (strong) carries the changed/saving/error/running states.
  * JS geometry: plusMargin / apf.tabRightDelta are set in plugin.js (GEOMETRY).
@@ -15,7 +15,18 @@
  * painted pill, inset @sl-tab-inset above and @sl-tab-gap left and right.
  */
 
-@sl-tab-text: @sl-fg-strong;
+/* The colours of the card: those of what its active tab shows, which
+   c9.ide.theme.jett/plugin.js writes to the pane as --cs-pane-bg and
+   --cs-pane-fg (the editor theme's, the terminal's, ...), the palette's
+   until it has. The pills and the text are mixed from the text colour, so
+   they read on any editor theme, light or dark. */
+@sl-pane-bg: var(--cs-pane-bg, @sl-card-bg);
+@sl-pane-fg: var(--cs-pane-fg, @sl-fg);
+@sl-pane-muted: color-mix(in srgb, @sl-pane-fg 62%, transparent);
+@sl-tab-text: @sl-pane-fg;
+@sl-pill-active: color-mix(in srgb, @sl-pane-fg 13%, transparent);
+@sl-pill-hover: color-mix(in srgb, @sl-pane-fg 7%, transparent);
+@sl-pill-pressed: color-mix(in srgb, @sl-pane-fg 18%, transparent);
 
 /* ---- Strip --------------------------------------------------------------- */
 
@@ -26,8 +37,8 @@
     border: 0;
     margin: 0;
     box-shadow: none;
-    background: @sl-tabstrip-bg;
-    color: @sl-fg;
+    background: @sl-pane-bg;
+    color: @sl-pane-fg;
     clip: auto;
     font-family: @sl-font-family;
     font-size: @sl-font-size-label;
@@ -88,7 +99,7 @@
     padding: 0 28px 0 @sl-space-10;
     border-radius: @sl-radius-tab;
     background-image: none;
-    color: @sl-fg-muted;
+    color: @sl-pane-muted;
     /* A tab that becomes active (a click, or its neighbour closing) takes
        its fill at once, like its shoulders, which cannot fade with it: a
        fade showed a grey cap between body-coloured shoulders for 0.1s.
@@ -96,10 +107,10 @@
     transition: none;
 }
 .session_btn:not(.curbtn) .tab_middle {
-    background-color: @sl-tab-pill-bg;
+    background-color: transparent;
 }
 .session_btn.over:not(.curbtn) .tab_middle {
-    background-color: @sl-tab-pill-hover-bg;
+    background-color: @sl-pill-hover;
 }
 
 /* Active: the same pill, filled. Cloud9's per-tab rule
@@ -112,7 +123,7 @@
 .has_apf .dark.session_btn.curbtn .tab_middle,
 .has_apf .console .session_btn.curbtn .tab_middle,
 .has_apf .console .dark.session_btn.curbtn .tab_middle {
-    background-color: @sl-tab-active-bg;
+    background-color: @sl-pill-active;
 }
 /* flat-light: .dark.session_btn.curbtn .tab_middle { margin-top: 3px !important }
    (a tab on a dark body would start below the others) */
@@ -145,7 +156,7 @@ body > .session_btn.curbtn .tab_middle {
     letter-spacing: 0;
     text-overflow: ellipsis;
     text-shadow: none;
-    color: @sl-fg-muted;
+    color: @sl-pane-muted;
 }
 /* Text colours. Each state also lists the ".btnclose ... .tab_middle" form:
    the geometry rule above needs that weight (flat-light sets margins with it),
@@ -157,12 +168,12 @@ body > .session_btn.curbtn .tab_middle {
    muted colour, never lighter than an inactive tab. */
 .session_btn.over .sessiontab_title,
 .session_btn.btnclose.over .tab_middle .sessiontab_title {
-    color: @sl-fg;
+    color: @sl-pane-fg;
 }
 .session_btn.curbtn .sessiontab_title,
 .session_btn.btnclose.curbtn .tab_middle .sessiontab_title,
 .dark.session_btn.curbtn .sessiontab_title {
-    color: @sl-fg-muted;
+    color: @sl-pane-muted;
     opacity: 1;
 }
 .focus.session_btn.curbtn .sessiontab_title,
@@ -216,7 +227,7 @@ body > .session_btn.curbtn .tab_middle {
     margin: 0;
     border-radius: 4px;
     background: none;
-    color: @sl-fg-muted;
+    color: @sl-pane-muted;
     animation: none;
 }
 /* base: .dark.session_btn.curbtn strong { margin-top: 1px !important } */
@@ -237,8 +248,8 @@ body > .session_btn.curbtn .tab_middle {
 }
 .has_apf .session_btn strong:hover,
 .has_apf .session_btn.curbtn strong:hover {
-    background-color: @sl-toolbar-hover-bg;
-    color: @sl-fg;
+    background-color: @sl-pill-hover;
+    color: @sl-pane-fg;
 }
 .session_btn.curbtn strong {
     color: @sl-tab-text;
@@ -284,33 +295,47 @@ body > .session_btn.curbtn .tab_middle {
     }
 }
 
-/* running / loading / connecting keep Cloud9's spinners */
+/* running / loading / connecting: a turning ring in place of the close
+   button (Cloud9 drew a sprite animation): the success colour for a
+   running process, the tab's muted colour while a file loads or a terminal
+   connects. Without motion it stands still. */
 .has_apf .session_btn.running strong,
 .has_apf .session_btn.loading strong,
 .has_apf .session_btn.connecting strong {
-    border-radius: 0;
+    background: none;
+    animation: none;
 }
 .has_apf .session_btn.running strong:before,
 .has_apf .session_btn.loading strong:before,
 .has_apf .session_btn.connecting strong:before {
-    display: none;
+    display: block;
+    opacity: 1;
+    -webkit-mask-image: @sl-icon-spinner;
+    mask-image: @sl-icon-spinner;
 }
-.has_apf .session_btn.running strong {
-    .image-2x(@pane-button-running-image, @pane-button-running-image-width, @pane-button-running-image-height, no-repeat);
-    width: @pane-button-running-width;
-    height: @pane-button-running-height;
-    right: @pane-button-running-right;
-    top: @pane-button-running-top;
-    animation: @pane-button-running-animation;
+.has_apf .session_btn.running strong:before {
+    color: @sl-success;
 }
-.has_apf .session_btn.loading strong,
-.has_apf .session_btn.connecting strong {
-    .image-2x(@pane-button-save-image, @pane-button-save-image-width, @pane-button-save-image-height, no-repeat);
-    width: @pane-button-save-width;
-    height: @pane-button-save-height;
-    right: @pane-button-save-right;
-    top: @pane-button-save-top;
-    animation: @pane-button-save-animation;
+@keyframes sl-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .has_apf .session_btn.running strong:before,
+    .has_apf .session_btn.loading strong:before,
+    .has_apf .session_btn.connecting strong:before {
+        animation: sl-spin 1s linear infinite;
+    }
+}
+/* on hover the close button comes back */
+.has_apf .session_btn.running strong:hover:before,
+.has_apf .session_btn.loading strong:hover:before,
+.has_apf .session_btn.connecting strong:hover:before {
+    color: @sl-pane-fg;
+    animation: none;
+    -webkit-mask-image: @sl-icon-close;
+    mask-image: @sl-icon-close;
 }
 
 /* ---- "+" and tab list buttons ------------------------------------------- */
@@ -324,7 +349,7 @@ body > .session_btn.curbtn .tab_middle {
     border-radius: @sl-radius-control;
     box-shadow: none;
     background: none;
-    color: @sl-fg-muted;
+    color: @sl-pane-muted;
     transform: none;
 }
 .has_apf .plus_tab_button {
@@ -357,16 +382,16 @@ body > .session_btn.curbtn .tab_middle {
 .has_apf .tabmenubtn.c9-simple-btnOver {
     border: 0;
     box-shadow: none;
-    background: @sl-toolbar-hover-bg;
-    color: @sl-fg;
+    background: @sl-pill-hover;
+    color: @sl-pane-fg;
 }
 .plus_tab_button.c9-simple-btnDown,
 .has_apf .tabmenubtn.c9-simple-btnDown {
     height: 22px;
     border: 0;
     box-shadow: none;
-    background: @sl-toolbar-active-bg;
-    color: @sl-fg;
+    background: @sl-pill-pressed;
+    color: @sl-pane-fg;
 }
 
 /* The tab list menu: a plain floating menu under its button */
@@ -402,22 +427,22 @@ body > .console > .hbox { /* maximised console: a full gutter */
     border-radius: @sl-radius-control;
     box-shadow: none;
     background: none;
-    color: @sl-fg-muted;
+    color: @sl-pane-muted;
 }
 .console > .hbox > .btn_consoleOver,
 .console > .hbox > .btn_consoleDown,
 .console > .hbox > .console_close_btn:hover {
     border: 0;
     box-shadow: none;
-    background: @sl-toolbar-hover-bg;
-    color: @sl-fg;
+    background: @sl-pill-hover;
+    color: @sl-pane-fg;
 }
 /* maximised: the button shows the restore glyph, not a pressed state */
 .console > .hbox > .btn_consoleChecked {
     background: none;
 }
 .console > .hbox > .btn_consoleChecked.btn_consoleOver {
-    background: @sl-toolbar-hover-bg;
+    background: @sl-pill-hover;
 }
 /* glyphs instead of the sprites */
 .console > .hbox > .btn_console div {

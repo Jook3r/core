@@ -203,6 +203,17 @@
 
 .ace_tree .heading {
     font-variant: normal;
+    /* the base is 16px small caps: without the small caps, a section
+       heading of the Changes panel was larger than anything around it */
+    font-size: @sl-font-size-small;
+    font-weight: @sl-font-weight-heading;
+    color: @sl-fg-muted;
+}
+/* ---- Changes panel ------------------------------------------------------- */
+/* its settings button (a menu with Refresh only) lay on the panel's own
+   Refresh button */
+.panel-bar .header-btn.panel-settings.changes {
+    display: none;
 }
 body .runner-form-header,
 .coverage-btn .title {
@@ -258,4 +269,54 @@ body .runner-form-header,
    border; the enabled item is already marked by its colour */
 .toolbar-top.bottom .c9-menu-btn {
     border-bottom: 0;
+}
+
+/* ---- Debugger: tool bar glyphs instead of the sprites --------------------- */
+/* The base skin draws each button with a sprite and moves it to the disabled
+   frame (-38px); here the glyph is a mask in the text colour, dimmed when
+   the button is disabled. Exceptions: muted when the debugger does not
+   pause on them (pause0), the warning colour on uncaught ones (pause1), the
+   error colour on all (pause2). */
+@sl-dbg-glyphs: play @sl-icon-dbg-resume, pause @sl-icon-dbg-pause,
+    step @sl-icon-dbg-step-over, stepinto @sl-icon-dbg-step-into,
+    stepback @sl-icon-dbg-step-out, toggle_breakpoints1 @sl-icon-dbg-breakpoints,
+    toggle_breakpoints2 @sl-icon-dbg-breakpoints, exception_break @sl-icon-dbg-exceptions,
+    remove_breakpoints @sl-icon-dbg-remove, scripts @sl-icon-dbg-scripts;
+.sl-dbg-glyph(@i: 1) when (@i =< length(@sl-dbg-glyphs)) {
+    @pair: extract(@sl-dbg-glyphs, @i);
+    @name: extract(@pair, 1);
+    @glyph: extract(@pair, 2);
+    .debugcontainer .c9-menu-btnIcon.@{name} .icon {
+        -webkit-mask-image: @glyph;
+        mask-image: @glyph;
+    }
+    .sl-dbg-glyph(@i + 1);
+}
+.debugcontainer .c9-menu-btnIcon .icon {
+    background-image: none !important; /* base sprite: !important */
+    background-color: currentColor;
+    -webkit-mask: @sl-icon-dbg-resume center / 16px 16px no-repeat;
+    mask: @sl-icon-dbg-resume center / 16px 16px no-repeat;
+}
+.sl-dbg-glyph();
+.debugcontainer .c9-menu-btnIcon {
+    color: @sl-fg;
+}
+.debugcontainer .c9-menu-btnIcon.c9-menu-btnDisabled {
+    color: @sl-fg-disabled;
+}
+.debugcontainer .play.c9-menu-btnIcon:not(.c9-menu-btnDisabled) {
+    color: @sl-success;
+}
+.debugcontainer .exception_break.pause0 {
+    color: @sl-fg-muted;
+}
+.debugcontainer .exception_break.pause1 {
+    color: @sl-warning;
+}
+.debugcontainer .exception_break.pause2 {
+    color: @sl-error;
+}
+.debugcontainer .toggle_breakpoints1 {
+    color: @sl-link;
 }

@@ -65,13 +65,13 @@ body > .basic.console.codeditorHolder {
     box-sizing: border-box;
     border: @sl-card-border-width solid @sl-card-border;
     border-radius: @sl-radius-card;
-    background-color: @sl-card-bg;
+    /* the colour of what the active tab shows (parts/tabs.less) */
+    background-color: var(--cs-pane-bg, @sl-card-bg);
     overflow: hidden;
 }
-/* the console card's body is the panel colour (VS Code panel.background),
-   the terminal's and the output's default background */
+/* the console card: the terminal's colour until its tab has said */
 .basic.console.codeditorHolder > .editor_tab {
-    background-color: @sl-terminal-bg;
+    background-color: var(--cs-pane-bg, @sl-terminal-bg);
 }
 /* the terminal container is height: 100% plus a 2px padding: keep it inside
    the card instead of overflowing its rounded bottom corners */

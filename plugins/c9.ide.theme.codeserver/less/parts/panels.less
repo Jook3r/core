@@ -167,6 +167,17 @@
 
 .ace_tree .heading {
     font-variant: normal;
+    /* the base is 16px small caps: without the small caps, a section
+       heading of the Changes panel was larger than anything around it */
+    font-size: @cs-font-size-small;
+    font-weight: @cs-font-weight-heading;
+    color: @cs-fg-muted;
+}
+/* ---- Changes panel ------------------------------------------------------- */
+/* its settings button (a menu with Refresh only) lay on the panel's own
+   Refresh button */
+.panel-bar .header-btn.panel-settings.changes {
+    display: none;
 }
 body .runner-form-header,
 .coverage-btn .title {
