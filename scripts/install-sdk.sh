@@ -79,6 +79,7 @@ updateNodeModules() {
     for name in $vendored; do
         [ -e "node_modules/$name" ] && mv "node_modules/$name" "$aside/$name"
     done
+    local lockBefore=$(cksum < package-lock.json)
     # package-lock.json has the version and the checksum of every package:
     # npm installs those, and replaces what an earlier install left
     if ! npm install --omit=dev --no-audit --no-fund; then
@@ -93,8 +94,8 @@ updateNodeModules() {
             exit 1
         fi
     done
-    if [ -e .git ] && ! git diff --quiet -- package-lock.json; then
-        echo "${yellow}npm changed package-lock.json (git diff package-lock.json)${resetColor}" >&2
+    if [ "$lockBefore" != "$(cksum < package-lock.json)" ]; then
+        echo "${yellow}npm changed package-lock.json: it did not match package.json${resetColor}" >&2
     fi
 
     if ! node -e 'require("node-pty")' 2>/dev/null; then

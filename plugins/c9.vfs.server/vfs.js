@@ -159,7 +159,10 @@ Vfs.prototype._createEngine = function(vfs, options) {
         pingInterval: 25000,
         transports: ["polling", "websocket"],
         allowUpgrades: true,
-        cookie: false
+        cookie: false,
+        // a message: up to 100 MB, as with engine.io 3 (6 would close the
+        // connection at 1 MB)
+        maxHttpBufferSize: 1e8
     });
     
     this.keepAliveTimer = null;

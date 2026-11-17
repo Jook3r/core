@@ -24,8 +24,8 @@ function main(options, imports, register) {
         if (loaded || options.disableUnpackagedClient) return false;
         loaded = true;
         
-        // the browser build of engine.io-client, without withCredentials;
-        // the package itself would only bring code for Node.js
+        // the browser build of engine.io-client (the package itself is
+        // not installed: Node.js is never the client)
         statics.addStatics([{
             path: __dirname + "/engine.io",
             mount: "/engine.io",

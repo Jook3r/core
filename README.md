@@ -52,7 +52,7 @@ commit the lockfile with it.
 yourself, run `git checkout HEAD -- node_modules` afterwards.
 
 The `overrides` in `package.json` move dependencies of old packages
-(engine.io 3, optimist, tern) to fixed versions. npm 9.2, Ubuntu's `npm`
+(optimist, tern) to fixed versions. npm 9.2, Ubuntu's `npm`
 package, fails on some forms of overrides: none for a file dependency, no
 `npm:` aliases, and `"."` set to `"$name"` for a direct dependency. `npm
 audit` reports no advisories.
