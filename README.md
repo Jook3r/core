@@ -39,19 +39,23 @@ To update the SDK to the latest version run:
     git pull
     scripts/install-sdk.sh
 
-`npm install` deletes the modules that are vendored in `node_modules`;
-`scripts/install-sdk.sh` checks them out again. If you run npm yourself, run
-`git checkout HEAD -- node_modules` afterwards.
+`package-lock.json` has the version and the checksum of every package, so
+every install gets the same ones. The four packages of Cloud9's own that
+are not on npm (emmet, nak, tern, tern_from_ts) are tarballs in `vendor/`:
+an install needs npm's registry and nothing else. After changing a
+dependency in `package.json`, run `npm install --package-lock-only` and
+commit the lockfile with it.
+
+`npm install` deletes the modules that are in git in `node_modules`
+(architect, kaefer, smith and others: they are not in `package.json`);
+`scripts/install-sdk.sh` sets them aside while npm runs. If you run npm
+yourself, run `git checkout HEAD -- node_modules` afterwards.
 
 The `overrides` in `package.json` move dependencies of old packages
-(connect 2.12, engine.io 3, optimist, tern) to fixed versions; npm applies
-them only to packages it installs, so `scripts/install-sdk.sh` reinstalls
-those (and puts them back if npm fails). npm 9.2, Ubuntu's `npm` package,
-fails on some forms of overrides: none for a git dependency, no `npm:`
-aliases, and `"."` set to `"$name"` for a direct dependency. `npm audit`
-then reports two advisories, both in parts of connect 2.12 that Cloud9
-doesn't load: the `methodOverride` middleware (XSS) and the multipart
-parser (multiparty; uploads use their own parser).
+(engine.io 3, optimist, tern) to fixed versions. npm 9.2, Ubuntu's `npm`
+package, fails on some forms of overrides: none for a file dependency, no
+`npm:` aliases, and `"."` set to `"$name"` for a direct dependency. `npm
+audit` reports no advisories.
 
 The packed client is minified with Terser. The client code and plugins can
 be written in current JavaScript (`const`, arrow functions, `async`,

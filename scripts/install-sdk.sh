@@ -56,42 +56,46 @@ checkDeps() {
 
 updateNodeModules() {
     echo "${magenta}--- Running npm install --------------------------------------------${resetColor}"
-    # npm applies the "overrides" of package.json only to what it installs,
-    # not to what an earlier install left: set the packages they are for
-    # aside (also where another package has its own copy) for npm to
-    # install them again, and put them back if npm fails
-    local aside=build/npm-aside name dir i=0
-    rm -rf "$aside"
-    mkdir -p "$aside"
-    for name in $(node -p 'Object.keys(require("./package.json").overrides || {}).join(" ")'); do
-        for dir in $(find node_modules -mindepth 1 -type d -path "*node_modules/$name" -prune 2>/dev/null); do
-            i=$((i + 1))
-            mkdir "$aside/$i"
-            echo "$dir" > "$aside/$i/path"
-            mv "$dir" "$aside/$i/package"
-        done
-    done
-    if ! npm install --omit=dev --no-audit --no-fund; then
-        for dir in "$aside"/*/; do
-            [ -f "$dir/path" ] && [ ! -e "$(cat "$dir/path")" ] && mv "$dir/package" "$(cat "$dir/path")"
-        done
-        rm -rf "$aside"
-        echo "${red}npm install failed; node_modules is as it was.${resetColor}" >&2
-        exit 1
-    fi
-    rm -rf "$aside"
-
-    # npm deletes the modules that are vendored in git (they are not in
-    # package.json), so check them out again
+    # The modules that are in git (they are not in package.json) would be
+    # deleted by npm: they wait aside, as they are, until it is done
+    local aside=build/npm-aside name vendored
     if [ -e .git ]; then
-        for i in $(git ls-tree --name-only HEAD node_modules/); do
-            [ -d "$i" ] || git checkout HEAD -- "$i"
-        done
+        vendored=$(git ls-tree --name-only HEAD node_modules/ | sed 's|^node_modules/||')
     else
-        echo "${yellow}Not a git checkout: can't restore the vendored modules in node_modules${resetColor}" >&2
+        vendored="amd-loader architect c9 connect-architect frontdoor kaefer msgpack-js smith treehugger"
+    fi
+    restoreVendored() {
+        for name in $vendored; do
+            if [ -e "$aside/$name" ]; then
+                rm -rf "node_modules/$name"
+                mv "$aside/$name" "node_modules/$name"
+            fi
+        done
+        rmdir "$aside" 2>/dev/null || true
+    }
+    # (an install that was interrupted left them there)
+    restoreVendored
+    mkdir -p "$aside"
+    for name in $vendored; do
+        [ -e "node_modules/$name" ] && mv "node_modules/$name" "$aside/$name"
+    done
+    # package-lock.json has the version and the checksum of every package:
+    # npm installs those, and replaces what an earlier install left
+    if ! npm install --omit=dev --no-audit --no-fund; then
+        restoreVendored
+        echo "${red}npm install failed.${resetColor}" >&2
         exit 1
     fi
-    rm -f package-lock.json
+    restoreVendored
+    for name in $vendored; do
+        if [ ! -e "node_modules/$name" ]; then
+            echo "${red}node_modules/$name is missing: restore it from git (git checkout HEAD -- node_modules/$name)${resetColor}" >&2
+            exit 1
+        fi
+    done
+    if [ -e .git ] && ! git diff --quiet -- package-lock.json; then
+        echo "${yellow}npm changed package-lock.json (git diff package-lock.json)${resetColor}" >&2
+    fi
 
     if ! node -e 'require("node-pty")' 2>/dev/null; then
         echo "${red}node-pty failed to build; the terminal won't work.${resetColor}" >&2
