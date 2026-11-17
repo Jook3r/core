@@ -18,6 +18,7 @@
  */
 
 var mime = require("mime");
+var onHeaders = require("on-headers");
 
 // No allow-same-origin: that is the point. No allow-top-navigation: a page
 // in the preview can't replace the IDE around it. The preview's frame has a
@@ -84,15 +85,9 @@ function middleware(options) {
         // in another way ("/./ide.html") gets the sandbox
         var pathname = String(req.url).split("?")[0];
 
-        // connect emits "header" right before the headers are written, from
-        // inside writeHead: before the status that was passed to it is set
-        var writeHead = res.writeHead;
-        res.writeHead = function(statusCode) {
-            if (typeof statusCode == "number")
-                this.statusCode = statusCode;
-            return writeHead.apply(this, arguments);
-        };
-        res.on("header", function() {
+        // right before the headers are written, when the status and the
+        // type are known (also those passed to writeHead)
+        onHeaders(res, function() {
             var add;
             try {
                 add = headers(pathname, res.statusCode, res.getHeader("Content-Type"), options);

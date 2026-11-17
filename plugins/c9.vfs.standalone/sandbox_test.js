@@ -185,7 +185,8 @@ describe(__filename, function() {
                 assert.equal(headers["content-security-policy"], sandbox.SANDBOX);
                 get("/nothing/here", function(status, headers) {
                     assert.equal(status, 404);
-                    assert.equal(headers["content-security-policy"], sandbox.SANDBOX);
+                    // next to the policy connect gives its own "not found"
+                    assert.equal(headers["content-security-policy"], "default-src 'none', " + sandbox.SANDBOX);
                     done();
                 });
             });

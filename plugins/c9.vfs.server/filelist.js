@@ -69,7 +69,7 @@ define(function(require, exports, module) {
                 var process = meta.process;
                 // once we receive data on stdout pipe it to the response        
                 process.stdout.once("data", function (data) {
-                    if (res.headerSent)
+                    if (res.headersSent)
                         return;
                         
                     res.writeHead(200, { "Content-Type": "text/plain" });
@@ -87,7 +87,7 @@ define(function(require, exports, module) {
                 });
                 
                 process.on("exit", function(code, signal) {
-                    if (res.headerSent)
+                    if (res.headersSent)
                         return;
                         
                     var err;

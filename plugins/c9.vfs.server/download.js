@@ -62,7 +62,7 @@ define(function(require, exports, module) {
                     
                     // once we receive data on stdout pipe it to the response
                     meta.stream.once("data", function(data) {
-                        if (res.headerSent)
+                        if (res.headersSent)
                             return;
                             
                         res.writeHead(200, {
@@ -74,7 +74,7 @@ define(function(require, exports, module) {
                     });
                     
                     meta.stream.once("close", function() {
-                        if (res.headerSent)
+                        if (res.headersSent)
                             return;
                             
                         res.writeHead(200, {
@@ -144,7 +144,7 @@ define(function(require, exports, module) {
 
                     // once we receive data on stdout pipe it to the response
                     proc.stdout.once("data", function (data) {
-                        if (res.headerSent)
+                        if (res.headersSent)
                             return;
                             
                         res.writeHead(200, {
@@ -161,7 +161,7 @@ define(function(require, exports, module) {
                     });
 
                     proc.on("exit", function(code, signal) {
-                        if (res.headerSent)
+                        if (res.headersSent)
                             return;
                             
                         var err;
