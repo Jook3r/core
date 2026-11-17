@@ -1,0 +1,88 @@
+/* @file plugins/c9.ide.theme.slate/less/parts/menus.less */
+/*
+ * Slate skins: menus, context menus, submenus
+ *
+ * Outer radius (@sl-radius-outer), @sl-shadow-lg, @sl-menu-* colours.
+ * Items: @sl-radius-control rows inside a 4px inset.
+ * Check/radio/arrow glyphs come from GIF sprites (@menu-item-*-background).
+ *
+ * The GIF check, radio and submenu-arrow sprites are replaced by masked
+ * glyphs in the text colour, so they follow the palette in both variants.
+ * The radius, border, shadow and colours of the menu box itself come from
+ * the @menu-* variables (palette.less).
+ */
+
+@sl-menu-item-height: 16px; /* + 2 x 4px padding = 24px rows */
+
+.c9menu {
+    padding: @sl-space-4 0;
+    margin-top: @sl-space-2;
+}
+.c9menu > div.menu_item {
+    height: @sl-menu-item-height;
+    margin: 0 @sl-space-4;
+    padding: 4px 24px 4px 28px;
+    line-height: @sl-menu-item-height;
+    border-radius: @sl-radius-control;
+}
+.c9menu > div.menu_item.hover {
+    background-color: @sl-menu-selection-bg;
+    color: @sl-menu-selection-fg;
+}
+.c9menu > div.menu_item.disabled {
+    color: @sl-fg-disabled;
+}
+/* keyboard shortcut */
+.c9menu > div.menu_item > span {
+    right: 12px;
+    padding-left: @sl-space-24;
+    color: @sl-fg-muted;
+}
+.c9menu > div.menu_item.disabled > span {
+    color: @sl-fg-disabled;
+}
+.c9menu > div.menu_divider {
+    margin: @sl-space-4 @sl-space-8;
+    border-top: 1px solid @sl-menu-separator;
+    border-bottom: 0;
+}
+
+/* submenu chevron */
+.c9menu > div.submenu > span,
+.c9menu > div.submenu.hover > span {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    right: 6px;
+    padding: 0;
+    color: @sl-fg-muted;
+    .cs-mask(@sl-icon-chevron-right, 14px);
+}
+.c9menu > div.submenu.hover > span {
+    color: @sl-fg;
+}
+
+/* check and radio marks */
+.c9menu > div.menu_item > u {
+    left: 8px;
+    margin-top: 0;
+}
+.c9menu > div.menu_item.checked > u,
+.c9menu > div.menu_item.checked:hover > u,
+.c9menu > div.menu_item.checked.disabled > u {
+    .cs-mask(@sl-icon-check, 14px);
+}
+.c9menu > div.menu_item.selected > u,
+.c9menu > div.menu_item.selected:hover > u,
+.c9menu > div.menu_item.selected.disabled > u {
+    .cs-mask(@sl-icon-circle, 16px);
+}
+.c9menu > div.menu_item.disabled > u {
+    opacity: 0.5;
+}
+
+/* the update item */
+.c9menu > div.menu_item.update {
+    background-color: @sl-menu-selection-bg;
+    font-weight: @sl-font-weight-heading;
+}

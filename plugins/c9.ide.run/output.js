@@ -55,7 +55,9 @@ define(function(require, exports, module) {
             // VS Code 2026 Dark/Light Output view: panel background, editor
             // foreground, editor.selectionBackground blended onto the background
             "code-server-dark": ["#191A1B", "#BBBEBF", "#255D74"],
-            "code-server-light": ["#FAFAFD", "#202020", "#BBD6F1"]
+            "code-server-light": ["#FAFAFD", "#202020", "#BBD6F1"],
+            "slate-dark": ["#1A1D23", "#C5CAD3", "#2B3A57"],
+            "slate-light": ["#FFFFFF", "#2A2E36", "#D6E2FB"]
         };
 
         handle.on("load", function() {
@@ -1077,7 +1079,7 @@ define(function(require, exports, module) {
                     var shade = util.shadeColor(bg, 0.75);
                     var skinName = settings.get("user/general/@skin");
                     // code-server skins paint the tab with the exact body colour, like flat
-                    var isFlat = ~skinName.indexOf("flat") || /^code-server-/.test(skinName);
+                    var isFlat = ~skinName.indexOf("flat") || /^(code-server|slate)-/.test(skinName);
                     var isLight = isFlat || shade.isLight;
                     doc.tab.backgroundColor = isLight ? bg : shade.color;
                     

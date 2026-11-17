@@ -1324,6 +1324,45 @@ async function main() {
         })(panels[i][0], panels[i][1]);
     }
 
+    await check("Slate skin: icons without a font or a bitmap, the accent colour, back to another skin", async function() {
+        var state = function() {
+            return page.evaluate(function() {
+                var icon = document.querySelector(".filetree .filetree-icon");
+                var before = icon && getComputedStyle(icon, ":before");
+                var mask = before ? before.maskImage || before.webkitMaskImage || "" : "";
+                return {
+                    skin: window.app.layout.theme,
+                    mask: mask.slice(0, 24),
+                    font: before && before.fontFamily,
+                    accent: document.documentElement.style.getPropertyValue("--sl-accent"),
+                    button: getComputedStyle(document.documentElement).getPropertyValue("--sl-accent-text"),
+                    editor: window.app.settings.get("user/ace/@theme")
+                };
+            });
+        };
+        var before = await page.evaluate(function() { return window.app.layout.theme; });
+        await page.evaluate(function() { window.app.layout.resetTheme("slate-light"); });
+        await until("the Slate Light skin", async function() {
+            var s = await state();
+            return s.skin == "slate-light" && /^url\("data:image\/svg/.test(s.mask) && s.accent == "#2F6FDE";
+        });
+        var light = await state();
+        assert.ok(!/c9/.test(light.font), "no icon font: " + light.font);
+        assert.equal(light.editor, "plugins/c9.ide.theme.slate/ace.themes/slate-light");
+        await page.evaluate(function() { window.app.settings.set("user/slate/@accent", "green"); });
+        await until("the green accent", async function() { return (await state()).accent == "#23803F"; });
+        await page.evaluate(function() {
+            window.app.settings.set("user/slate/@accent", "blue");
+            window.app.layout.resetTheme("flat-light");
+        });
+        await until("the Flat Light skin, without Slate's properties", async function() {
+            var s = await state();
+            return s.skin == "flat-light" && s.accent == "";
+        });
+        await page.evaluate(function(skin) { window.app.layout.resetTheme(skin); }, before);
+        await until("the skin of before", async function() { return (await state()).skin == before; });
+    });
+
     await check("no errors in the page", async function() {
         assert.deepEqual(pageErrors, []);
     });

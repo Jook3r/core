@@ -23,6 +23,9 @@ define(function(require, exports, module) {
         
         var plugin = new Plugin("Ajax.org", main.consumes);
         var emit = plugin.getEmitter();
+        // every skin and every plugin that has colours of its own listens
+        // for a change of theme
+        emit.setMaxListeners(100);
         
         var highResolution = c9.location.indexOf("2x=1") > -1;
         
@@ -228,9 +231,10 @@ define(function(require, exports, module) {
                 function() { // yes
                     ignoreTheme = true;
                     var current = settings.get("user/general/@skin") || "";
-                    // the code-server skins switch to their own other variant
-                    var theme = /^code-server-/.test(current)
-                        ? "code-server-" + kind
+                    // the code-server and Slate skins switch to their own other variant
+                    var family = /^(code-server|slate)-/.exec(current);
+                    var theme = family
+                        ? family[1] + "-" + kind
                         : { "dark": "dark", "light": "flat-light" }[kind];
                     settings.set("user/general/@skin", theme);
                     updateTheme(false, type);

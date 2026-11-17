@@ -1,0 +1,18 @@
+{
+    "name": "c9.ide.theme.slate",
+    "description": "Slate Dark and Slate Light: calm, rounded skins for Cloud9 with SVG icons, accent colours and an editor theme each",
+    "version": "0.1.0",
+    "author": "",
+    "contributors": [],
+    "repository": {
+        "type": "git",
+        "url": ""
+    },
+    "plugins": {
+        "plugin": {}
+    },
+    "categories": [
+        "core"
+    ],
+    "licenses": []
+}

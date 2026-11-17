@@ -47,7 +47,7 @@ define(function(require, exports, module) {
                     }
                     var skins = options.withSkins;
                     if (skins === true || skins === "all")
-                        skins = ["dark", "light", "dark-gray", "light-gray", "flat-light", "flat-dark", "jett-dark", "code-server-dark", "code-server-light"];
+                        skins = ["dark", "light", "dark-gray", "light-gray", "flat-light", "flat-dark", "jett-dark", "code-server-dark", "code-server-light", "slate-dark", "slate-light"];
                     else
                         skins = skins ? skins.split(/,\s*/) : [];
                     
@@ -192,7 +192,9 @@ define(function(require, exports, module) {
                 "plugins/c9.ide.ace.keymaps/sublime/keymap",
                 "plugins/c9.ide.theme.jett/ace.themes/jett",
                 "plugins/c9.ide.theme.codeserver/ace.themes/code-server-dark",
-                "plugins/c9.ide.theme.codeserver/ace.themes/code-server-light"
+                "plugins/c9.ide.theme.codeserver/ace.themes/code-server-light",
+                "plugins/c9.ide.theme.slate/ace.themes/slate-dark",
+                "plugins/c9.ide.theme.slate/ace.themes/slate-light"
             ];
             
             // FIXME: this could be resolved via pathConfig:

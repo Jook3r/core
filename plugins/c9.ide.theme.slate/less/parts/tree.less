@@ -1,0 +1,259 @@
+/* @file plugins/c9.ide.theme.slate/less/parts/tree.less */
+/*
+ * Slate skins: file tree, navigate, commands, outline lists
+ *
+ * Rows are 22px (@tree-row-height). JS reads row heights back from exact
+ * selectors such as ".filetree .tree-row" (lib_apf findCssRule): NEVER add a
+ * rule with such an exact selector unless it also carries the height; change
+ * heights through the base variables in palette.less. A broken case shows as
+ * 0 rows in the File > Save As tree.
+ * File icons come from icons.less (SVG masks).
+ *
+ * Every rule here therefore uses ".filetree.ace_tree .tree-row" (or longer),
+ * never the bare ".filetree .tree-row".
+ * VS Code Modern UI lists: 13px text, 22px rows inset 4px from the card
+ * edges, 4px row radius, list.hoverBackground on hover,
+ * list.inactiveSelectionBackground for the selection of an unfocused list and
+ * list.activeSelectionBackground plus a 1px list.focusOutline when focused.
+ */
+
+/* ---- File tree ----------------------------------------------------------- */
+
+.filetree.ace_tree {
+    font-family: @sl-font-family;
+    font-size: @sl-font-size;
+    -webkit-font-smoothing: antialiased;
+}
+.filetree.ace_tree .tree-row {
+    margin: 0 @sl-space-4;
+    padding-left: @sl-space-4;
+    border-radius: @sl-radius-control;
+    color: @sl-fg;
+}
+.filetree.ace_tree .tree-row.projectRoot:first-child {
+    margin-right: @tree-first-row-margin-right; /* room for the settings gear */
+}
+.filetree.ace_tree .tree-row:hover,
+.filetree.ace_tree .tree-row.hover {
+    background: @sl-list-hover-bg;
+}
+.filetree.ace_tree .tree-row.selected,
+.filetree.ace_tree .tree-row.selected:hover {
+    background: @sl-list-inactive-bg;
+    color: @sl-list-active-fg;
+}
+.filetree.ace_tree.ace_tree_focus .tree-row.selected,
+.filetree.ace_tree.ace_tree_focus.alternative .tree-row.selected {
+    background: @sl-list-active-bg;
+    box-shadow: inset 0 0 0 1px @sl-list-focus-outline;
+    color: @sl-list-active-fg;
+}
+
+/* The cells: indent, chevron, icon, caption.
+   The row is a flex line and every cell is a fixed 22px box centred on it.
+   The chevron and icon glyphs are blocks exactly one em tall (line-height =
+   font-size), placed at the middle of their cell by arithmetic, not by the
+   text baseline. So the glyphs sit on the row's centre line whatever the UI
+   font's metrics (Segoe UI, Inter, ...) are; only the caption's text uses
+   its font (see below). No cell shrinks (flex: none): the row lays out as
+   the inline-blocks did, and the cells keep their display (the Open Files
+   list hides its togglers, ".openfiles .ace_tree .toggler"). */
+.filetree.ace_tree .tree-row {
+    display: flex;
+    align-items: center;
+}
+.filetree.ace_tree .tree-row > * {
+    flex: none;
+}
+.filetree.ace_tree .tree-row > span {
+    padding: 0;
+    line-height: @tree-row-height;
+    height: @tree-row-height;
+}
+.filetree.ace_tree .tree-row > .tree-indent {
+    height: 0;
+}
+.filetree.ace_tree .tree-row .toggler,
+.filetree.ace_tree.ace_tree_focus .tree-row.selected .toggler {
+    width: 16px;
+    height: @tree-row-height;
+    margin: 0 @sl-space-2 0 0;
+    padding: 0;
+    text-align: center;
+    color: @sl-fg-muted;
+}
+/* the chevron: a 16px block at the middle of the cell */
+.filetree.ace_tree .tree-row .toggler:before,
+.filetree.ace_tree .tree-row .toggler.open:before,
+.filetree.ace_tree .tree-row .toggler.closed:before {
+    display: block;
+    top: ((@tree-row-height - 16px) / 2);
+    width: 16px;
+    height: 16px;
+}
+.filetree.ace_tree .tree-row:hover .toggler,
+.filetree.ace_tree .tree-row.selected .toggler {
+    color: @sl-fg;
+}
+/* One 16px box for every file and folder icon. The symlink / favourite
+   overlay keeps its icons.less place (a 12px image at 50% - 5px: 6px to
+   18px of the cell), so it sits at the bottom left of the icons' ink. */
+.filetree.ace_tree .tree-row .filetree-icon {
+    width: 16px;
+    height: @tree-row-height;
+    margin: 0 @sl-space-6 0 0;
+    line-height: @tree-row-height !important; /* icons.less sets 18px !important */
+}
+.filetree.ace_tree .tree-row .filetree-icon:before {
+    display: block;
+    position: relative;
+    top: ((@tree-row-height - 16px) / 2);
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 16px;
+    text-align: center;
+}
+/* the caption keeps its 22px box (the rename box copies it); its text has
+   its cap-height band centred in it (Chrome 133+), so the name's middle
+   meets the icons' whatever the font's ascent and descent are. Older
+   browsers centre the 22px line box by the font's own metrics. */
+.filetree.ace_tree .tree-row > .caption {
+    margin: 0;
+    text-box: trim-both cap alphabetic;
+    align-content: center;
+}
+.filetree.ace_tree .tree-row .extrainfo {
+    color: @sl-fg-muted;
+    font-size: @sl-font-size-small;
+}
+
+/* rename box */
+.filetree.ace_tree .ace_tree-editor {
+    border: 1px solid @sl-focus-solid;
+    border-radius: @sl-radius-control;
+    box-shadow: none;
+}
+
+/* drag and drop */
+.dragOver.filetree.ace_tree .tree-row.dropTarget {
+    background: @sl-list-hover-bg;
+    box-shadow: inset 0 0 0 1px @sl-list-focus-outline;
+    border-radius: @sl-radius-control;
+}
+
+/* the Save As / Open dialogs use the same tree inside a bordered well */
+.bk-window .filetree.ace_tree {
+    border-radius: @sl-radius-control;
+}
+
+/* ---- Navigate and commands result lists --------------------------------- */
+
+.searchresults.ace_tree {
+    font-family: @sl-font-family !important; /* base: !important */
+}
+.searchresults .item,
+.searchresults .item.selected {
+    margin: 1px 0;
+    padding: 3px 6px 4px;
+    border-radius: @sl-radius-control;
+    color: @sl-fg;
+}
+.searchresults .item:not(.selected):hover,
+.searchresults .item:not(.selected).hover {
+    background: @sl-list-hover-bg;
+    color: @sl-fg;
+}
+.searchresults .item.selected {
+    background: @sl-list-active-bg;
+}
+.searchresults .item > span {
+    padding: 1px 2px 0;
+    font-size: @sl-font-size;
+    font-weight: @sl-font-weight;
+}
+.searchresults .item.selected span {
+    color: @sl-list-active-fg;
+}
+.searchresults .item .path,
+.searchresults .item.selected .path {
+    font-size: @sl-font-size-small;
+    color: @sl-fg-muted;
+}
+.searchresults .item span strong,
+.searchresults .item.selected span strong {
+    color: @sl-highlight-fg;
+    font-weight: @sl-font-weight-heading;
+}
+.searchresults .item .keys {
+    color: @sl-fg-muted;
+    font-size: @sl-font-size-label;
+}
+.searchresults .message {
+    color: @sl-fg-muted;
+    font-size: @sl-font-size-label;
+}
+/* Navigate: the icon glyph is the :before of the name's span. As in the
+   tree: the glyph gets a 16px box over the name's whole 18px line (the
+   line-height icons.less sets with !important), so it is centred on the
+   line, and the name has its cap-height band centred on the same line
+   (Chrome 133+), whatever the font. Every name starts at the same x. */
+.searchresults .item > span.filetree-icon {
+    position: relative;
+    width: auto;
+    height: 18px;
+    padding-left: (@sl-space-2 + 16px + @sl-space-6);
+    text-box: trim-both cap alphabetic;
+    align-content: center;
+}
+div.navigate-list span.filetree-icon:before {
+    position: absolute;
+    top: 1px;      /* the span's padding-top (.searchresults .item > span) */
+    left: @sl-space-2;
+    width: 16px;
+    height: 18px;
+    padding-right: 0;
+    font-size: 16px;
+    line-height: 18px;
+    text-align: center;
+}
+
+/* ---- Outline and other ace_tree lists ----------------------------------- */
+
+.outline.ace_tree,
+.ace_tree.outline {
+    font-family: @sl-font-family;
+    font-size: @sl-font-size-label;
+}
+
+/* ---- Chevrons of every tree, and of the debugger's sections -------------- */
+/* (the base skin draws them from a sprite) */
+.ace_tree .toggler,
+.filetree .tree-row .toggler,
+.frame .buttons div.min {
+    background: none !important;
+    text-align: center;
+    cursor: pointer;
+}
+.ace_tree .toggler:before,
+.frame .buttons div.min:before {
+    content: "";
+    display: inline-block;
+    position: relative;
+    width: 14px;
+    height: 14px;
+    vertical-align: middle;
+    .cs-mask(@sl-icon-chevron-down, 14px);
+}
+.ace_tree .toggler.closed:before,
+.frame.frameMin .buttons div.min:before {
+    -webkit-mask-image: @sl-icon-chevron-right;
+    mask-image: @sl-icon-chevron-right;
+}
+.ace_tree .toggler.empty:before,
+.filetree .tree-row .toggler:not(.open):not(.closed):before {
+    display: none;
+}
+.filetree .loading .filetree-icon:before {
+    animation: flash 2s ease infinite;
+}

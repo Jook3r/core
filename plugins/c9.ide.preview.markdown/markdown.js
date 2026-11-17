@@ -41,7 +41,9 @@ define(function(require, exports, module) {
             "dark": "rgba(255, 255, 255, 0.88)",
             "dark-gray": "rgba(255, 255, 255, 0.88)",
             "code-server-dark": "rgba(255, 255, 255, 0.88)",
-            "code-server-light": "rgb(255,255,255)"
+            "code-server-light": "rgb(255,255,255)",
+            "slate-dark": "rgba(255, 255, 255, 0.88)",
+            "slate-light": "rgb(255,255,255)"
         };
         
         var counter = 0;

@@ -31,13 +31,14 @@ define(function(require, exports, module) {
         var emit = plugin.getEmitter();
 
         var themeEnabled = false;
-        // "jett" for jett-dark, "code-server" for the code-server skins,
-        // which reuse the file icons and the active tab colouring
+        // "jett" for jett-dark, "code-server" for the code-server and Slate
+        // skins, which reuse the file icon classes (Slate draws its own
+        // icons for them) and the active tab's custom properties
         var mode = null;
         
         function getMode(theme) {
             if (theme == "jett-dark") return "jett";
-            if (/^code-server-/.test(theme || "")) return "code-server";
+            if (/^(code-server|slate)-/.test(theme || "")) return "code-server";
             return null;
         }
 

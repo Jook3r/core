@@ -44,7 +44,9 @@ define(function(require, exports, module) {
             "dark": "#203947",
             "dark-gray": "#203947",
             "code-server-dark": "#121314",
-            "code-server-light": "#FFFFFF"
+            "code-server-light": "#FFFFFF",
+            "slate-dark": "#1A1D23",
+            "slate-light": "#FFFFFF"
         };
         
         var loaded = false;
@@ -211,7 +213,9 @@ define(function(require, exports, module) {
                                 { caption: "Cloud9 Flat Light Theme", value: "flat-light" },
                                 // { caption: "Cloud9 Flat Dark Theme", value: "flat-dark" }
                                 { caption: "Code Server Light Theme", value: "code-server-light" },
-                                { caption: "Code Server Dark Theme", value: "code-server-dark" }
+                                { caption: "Code Server Dark Theme", value: "code-server-dark" },
+                                { caption: "Slate Light Theme", value: "slate-light" },
+                                { caption: "Slate Dark Theme", value: "slate-dark" }
                             ],
                             position: 100
                         },
@@ -328,7 +332,7 @@ define(function(require, exports, module) {
                 var tab = doc.tab;
                 
                 function setTheme(e) {
-                    var isDark = e.theme == "dark" || e.theme == "code-server-dark";
+                    var isDark = e.theme == "dark" || e.theme == "code-server-dark" || e.theme == "slate-dark";
                     var backgroundColor = defaults[e.theme];
                     if (!backgroundColor) return;
                     tab.backgroundColor = backgroundColor;

@@ -125,6 +125,17 @@ the line numbers for Revert Change and Show Git Blame. The Changes panel
 shows the current branch: click it to switch branches or create one
 ([plugins/c9.ide.scm](plugins/c9.ide.scm/README.md)).
 
+#### Themes ####
+
+A new installation starts with the Slate Dark skin: cards on a dark window,
+tabs as pills, SVG icons with the mark of each file's language, and an
+editor theme and terminal colours of the same palette. Slate Light is its
+light variant. Preferences > Themes has them next to the older skins (Flat,
+Code Server, Jett, Classic); Preferences > User Settings > User Interface
+has the accent colour, following the system's dark mode, and the size of
+the interface's text ([plugins/c9.ide.theme.slate](plugins/c9.ide.theme.slate/README.md)).
+A skin chosen in the preferences before stays.
+
 #### Other folders ####
 
 `/ide.html?w=/path/to/folder` opens the IDE with another folder than the
@@ -194,7 +205,7 @@ this fork are listed there and left out) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
 `c9 open`, the Welcome page, the language server, the Python debugger (skipped without debugpy),
-the previews' sandbox, a file changed on disk,
+the previews' sandbox, a file changed on disk, the Slate skin,
 another folder as the
 workspace, the Claude Code IDE bridge, an inline edit, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).

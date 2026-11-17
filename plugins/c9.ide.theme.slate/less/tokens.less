@@ -1,0 +1,80 @@
+/*
+ * Slate skins: design tokens shared by both variants
+ * (radius tiers, spacing, sizes, shadows, type). Colours live in the palettes.
+ */
+
+/* Type */
+@sl-font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", system-ui, "Ubuntu", "Droid Sans", sans-serif;
+/* the size is a custom property that plugin.js sets from the preferences
+   (11 to 16px); the two smaller sizes follow it */
+@sl-font-size: ~"var(--sl-font-size, 13px)";                      // body
+@sl-font-size-label: ~"calc(var(--sl-font-size, 13px) - 1px)";    // labels, tabs
+@sl-font-size-small: ~"calc(var(--sl-font-size, 13px) - 2px)";
+@sl-font-weight: 400;
+@sl-font-weight-heading: 600;
+
+/* Radius tiers */
+@sl-radius-control: 6px;      // inputs, buttons, dropdown fields, rows, toolbar buttons, scrollbar thumbs, find toggles
+@sl-radius-checkbox: 4px;
+@sl-radius-outer: 10px;        // menus, dropdown popups, dialogs, error bar, autocomplete, tooltips, floating widgets
+@sl-radius-card: 10px;         // side panel, editor panes, console, right panels
+@sl-radius-badge: 999px;      // fully round
+@sl-radius-tab: 6px;          // tab pills
+
+/* Spacing scale */
+@sl-space-0: 0;
+@sl-space-2: 2px;
+@sl-space-4: 4px;
+@sl-space-6: 6px;
+@sl-space-8: 8px;
+@sl-space-10: 10px;
+@sl-space-12: 12px;
+@sl-space-16: 16px;
+@sl-space-20: 20px;
+@sl-space-24: 24px;
+@sl-space-28: 28px;
+@sl-space-32: 32px;
+
+/* Layout sizes */
+@sl-gutter: 6px;              // gap between cards and to the window edges
+@sl-card-border-width: 1px;
+@sl-row-height: 22px;         // list and tree rows (change heights only through the base variables, see palette.less)
+@sl-tabstrip-height: 36px;    // tab strip
+@sl-tab-height: 26px;         // painted height of a tab pill
+@sl-tab-inset: ((@sl-tabstrip-height - @sl-tab-height) / 2); // above and below a pill
+@sl-tab-gap: 1px;             // left and right of a pill (2px between two)
+
+/* Shadows */
+@sl-shadow-sm: 0 0 4px @sl-shadow-color-sm;
+@sl-shadow-md: 0 0 6px @sl-shadow-color-md;
+@sl-shadow-lg: 0 0 12px @sl-shadow-color-lg;   // menus, dropdowns, popups
+@sl-shadow-xl: 0 0 20px @sl-shadow-color-xl;   // dialogs
+
+/* Motion */
+@sl-ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+@sl-duration-fast: 0.1s;
+@sl-duration: 0.2s;
+
+/* Glyphs: simple 16x16 SVG shapes, painted as masks over currentColor
+   (background-color) so they follow the palette; drawn for this skin. */
+@sl-svg-head: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'>";
+@sl-icon-close: url("@{sl-svg-head}<path d='M4.5 4.5l7 7M11.5 4.5l-7 7'/></svg>");
+@sl-icon-plus: url("@{sl-svg-head}<path d='M8 3.5v9M3.5 8h9'/></svg>");
+@sl-icon-chevron-down: url("@{sl-svg-head}<path d='M4.5 6.5L8 10l3.5-3.5'/></svg>");
+@sl-icon-chevron-right: url("@{sl-svg-head}<path d='M6.5 4.5L10 8l-3.5 3.5'/></svg>");
+@sl-icon-chevron-up: url("@{sl-svg-head}<path d='M4.5 9.5L8 6l3.5 3.5'/></svg>");
+@sl-icon-check: url("@{sl-svg-head}<path d='M3.5 8.5l3 3 6-7' stroke-width='1.5'/></svg>");
+@sl-icon-list: url("@{sl-svg-head}<path d='M3 4.5h10M3 8h10M3 11.5h10'/></svg>");
+@sl-icon-json: url("@{sl-svg-head}<path d='M6.75 3h-.5C5.1 3 4.75 3.6 4.75 4.75V6.5c0 .9-.55 1.4-1.75 1.5 1.2.1 1.75.6 1.75 1.5v1.75c0 1.15.35 1.75 1.5 1.75h.5M9.25 3h.5c1.15 0 1.5.6 1.5 1.75V6.5c0 .9.55 1.4 1.75 1.5-1.2.1-1.75.6-1.75 1.5v1.75c0 1.15-.35 1.75-1.5 1.75h-.5' stroke-width='1.5'/></svg>");
+@sl-icon-dot: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='4' fill='black'/></svg>");
+@sl-icon-circle: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='3' fill='black'/></svg>");
+@sl-icon-maximize: url("@{sl-svg-head}<rect x='3.5' y='3.5' width='9' height='9' rx='1.5'/></svg>");
+@sl-icon-restore: url("@{sl-svg-head}<rect x='3.5' y='5.5' width='7' height='7' rx='1.5'/><path d='M5.5 3.5h5.5a1.5 1.5 0 0 1 1.5 1.5v5.5'/></svg>");
+@sl-icon-gear: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.2'><circle cx='8' cy='8' r='2'/><path d='M8 1.8l1.1 1.6 1.9-.5.4 1.9 1.8.8-.6 1.8 1.2 1.6-1.6 1.1.2 1.9-1.9.2-.8 1.8-1.7-.8L8 14.2l-1.1-1.6-1.9.5-.4-1.9-1.8-.8.6-1.8L2.2 7l1.6-1.1-.2-1.9 1.9-.2.8-1.8 1.7.8z' stroke-linejoin='round'/></svg>");
+
+/* .cs-mask(@icon, @size): paint a glyph in the current text colour */
+.cs-mask(@icon; @size: 16px) {
+    background: currentColor;
+    -webkit-mask: @icon center / @size @size no-repeat;
+    mask: @icon center / @size @size no-repeat;
+}

@@ -67,7 +67,10 @@ define(function(require, exports, module) {
             // terminal.foreground, terminal.selectionBackground blended onto
             // the background (#3994BC33 / #0069CC26)
             "code-server-dark": ["#191A1B", "#CCCCCC", "#1F323B", true],
-            "code-server-light": ["#FAFAFD", "#3B3B3B", "#D5E4F6", false]
+            "code-server-light": ["#FAFAFD", "#3B3B3B", "#D5E4F6", false],
+            // Slate skins: the card colour, the text colour, the accent blended in
+            "slate-dark": ["#1A1D23", "#C5CAD3", "#2B3A57", true],
+            "slate-light": ["#FFFFFF", "#2A2E36", "#D6E2FB", false]
         };
 
         // ANSI colours 0-15 for the code-server skins' default backgrounds:
@@ -85,6 +88,19 @@ define(function(require, exports, module) {
                 "#0451a5", "#bc05bc", "#0598bc", "#555555",
                 "#666666", "#f14c4c", "#14ce14", "#b5ba00",
                 "#3b8eea", "#d670d6", "#29b8db", "#a5a5a5"
+            ],
+            // Slate Dark and Slate Light: the colours of their editor themes
+            "#1a1d23": [
+                "#2b303a", "#e0707c", "#8fc78a", "#dcb46c",
+                "#6c9ef8", "#b890f0", "#5fc0c8", "#c5cad3",
+                "#5d6573", "#f08c96", "#a6d9a1", "#ecc98a",
+                "#8fb6fb", "#ccabf6", "#84d5dc", "#e6e9ef"
+            ],
+            "#ffffff": [
+                "#2a2e36", "#c93a48", "#2f8f46", "#a66d00",
+                "#2f6fde", "#8a4fd0", "#1787a0", "#6a7280",
+                "#8a919c", "#de5360", "#3aa856", "#bf8200",
+                "#4c88f0", "#a26be0", "#22a0bc", "#aeb4bf"
             ]
         };
 
@@ -258,7 +274,7 @@ define(function(require, exports, module) {
                       '#BBBBBB' // light grey
                     ];
                 }
-                else if (/^code-server-/.test(settings.get("user/general/@skin"))
+                else if (/^(code-server|slate)-/.test(settings.get("user/general/@skin"))
                     && ansiColors[String(bcolor).toLowerCase()]) {
                     // a copy: libterm appends the 240 extended colours to
                     // the array it is given and keeps it
@@ -1015,7 +1031,7 @@ define(function(require, exports, module) {
                     var shade = util.shadeColor(bg, 0.75);
                     var skinName = settings.get("user/general/@skin");
                     // code-server skins paint the tab with the exact body colour, like flat
-                    var isFlat = ~skinName.indexOf("flat") || /^code-server-/.test(skinName);
+                    var isFlat = ~skinName.indexOf("flat") || /^(code-server|slate)-/.test(skinName);
                     var isLight = isFlat || shade.isLight;
                     doc.tab.backgroundColor = isLight ? bg : shade.color;
                     

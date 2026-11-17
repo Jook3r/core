@@ -118,6 +118,24 @@ define(function(require, exports, module) {
                 },
                 {
                     type: "custom",
+                    title: "Slate Theme",
+                    position: 1,
+                    node: new ui.hsplitbox({
+                        height: 49,
+                        edge: "10 10 10 10",
+                        style: "white-space:nowrap",
+                        childNodes: [
+                            new ui.label({ 
+                                width: 150, 
+                                caption: "Slate Theme:", 
+                                style: "padding-top:5px" 
+                            }),
+                            themeContainers.slate = new ui.bar({})
+                        ]
+                    })
+                },
+                {
+                    type: "custom",
                     title: "Code Server Theme",
                     position: 1,
                     node: new ui.hsplitbox({
@@ -201,6 +219,7 @@ define(function(require, exports, module) {
             var setTheme = function(e) {
                 [].concat(
                     themeContainers.flat.childNodes,
+                    themeContainers.slate.childNodes,
                     themeContainers["code-server"].childNodes,
                     themeContainers.classic.childNodes
                 ).some(function(rb) {
@@ -246,11 +265,15 @@ define(function(require, exports, module) {
             themeContainers["code-server"].childNodes.slice().forEach(function(n) {
                 n.remove();
             });
+            themeContainers.slate.childNodes.slice().forEach(function(n) {
+                n.remove();
+            });
             
             themes.forEach(function(theme) {
                 if (theme.hidden) return;
                 var container = theme.group == "flat" ? themeContainers.flat
                     : theme.group == "code-server" ? themeContainers["code-server"]
+                    : theme.group == "slate" ? themeContainers.slate
                     : themeContainers.classic;
                 container.appendChild(
                     new ui.radiobutton({

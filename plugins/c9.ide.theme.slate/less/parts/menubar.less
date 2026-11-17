@@ -1,0 +1,197 @@
+/* @file plugins/c9.ide.theme.slate/less/parts/menubar.less */
+/*
+ * Slate skins: menu bar and its toolbar buttons
+ *
+ * Height comes from JS (plugin.js GEOMETRY.menuHeight) and @menu-bar-height.
+ * .c9-mbar-cont clips overflow: its children must stay inline/inline-flex
+ * (display:flex pushes Preview/Run out of view).
+ * The menu underline animation is in animations.less.
+ *
+ * VS Code title bar feel: the bar is the window background with no edge
+ * line; the Cloud9 menus, Preview and Run stay inline where they are, each a
+ * @sl-menu-pill high pill with the control radius, centred in the bar, filled
+ * with menubar.selectionBackground on hover and while its menu is open.
+ * The buttons keep their full-height boxes (apf sizes them); the pills are
+ * made with margins inside the bar.
+ */
+
+@sl-menu-pill: 26px;
+@sl-menu-pill-top: ((@menu-bar-height + 1px - @sl-menu-pill) / 2); // bar = @menu-bar-height + 1px border
+
+.c9-menu-bar .c9-mbar-cont {
+    border-bottom-color: transparent;
+    box-shadow: none;
+}
+
+/* ---- Menu buttons -------------------------------------------------------- */
+
+.c9-menu-bar .menubar .c9-menu-btn,
+.c9-menu-bar .menubar .c9-menu-btnDown {
+    top: @sl-menu-pill-top; /* apf sets an inline margin: 0 */
+    height: @sl-menu-pill;
+    padding: 0 @sl-space-8;
+    border: 0;
+    border-radius: @sl-radius-control;
+    vertical-align: top;
+    line-height: @sl-menu-pill;
+    font-size: @sl-font-size;
+    color: @sl-fg;
+    transition: background-color @sl-duration-fast linear;
+}
+.c9-menu-bar .menubar .c9-menu-btnOver,
+.c9-menu-bar .menubar .c9-menu-btnDown {
+    background-color: @sl-menubar-selection-bg;
+    color: @sl-fg;
+    box-shadow: none;
+}
+.c9-menu-bar .menubar .c9-menu-btn.c9btn {
+    margin-right: @sl-space-4;
+    font-weight: @sl-font-weight-heading;
+    color: @sl-fg-strong;
+}
+.c9-menu-bar .menubar .c9-menu-btnDisabled.c9-menu-btn {
+    color: @sl-fg-disabled;
+}
+
+/* Preferences gear (right end): a 16px glyph in a pill */
+.c9-menu-bar .c9-menu-btn.preferences {
+    height: @sl-menu-pill;
+    width: @sl-menu-pill + 2;
+    top: @sl-menu-pill-top;
+    padding: 0 !important; /* base: 18px !important */
+    border: 0;
+    border-radius: @sl-radius-control;
+    vertical-align: top;
+    color: @sl-fg-muted;
+}
+.c9-menu-bar .c9-menu-btn.preferences .icon {
+    left: 0;
+    right: 0;
+    top: 0 !important;      /* base: 7px !important */
+    bottom: 0;
+    height: auto !important; /* base: 25px !important */
+    .cs-mask(@sl-icon-gear, 16px);
+}
+.c9-menu-bar .c9-menu-btn.preferences.c9-menu-btnOver,
+.c9-menu-bar .c9-menu-btn.preferences.c9-menu-btnDown {
+    background-color: @sl-menubar-selection-bg;
+    color: @sl-fg;
+}
+
+/* Minimize chevron (top left) */
+.c9-menu-bar .c9-mbar-bcont .c9-mbar-minimize {
+    width: 28px;
+}
+.c9-menu-bar .c9-mbar-bcont .c9-mbar-minimize:before {
+    position: absolute;
+    left: 6px;
+    top: (@menu-bar-height - 16px) / 2;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    color: @sl-fg-muted;
+    .cs-mask(@sl-icon-chevron-up, 14px);
+}
+.c9-menu-bar .c9-mbar-bcont .c9-mbar-minimize:hover:before {
+    border: 0;
+    box-shadow: none;
+    color: @sl-fg;
+}
+.c9-menu-bar .c9-mbar-bcont .c9-mbar-minimize:after,
+.c9-menu-bar .c9-mbar-bcont .c9-mbar-minimize:hover:after {
+    display: none;
+}
+/* minimized: a thin strip of window background */
+.c9-menu-bar.minimized .c9-mbar-cont,
+.c9-menu-bar.minimized .c9-mbar-bcont .c9-mbar-minimize {
+    background-image: none;
+    box-shadow: none;
+}
+.c9-menu-bar.minimized .c9-mbar-cont:hover,
+.c9-menu-bar.minimized .c9-mbar-bcont .c9-mbar-minimize:hover {
+    background-image: none;
+    background-color: @sl-menubar-selection-bg;
+    box-shadow: none;
+}
+.c9-menu-bar.minimized .c9-mbar-bcont .c9-mbar-minimize:before {
+    display: none;
+}
+
+/* ---- Preview / Run ------------------------------------------------------- */
+
+.c9-menu-bar .c9-mbar-cont .c9-divider-double {
+    visibility: hidden;
+}
+.bartools .c9-toolbarbutton-glossy {
+    height: @sl-menu-pill;
+    margin: @sl-menu-pill-top 0 0 @sl-space-2;
+    padding: 0 @sl-space-8;
+    border: 0;
+    border-radius: @sl-radius-control;
+    vertical-align: top;
+    box-shadow: none;
+    color: @sl-fg;
+    transition: background-color @sl-duration-fast linear;
+}
+.bartools .c9-toolbarbutton-glossyIcon {
+    padding-left: @sl-space-8;
+}
+.bartools .c9-toolbarbutton-glossy .c9-label {
+    height: @sl-menu-pill;
+    margin: 0;
+    padding: 0 @sl-space-2;
+    line-height: @sl-menu-pill;
+    font-size: @sl-font-size;
+    color: @sl-fg;
+    text-shadow: none;
+}
+.bartools .c9-toolbarbutton-glossyIcon .c9-label {
+    padding-left: 22px;
+}
+.bartools .c9-toolbarbutton-glossy .c9-icon,
+.bartools .c9-toolbarbutton-glossyIcon .c9-icon {
+    margin: 0;
+    top: (@sl-menu-pill - 20px) / 2;
+    left: @sl-space-4;
+}
+.bartools .c9-toolbarbutton-glossyOver,
+.bartools .c9-toolbarbutton-glossyDown,
+.bartools .c9-toolbarbutton-glossymenuDown {
+    border: 0;
+    box-shadow: none;
+    background: @sl-menubar-selection-bg;
+}
+.bartools .c9-toolbarbutton-glossyDisabled .c9-label {
+    color: @sl-fg-disabled;
+}
+
+/* Jett's hover underline (animations.less) sits inside the pill */
+.c9-menu-bar .menubar .c9-menu-btn:after {
+    left: @sl-space-8;  /* the label's padding on both sides */
+    right: @sl-space-8;
+    width: auto;
+    bottom: 3px;
+    background-color: @sl-fg-muted;
+}
+.c9-menu-bar .c9-menu-btn.preferences:after {
+    display: none;
+}
+
+/* ---- Run / Stop: glyphs instead of the sprites --------------------------- */
+
+.bartools .runbtn .c9-icon,
+.runbtn.stopped .c9-icon,
+.runbtn.running .c9-icon {
+    width: 20px;
+    height: 20px;
+    color: @sl-success;
+    .cs-mask(@sl-icon-run, 16px);
+    background-image: none !important; /* base sprite: !important */
+}
+.runbtn.running .c9-icon {
+    color: @sl-error;
+    -webkit-mask-image: @sl-icon-stop;
+    mask-image: @sl-icon-stop;
+}

@@ -440,7 +440,7 @@ define(function(require, exports, module) {
             var button = plugin.button;
             if (!button || !button.$ext) return;
             var skin = layout.theme || settings.get("user/general/@skin") || "";
-            var glyph = /^(jett|code-server)/.test(skin);
+            var glyph = /^(jett|code-server|slate)/.test(skin);
             if (glyph) button.$ext.classList.add("agent-glyph");
             else button.$ext.classList.remove("agent-glyph");
         }

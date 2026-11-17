@@ -102,6 +102,8 @@
             "jett-dark": "plugins/c9.ide.theme.jett/ace.themes/jett",
             "code-server-dark": "plugins/c9.ide.theme.codeserver/ace.themes/code-server-dark",
             "code-server-light": "plugins/c9.ide.theme.codeserver/ace.themes/code-server-light",
+            "slate-dark": "plugins/c9.ide.theme.slate/ace.themes/slate-dark",
+            "slate-light": "plugins/c9.ide.theme.slate/ace.themes/slate-light",
             "light": "ace/theme/cloud9_day",
             "light-gray": "ace/theme/cloud9_day",
             "flat-light": "ace/theme/cloud9_day",
@@ -2150,7 +2152,7 @@
                 if (handle.theme && currentSession.cssClass != theme.cssClass) {
                     var tab = currentDocument.tab;
                     var html = plugin.aml.$int;
-                    var isCodeServer = /^code-server-/.test(settings.get("user/general/@skin"));
+                    var isCodeServer = /^(code-server|slate)-/.test(settings.get("user/general/@skin"));
                     
                     if (theme.isDark) {
                         tab.classList.add("dark");

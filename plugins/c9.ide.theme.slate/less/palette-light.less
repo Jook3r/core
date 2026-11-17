@@ -1,0 +1,148 @@
+/*
+ * Slate Light: colour tokens.
+ *
+ * Every @sl-* colour is defined here AND in palette-dark.less with the
+ * same names; palette.less maps Cloud9's base theme variables onto them and
+ * the parts/*.less rules use them. Keep both files in step.
+ *
+ * The neutrals are one cool grey ramp: the window is the darkest step, the
+ * cards (side panel, editor panes, console) the next, floating widgets (menus,
+ * dialogs, popups) the one after. Nothing is told apart by a line that a step
+ * of the ramp can tell apart.
+ *
+ * The accent is not a LESS colour but two CSS custom properties, which
+ * plugin.js sets on <html> from Preferences > Themes > Accent Colour:
+ *   --sl-accent       fills (primary button, badge, switch)
+ *   --sl-accent-text  text and lines (links, matches, focus ring)
+ * So an accent token cannot go through a LESS colour function (fade, mix,
+ * darken): use color-mix() in the CSS, as below. The values after the comma
+ * are the default accent, Blue, also listed in plugin.js (ACCENTS).
+ * The build's LESS mangles #RRGGBBAA colours: always write rgba().
+ */
+
+@sl-is-dark: false;
+
+/* Surfaces */
+@sl-window-bg: #ECEEF2;
+@sl-card-bg: #FFFFFF;
+@sl-card-border: #E1E4E9;
+@sl-editor-bg: #FFFFFF;
+@sl-editor-fg: #2A2E36;
+@sl-terminal-bg: #FFFFFF;
+@sl-terminal-fg: #2A2E36;
+@sl-tabstrip-bg: #FFFFFF;
+@sl-tab-inactive-bg: transparent;
+@sl-tab-hover-bg: rgba(20, 30, 50, 0.05);
+@sl-tab-pill-bg: transparent;
+@sl-tab-pill-hover-bg: rgba(20, 30, 50, 0.05);
+@sl-tab-active-bg: #E9ECF1;
+@sl-widget-bg: #FFFFFF;
+@sl-widget-border: #D9DDE3;
+
+/* Text */
+@sl-fg: #2A2E36;
+@sl-fg-strong: #111418;
+@sl-fg-muted: #6A7280;
+@sl-fg-disabled: #B4B9C2;
+@sl-placeholder: #9AA1AC;
+@sl-link: var(--sl-accent-text, #2460C8);
+@sl-link-active: var(--sl-accent-text, #2460C8);
+@sl-highlight-fg: var(--sl-accent-text, #2460C8);
+
+/* Accent / focus */
+@sl-accent: var(--sl-accent, #2F6FDE);
+@sl-accent-hover: color-mix(in srgb, var(--sl-accent, #2F6FDE) 90%, black);
+@sl-accent-fg: #FFFFFF;
+@sl-focus: color-mix(in srgb, var(--sl-accent-text, #2460C8) 70%, transparent);
+@sl-focus-solid: var(--sl-accent-text, #2460C8);
+@sl-badge-bg: var(--sl-accent, #2F6FDE);
+@sl-badge-fg: #FFFFFF;
+
+/* Secondary button */
+@sl-button2-bg: #E9ECF1;
+@sl-button2-border: #E9ECF1;
+@sl-button2-fg: #2A2E36;
+@sl-button2-hover-bg: #F1F3F6;
+@sl-button2-fill: #E9ECF1;
+@sl-button2-fill-hover: #DFE3E9;
+@sl-danger: #C93A48;
+@sl-danger-hover: #B5303D;
+
+/* Inputs */
+@sl-input-bg: #FFFFFF;
+@sl-input-border: #D4D8DF;
+@sl-input-fg: #2A2E36;
+@sl-well-border: #D9DDE3;
+@sl-checkbox-bg: #FFFFFF;
+@sl-checkbox-border: #9AA1AC;
+@sl-checkbox-fg: #6A7280;
+@sl-option-active-bg: #DFE3E9;
+@sl-option-active-border: #DFE3E9;
+
+/* Lists, trees, menus */
+@sl-list-hover-bg: rgba(20, 30, 50, 0.05);
+@sl-list-active-bg: rgba(20, 30, 50, 0.10);
+@sl-list-active-fg: #111418;
+@sl-list-inactive-bg: #EEF0F4;
+@sl-list-focus-outline: color-mix(in srgb, var(--sl-accent-text, #2460C8) 45%, transparent);
+@sl-menu-bg: #FFFFFF;
+@sl-menu-fg: #2A2E36;
+@sl-menu-selection-bg: rgba(20, 30, 50, 0.06);
+@sl-menu-selection-fg: #111418;
+@sl-menu-separator: #E9ECF1;
+@sl-menubar-selection-bg: #DFE3E9;
+@sl-quick-focus-bg: var(--sl-accent, #2F6FDE);
+@sl-quick-focus-fg: #FFFFFF;
+@sl-toolbar-hover-bg: rgba(20, 30, 50, 0.07);
+@sl-toolbar-active-bg: rgba(20, 30, 50, 0.12);
+
+/* Status / notifications */
+@sl-statusbar-fg: #6A7280;
+@sl-statusbar-item-hover-bg: #E9ECF1;
+@sl-error: #C93A48;
+@sl-error-bg: #FCECEE;
+@sl-error-border: #C93A48;
+@sl-warning: #A66D00;
+@sl-warning-bg: #FBF3DF;
+@sl-info: #2460C8;
+@sl-success: #2F8F46;
+
+/* Scrollbars */
+@sl-scrollbar-thumb: rgba(90, 100, 120, 0.30);
+@sl-scrollbar-thumb-hover: rgba(90, 100, 120, 0.45);
+@sl-scrollbar-thumb-active: rgba(90, 100, 120, 0.55);
+
+/* Editor bits used by the skin (gutter, selection) */
+@sl-editor-selection: rgba(47, 111, 222, 0.20);
+@sl-editor-line-highlight: #F4F6F9;
+@sl-editor-line-number: #9AA1AC;
+
+/* Shadows */
+@sl-shadow-color-sm: rgba(20, 30, 50, 0.08);
+@sl-shadow-color-md: rgba(20, 30, 50, 0.10);
+@sl-shadow-color-lg: rgba(20, 30, 50, 0.14);
+@sl-shadow-color-xl: rgba(20, 30, 50, 0.18);
+
+/* Sprite/image variants for base variables that pick images by name */
+@sl-image-variant: "flat_light";
+
+/* Controls (parts/controls.less) */
+@sl-dropdown-border: #D4D8DF;
+@sl-switch-off-bg: #C5CAD3;
+@sl-switch-knob: #FFFFFF;
+@sl-checkbox-check: #111418;
+
+/* Terminal cursor (parts/misc.less) */
+@sl-terminal-cursor-on-light: #2A2E36;
+@sl-terminal-cursor-on-dark: #C5CAD3;
+
+/* File-type icons (icons.less) */
+@sl-fi-muted: #6A7280;
+@sl-fi-blue: #2F6FDE;
+@sl-fi-teal: #1787A0;
+@sl-fi-green: #2F8F46;
+@sl-fi-yellow: #A66D00;
+@sl-fi-orange: #C2622A;
+@sl-fi-red: #C93A48;
+@sl-fi-pink: #C2478A;
+@sl-fi-purple: #8A4FD0;

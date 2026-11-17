@@ -38,7 +38,9 @@ define(function(require, exports, module) {
             "dark": "#3D3D3D",
             "dark-gray": "#3D3D3D",
             "code-server-dark": "#121314",
-            "code-server-light": "#FFFFFF"
+            "code-server-light": "#FFFFFF",
+            "slate-dark": "#1A1D23",
+            "slate-light": "#FFFFFF"
         };
         
         var menuAce;
@@ -517,7 +519,7 @@ define(function(require, exports, module) {
                 function setTheme(e) {
                     var tab = doc.tab;
                     if (e.theme && BGCOLOR[e.theme]) {
-                        var isDark = e.theme == "dark" || e.theme == "code-server-dark";
+                        var isDark = e.theme == "dark" || e.theme == "code-server-dark" || e.theme == "slate-dark";
                         
                         toolbar.$ext.style.backgroundColor = 
                         tab.backgroundColor = BGCOLOR[e.theme];
