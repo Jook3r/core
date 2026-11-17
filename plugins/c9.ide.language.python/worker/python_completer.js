@@ -130,7 +130,6 @@ handler.predictNextCompletion = function(doc, fullAst, pos, options, callback) {
         return callback();
     if (/^\s+import /.test(line))
         return callback();
-    console.log("[python_completer] Predicted our next completion will be for " + predicted[0].replaceText + ".");
     callback(null, {
         predicted: predicted[0].replaceText + ".",
         showEarly: predicted[0].replaceText === "self" || predicted[0].icon === "package"
@@ -145,7 +144,6 @@ function callDaemon(command, path, doc, pos, options, callback) {
     ensureDaemon(function(err, dontRetry) {
         if (err) return callback(err);
         
-        var start = Date.now();
         workerUtil.execAnalysis(
             "curl",
             {
@@ -170,10 +168,6 @@ function callDaemon(command, path, doc, pos, options, callback) {
                 if (typeof stdout !== "object")
                     return callback(new Error("Couldn't parse python-jedi output: " + stdout));
                 
-                console.log("[python_completer] " + command + " in " + (Date.now() - start)
-                    + "ms (jedi: " + meta.serverTime + "ms): "
-                    + doc.getLine(pos.row).substr(0, pos.column));
-
                 callback(null, stdout, meta);
             }
         );

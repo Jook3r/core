@@ -631,10 +631,14 @@ Client.prototype.onExit = function(err) {
     Object.keys(pending).forEach(function(id) { pending[id](err); });
     if (this.stopped) return;
     var missing = err && (err.code == "ENOENT" || /ENOENT/.test(err.message));
+    var next = false;
     if (missing && this.commandIndex + 1 < this.commands.length) {
-        // not installed: the next one that could be the server
+        // not installed: the next one that could be the server. Nothing
+        // is said: a language lists servers to choose from, and most
+        // of them are not installed (lsp.js, "commands")
         this.commandIndex++;
         missing = false;
+        next = true;
     }
     else if (missing || ++this.exits >= MAX_RESTARTS) {
         this.failed = err;
@@ -650,7 +654,8 @@ Client.prototype.onExit = function(err) {
     this.waiting = [];
     waiting.forEach(function(fn) { fn(err); });
     if (this.failed) return;
-    console.warn("[lsp] " + err.message + "; restarting");
+    if (!next)
+        console.warn("[lsp] " + err.message + "; restarting");
     this.start();
 };
 
