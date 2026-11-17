@@ -591,6 +591,95 @@ async function main() {
         });
     });
 
+    await check("Python debugger (Debug Adapter Protocol): a breakpoint, the stack, variables, a step, the end", async function() {
+        // debugpy: the one install-sdk.sh puts in ~/.c9, or the system's
+        var installed = path.join(os.homedir(), ".c9", "debugpy");
+        if (fs.existsSync(path.join(installed, "debugpy"))) {
+            fs.mkdirSync(path.join(home, ".c9"), { recursive: true });
+            if (!fs.existsSync(path.join(home, ".c9", "debugpy")))
+                fs.symlinkSync(installed, path.join(home, ".c9", "debugpy"));
+        }
+        else if (childProcess.spawnSync("python3", ["-c", "import debugpy"]).status !== 0) {
+            return "skipped: debugpy is not installed";
+        }
+        fs.mkdirSync(path.join(workspace, "dap"));
+        fs.writeFileSync(path.join(workspace, "dap", "calc.py"), "def double(value):\n    result = value * 2\n    return result\n\n"
+            + "total = 0\nfor i in range(3):\n    total += double(i + 5)\nprint(\"total\", total)\n"
+            + "open(__file__ + \".txt\", \"w\").write(str(total))\n");
+        await page.evaluate(function() {
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/dap/calc.py", true, resolve); });
+        });
+        await page.evaluate(function() {
+            var app = window.app;
+            app.breakpoints.setBreakpoint({ path: "/dap/calc.py", line: 1, column: 4, text: "calc.py", content: "result = value * 2", enabled: true });
+            // as the Run button does it, with the output tab's debug button on
+            app.commands.exec("showoutput", null, { runner: "Python 3", run: true,
+                config: { runner: "Python 3", command: "dap/calc.py", debug: true } });
+        });
+        function stopped() {
+            return page.evaluate(function() {
+                var app = window.app;
+                var frame = app.debugger.state == "stopped" && app.callstack.activeFrame;
+                if (!frame) return null;
+                return new Promise(function(resolve) {
+                    app.dapdebugger.getScope(frame, frame.scopes[0], function(err, variables) {
+                        resolve({
+                            frames: app.callstack.frames.map(function(f) { return f.name + ":" + (f.line + 1) + " " + f.path; }),
+                            scopes: frame.scopes.map(function(scope) { return scope.type; }),
+                            variables: (variables || []).map(function(v) { return v.name + "=" + v.value; }),
+                            tab: app.tabManager.focussedTab && app.tabManager.focussedTab.path
+                        });
+                    });
+                });
+            });
+        }
+        var stop = await until("the breakpoint to stop the program", stopped, 60000);
+        assert.deepEqual(stop.frames, ["double:2 /dap/calc.py", "<module>:7 /dap/calc.py"]);
+        assert.deepEqual(stop.scopes, ["Locals", "Globals"]);
+        assert.deepEqual(stop.variables, ["value=5"]);
+        assert.equal(stop.tab, "/dap/calc.py");
+        // the panel shows them
+        await until("the debugger panel to show the stack", function() {
+            return page.evaluate(function() {
+                return Array.from(document.querySelectorAll("body *")).some(function(el) {
+                    return el.offsetHeight && !el.children.length && el.textContent.trim() == "<module>";
+                });
+            });
+        });
+        var value = await page.evaluate(function() {
+            return new Promise(function(resolve) {
+                window.app.dapdebugger.evaluate("value * 100", null, false, true, function(err, variable) {
+                    resolve(err ? "error: " + err.message : variable.value);
+                });
+            });
+        });
+        assert.equal(value, "500");
+        await page.evaluate(function() { window.app.commands.exec("stepover"); });
+        var step = await until("the step to the next line", async function() {
+            var now = await stopped();
+            return now && now.frames[0] == "double:3 /dap/calc.py" && now;
+        });
+        assert.deepEqual(step.variables, ["result=10", "value=5"]);
+        // without the breakpoint the program runs to its end, and the
+        // debug adapter and the proxy with it
+        await page.evaluate(function() {
+            var app = window.app;
+            app.breakpoints.breakpoints.slice().forEach(function(bp) { app.breakpoints.clearBreakpoint(bp); });
+        });
+        await wait(500);
+        await page.evaluate(function() { window.app.commands.exec("resume"); });
+        await until("the debug session to end", function() {
+            return page.evaluate(function() {
+                return window.app.dapdebugger.state == null && window.app.debugger.state != "stopped";
+            });
+        });
+        var result = await until("the program's result", function() {
+            var file = path.join(workspace, "dap", "calc.py.txt");
+            return fs.existsSync(file) && fs.readFileSync(file, "utf8");
+        });
+        assert.equal(result, "36");
+    });
+
     await check("Git: a changed line is marked, blame shows the author", async function() {
         var repo = path.join(workspace, "repo");
         fs.mkdirSync(repo);

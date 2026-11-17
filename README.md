@@ -189,7 +189,8 @@ in a browser, by `test/client.js`; those that have been failing since before
 this fork are listed there and left out) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
-`c9 open`, the Welcome page, the language server, the previews' sandbox, a file changed on disk,
+`c9 open`, the Welcome page, the language server, the Python debugger (skipped without debugpy),
+the previews' sandbox, a file changed on disk,
 another folder as the
 workspace, the Claude Code IDE bridge, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).
@@ -210,6 +211,16 @@ when it is installed on the server, and any other LSP server can be added.
 They give hover, Find References, Rename Symbol across files, Quick Fix and
 Format Document next to completion and markers. See
 `plugins/c9.ide.language.lsp/README.md`.
+
+#### Debuggers ####
+
+Next to the Node.js debugger there is one for the Debug Adapter Protocol,
+the protocol of VS Code's debuggers: Python (the *Python 3* runner, with
+debugpy, which `scripts/install-sdk.sh` installs) and Go (with Delve, when
+it is installed) are debugged through it, with breakpoints, the call stack,
+variables, watches, stepping and pause on exceptions; another language
+needs a runner that names its adapter. See
+`plugins/c9.ide.run.debug.dap/README.md`.
 
 #### The Claude and DeepSeek panels ####
 

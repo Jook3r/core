@@ -445,6 +445,7 @@ module.exports = function(options) {
         "plugins/c9.ide.run.debug.xdebug/xdebug",
         "plugins/c9.ide.run.debug/debuggers/gdb/gdbdebugger",
         "plugins/c9.ide.run.debug.ikpdb/ikpdb",
+        "plugins/c9.ide.run.debug.dap/dap",
         
         // Console
         {

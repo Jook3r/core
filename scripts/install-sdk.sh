@@ -109,7 +109,7 @@ echo -e "nak\n.gitignore" >  node_modules/.gitignore
 
 # Python support: pylint, jedi and ruff in ~/.c9/python3 (the IDE would
 # otherwise install them the first time a .py file is opened), and the
-# debugger used by the "Python 3" runner
+# debuggers used by the Python runners
 setupPython() {
     echo "${magenta}--- Setting up Python support ---------------------------------------${resetColor}"
     if ! bash plugins/c9.ide.language.python/server/launch_command.sh python3 true; then
@@ -118,6 +118,11 @@ setupPython() {
     fi
     mkdir -p ~/.c9/ikp3db
     ln -sf "$PWD/plugins/c9.ide.run.debug.ikpdb/python/ikp3db.py" ~/.c9/ikp3db/ikp3db.py
+    # debugpy, in a folder of its own: the "Python 3" runner debugs with
+    # the python3 of the project, which need not have it
+    if ! ~/.c9/python3/bin/python -m pip install --quiet --upgrade --target ~/.c9/debugpy debugpy; then
+        echo "${red}Could not install debugpy: the Python 3 runner will run but not debug.${resetColor}" >&2
+    fi
 }
 setupPython
 

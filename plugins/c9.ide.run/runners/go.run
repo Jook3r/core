@@ -2,19 +2,27 @@
   "script": [
     "set -e",
     "if [ \"$debug\" == true ]; then ",
-    "    go build -gcflags \"-N -l\" $file",
-    "    node $HOME/.c9/bin/c9gdbshim.js \"$file_path/$file_base_name\" $args",
+    "    PATH=\"$PATH:$HOME/go/bin:$(go env GOPATH 2>/dev/null)/bin\"",
+    "    if ! command -v dlv >/dev/null; then",
+    "        echo 'The Go debugger (Delve) is not installed: go install github.com/go-delve/delve/cmd/dlv@latest' >&2",
+    "        exit 1",
+    "    fi",
+    "    dlv debug --headless --listen=127.0.0.1:15473 --api-version=2 --accept-multiclient \"$file\" -- $args",
     "else",
     "    go run $file $args",
     "fi"
   ],
   "info": "Running ... $file",
   
-  "debugger": "gdb",
+  "debugger": "dap",
+  "debugport": 15473,
+  "dap": {
+    "adapter": "delve",
+    "arguments": { "mode": "remote" }
+  },
   "$debugDefaultState": false,
   
   "env": {},
   
   "selector": "source.go"
 }
-
