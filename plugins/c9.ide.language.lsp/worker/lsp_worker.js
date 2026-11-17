@@ -4,7 +4,10 @@
  * Runs language servers (e.g. TypeScript 7: tsc --lsp --stdio) in the
  * workspace through workerUtil.spawn, keeps the open files in sync, and
  * answers the language worker's calls: completion, markers (diagnostics),
- * jump to definition, parameter hints (signature help) and outline. The
+ * jump to definition, parameter hints (signature help), outline and the
+ * other places of the name under the cursor. What the IDE asks for itself
+ * (../features.js: hover, references, rename, code actions, formatting)
+ * comes as an "lsp_request" and is answered with an "lsp_response". The
  * servers are configured by ../lsp.js.
  */
 define(function(require, exports, module) {
@@ -16,6 +19,11 @@ var REQUEST_TIMEOUT = 15000;
 var TOOLTIP_TIMEOUT = 1500;     // parameter hints are asked on every cursor move
 var MAX_COMPLETIONS = 500;
 var MAX_RESTARTS = 3;
+var MAX_LOCATIONS = 500;        // references listed
+var MAX_ACTIONS = 30;
+// A server may be installed for the user only: these are not on the PATH
+// of a service
+var SPAWN = 'PATH="$PATH:$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:/usr/local/go/bin"; exec "$0" "$@"';
 
 var handler = module.exports = Object.create(baseHandler);
 
@@ -34,6 +42,25 @@ handler.init = function(callback) {
                 clients[name].stop();
                 delete clients[name];
             }
+        });
+    });
+    // files the IDE changed on disk (a rename in files that are not open)
+    handler.getEmitter().on("lsp_files_changed", function(e) {
+        var changes = (e.paths || []).map(function(path) {
+            return { uri: toUri(toFsPath(path)), type: 2 };
+        });
+        Object.keys(clients).forEach(function(name) {
+            var client = clients[name];
+            var mine = changes.filter(function(c) { return matches(client.server.extensions, c.uri); });
+            if (client.ready && mine.length)
+                client.notify("workspace/didChangeWatchedFiles", { changes: mine });
+        });
+    });
+    handler.getEmitter().on("lsp_request", function(e) {
+        onRequest(e, function(err, result) {
+            handler.getEmitter().emit("lsp_response", {
+                id: e.id, err: err ? String(err.message || err) : null, result: err ? null : result
+            });
         });
     });
     callback();
@@ -144,6 +171,24 @@ handler.jumpToDefinition = function(doc, ast, pos, options, callback) {
     });
 };
 
+handler.highlightOccurrences = function(doc, ast, pos, options, callback) {
+    var path = options.path || handler.path;
+    var client = clientFor(path);
+    if (!client || !client.ready || !client.capabilities.documentHighlightProvider) return callback();
+    var uri = client.sync(path, doc);
+    client.request("textDocument/documentHighlight", {
+        textDocument: { uri: uri },
+        position: { line: pos.row, character: pos.column }
+    }, TOOLTIP_TIMEOUT, function(err, result) {
+        if (err || !result || !result.length) return callback();
+        callback(null, { markers: result.slice(0, MAX_LOCATIONS).map(function(h) {
+            var here = h.range.start.line == pos.row && h.range.start.character <= pos.column
+                && h.range.end.character >= pos.column;
+            return { pos: toPos(h.range), type: here ? "occurrence_main" : "occurrence_other" };
+        })});
+    });
+};
+
 handler.analyze = function(doc, ast, options, callback) {
     var path = options.path || handler.path;
     var client = clientFor(path);
@@ -157,7 +202,9 @@ handler.analyze = function(doc, ast, options, callback) {
         }
         client.request("textDocument/diagnostic", { textDocument: { uri: uri } }, REQUEST_TIMEOUT, function(err, report) {
             if (err || !report) return callback();
-            callback(null, toMarkers(report.items || []));
+            // (kept for the code actions, which are asked for with them)
+            if (report.items) client.diagnostics[uri] = report.items;
+            callback(null, toMarkers(report.items || client.diagnostics[uri] || []));
         });
     });
 };
@@ -172,6 +219,200 @@ handler.outline = function(doc, ast, options, callback) {
         callback(null, { items: symbols.map(outlineItem) });
     });
 };
+
+/***** What the IDE asks for (../features.js) *****/
+
+// e: { id, type, path, value (the document's text), pos: { row, column }, ... }
+function onRequest(e, callback) {
+    var client = clientFor(e.path);
+    if (!client) return callback(new Error("No language server for this file"));
+    var uri = client.sync(e.path, String(e.value == null ? "" : e.value));
+    var at = { textDocument: { uri: uri }, position: e.pos && { line: e.pos.row, character: e.pos.column } };
+    var caps = function(name) { return client.capabilities[name]; };
+    client.whenReady(function(err) {
+        if (err) return callback(err);
+        switch (e.type) {
+            case "capabilities":
+                return callback(null, {
+                    server: client.server.name,
+                    hover: !!caps("hoverProvider"),
+                    references: !!caps("referencesProvider"),
+                    typeDefinition: !!caps("typeDefinitionProvider"),
+                    implementation: !!caps("implementationProvider"),
+                    rename: !!caps("renameProvider"),
+                    codeAction: !!caps("codeActionProvider"),
+                    format: !!caps("documentFormattingProvider")
+                });
+            case "hover":
+                if (!caps("hoverProvider")) return callback(null, null);
+                // (the first one of a project can take seconds; the IDE drops an
+                // answer that comes when the mouse is elsewhere)
+                return client.request("textDocument/hover", at, REQUEST_TIMEOUT, function(err, hover) {
+                    if (err || !hover || !hover.contents) return callback(null, null);
+                    var parts = hoverParts(hover.contents);
+                    callback(null, parts.length ? { parts: parts, pos: hover.range ? toPos(hover.range) : null } : null);
+                });
+            case "references":
+            case "typeDefinition":
+            case "implementation":
+                var method = "textDocument/" + e.type;
+                if (!caps(e.type + "Provider")) return callback(new Error("The language server can't do this"));
+                var params = { textDocument: at.textDocument, position: at.position };
+                if (e.type == "references") params.context = { includeDeclaration: true };
+                return client.request(method, params, REQUEST_TIMEOUT, function(err, result) {
+                    if (err) return callback(err);
+                    var outside = 0;
+                    var locations = [].concat(result || []).map(function(location) {
+                        var range = location.targetSelectionRange || location.range;
+                        var target = fromUri(location.targetUri || location.uri);
+                        if (!target) outside++;
+                        return target && range ? { path: target, pos: toPos(range) } : null;
+                    }).filter(Boolean);
+                    callback(null, { locations: locations.slice(0, MAX_LOCATIONS), more: Math.max(0, locations.length - MAX_LOCATIONS), outside: outside });
+                });
+            case "prepareRename":
+                if (!caps("renameProvider")) return callback(new Error("The language server can't rename"));
+                if (!caps("renameProvider").prepareProvider) return callback(null, {});
+                return client.request("textDocument/prepareRename", at, REQUEST_TIMEOUT, function(err, result) {
+                    if (err) return callback(err);
+                    if (!result) return callback(new Error("This can't be renamed"));
+                    var range = result.range || (result.start ? result : null);
+                    callback(null, { pos: range ? toPos(range) : null, placeholder: result.placeholder || null });
+                });
+            case "rename":
+                if (!caps("renameProvider")) return callback(new Error("The language server can't rename"));
+                return client.request("textDocument/rename", {
+                    textDocument: at.textDocument, position: at.position, newName: String(e.newName)
+                }, REQUEST_TIMEOUT, function(err, edit) {
+                    if (err) return callback(err);
+                    callback(null, workspaceEdit(edit));
+                });
+            case "codeActions":
+                if (!caps("codeActionProvider")) return callback(null, { actions: [] });
+                var range = toRange(e.range || { sl: e.pos.row, sc: e.pos.column, el: e.pos.row, ec: e.pos.column });
+                return client.request("textDocument/codeAction", {
+                    textDocument: at.textDocument,
+                    range: range,
+                    context: {
+                        diagnostics: (client.diagnostics[uri] || []).filter(function(d) { return overlaps(d.range, range); }),
+                        triggerKind: 1
+                    }
+                }, REQUEST_TIMEOUT, function(err, actions) {
+                    if (err) return callback(err);
+                    // kept until the next list: the one that is picked is applied by its number
+                    client.actions = (actions || []).filter(function(a) {
+                        return a && a.title && !a.disabled;
+                    }).slice(0, MAX_ACTIONS);
+                    callback(null, { actions: client.actions.map(function(a, i) {
+                        return { index: i, title: a.title, kind: a.kind || "", preferred: !!a.isPreferred };
+                    })});
+                });
+            case "applyCodeAction":
+                return applyCodeAction(client, (client.actions || [])[e.index], callback);
+            case "format":
+                if (!caps("documentFormattingProvider")) return callback(new Error("The language server can't format"));
+                return client.request("textDocument/formatting", {
+                    textDocument: at.textDocument,
+                    options: { tabSize: e.tabSize || 4, insertSpaces: e.insertSpaces !== false,
+                        trimTrailingWhitespace: true, insertFinalNewline: true }
+                }, REQUEST_TIMEOUT, function(err, edits) {
+                    if (err) return callback(err);
+                    callback(null, { files: edits && edits.length ? [{ path: e.path, edits: edits.map(toEdit) }] : [], skipped: 0 });
+                });
+            default:
+                callback(new Error("Unknown request: " + e.type));
+        }
+    });
+}
+
+// An action is an edit, a command for the server to run (which then asks
+// for an edit: workspace/applyEdit, see onMessage), or both; some servers
+// give the edit only when asked again (codeAction/resolve)
+function applyCodeAction(client, action, callback) {
+    if (!action) return callback(new Error("That action is gone: ask again"));
+    var provider = client.capabilities.codeActionProvider;
+    // (a Command in the place of an action has its name in .command)
+    var isCommand = typeof action.command == "string";
+    if (!isCommand && !action.edit && !action.command && provider && provider.resolveProvider) {
+        return client.request("codeAction/resolve", action, REQUEST_TIMEOUT, function(err, resolved) {
+            if (err || !resolved) return callback(err || new Error("The action has nothing to do"));
+            run(resolved);
+        });
+    }
+    run(action);
+
+    function run(action) {
+        var edit = !isCommand && action.edit ? workspaceEdit(action.edit) : { files: [], skipped: 0 };
+        var command = isCommand ? action : action.command;
+        if (!command || !command.command) return callback(null, edit);
+        client.request("workspace/executeCommand", {
+            command: command.command, arguments: command.arguments
+        }, REQUEST_TIMEOUT, function(err) {
+            callback(err, edit);
+        });
+    }
+}
+
+// A WorkspaceEdit as { files: [{ path, edits: [{ sl, sc, el, ec, text }] }],
+// skipped: the number of changes that are left out (files outside the
+// workspace and the home folder; files to create, rename or delete) }
+function workspaceEdit(edit) {
+    var files = Object.create(null);
+    var skipped = 0;
+    function add(uri, edits) {
+        var path = fromUri(uri);
+        if (!path) return skipped++;
+        files[path] = (files[path] || []).concat((edits || []).map(toEdit));
+    }
+    if (edit && edit.documentChanges) {
+        edit.documentChanges.forEach(function(change) {
+            if (change.kind || !change.textDocument) return skipped++;
+            add(change.textDocument.uri, change.edits);
+        });
+    }
+    else if (edit && edit.changes) {
+        Object.keys(edit.changes).forEach(function(uri) { add(uri, edit.changes[uri]); });
+    }
+    return { files: Object.keys(files).map(function(path) { return { path: path, edits: files[path] }; }), skipped: skipped };
+}
+
+function toEdit(edit) {
+    var pos = toPos(edit.range);
+    pos.text = String(edit.newText == null ? "" : edit.newText);
+    return pos;
+}
+
+function toPos(range) {
+    return { sl: range.start.line, sc: range.start.character, el: range.end.line, ec: range.end.character };
+}
+
+function toRange(pos) {
+    return { start: { line: pos.sl, character: pos.sc }, end: { line: pos.el, character: pos.ec } };
+}
+
+function overlaps(a, b) {
+    function before(p, q) { return p.line < q.line || p.line == q.line && p.character < q.character; }
+    return !before(a.end, b.start) && !before(b.end, a.start);
+}
+
+// Hover contents (a string, { language, value }, { kind, value }, or a list
+// of them) as parts: { code, language } or { text } (markdown)
+function hoverParts(contents) {
+    var parts = [];
+    [].concat(contents).forEach(function(c) {
+        if (c == null) return;
+        if (typeof c == "string") {
+            if (c.trim()) parts.push({ text: c });
+        }
+        else if (c.language != null) {
+            if (String(c.value || "").trim()) parts.push({ code: String(c.value), language: String(c.language) });
+        }
+        else if (String(c.value || "").trim()) {
+            parts.push(c.kind == "plaintext" ? { text: String(c.value), plain: true } : { text: String(c.value) });
+        }
+    });
+    return parts;
+}
 
 /***** Servers *****/
 
@@ -208,7 +449,15 @@ function Client(server) {
     this.generation = 0;
     this.exits = 0;
     this.failed = null;
+    this.actions = [];                      // the code actions listed last
+    // the commands to try: the first that is installed is the server
+    this.commands = server.commands || [{ command: server.command, args: server.args }];
+    this.commandIndex = 0;
     this.start();
+}
+
+function status(server, state, detail) {
+    handler.getEmitter().emit("lsp_status", { server: server.name, state: state, detail: detail || "" });
 }
 
 // Each start is a generation: events of a process that was replaced or
@@ -217,9 +466,12 @@ Client.prototype.start = function() {
     var self = this;
     var server = this.server;
     var generation = ++this.generation;
+    var command = this.commands[this.commandIndex];
     this.stderr = "";
-    workerUtil.spawn(server.command, {
-        args: server.args,
+    this.initialized = false;
+    status(server, "starting", command.command);
+    workerUtil.spawn("sh", {
+        args: ["-c", SPAWN, command.command].concat(command.args || []),
         cwd: config.workspaceDir,
         stdoutEncoding: "utf8",
         stderrEncoding: "utf8"
@@ -240,9 +492,12 @@ Client.prototype.start = function() {
             if (generation == self.generation) self.onExit(e);
         });
         child.on("exit", function(code) {
-            if (generation == self.generation)
-                self.onExit(new Error(server.name + " language server exited with " + code
-                    + (self.stderr ? ": " + self.stderr.trim() : "")));
+            if (generation != self.generation) return;
+            var err = new Error(server.name + " language server exited with " + code
+                + (self.stderr ? ": " + self.stderr.trim() : ""));
+            // the shell's "command not found": not installed
+            if (code == 127 && !self.initialized) err.code = "ENOENT";
+            self.onExit(err);
         });
         self.request("initialize", initializeParams(server), REQUEST_TIMEOUT, function(err, result) {
             if (generation != self.generation) return;
@@ -252,6 +507,8 @@ Client.prototype.start = function() {
             }
             self.capabilities = result && result.capabilities || {};
             self.ready = true;
+            self.initialized = true;
+            status(server, "running", command.command);
             self.notify("initialized", {});
             var waiting = self.waiting;
             self.waiting = [];
@@ -342,9 +599,20 @@ Client.prototype.onMessage = function(message) {
     }
     else if (message.id != null) {
         // a request from the server; no settings to give, nothing to register
-        var result = message.method == "workspace/configuration"
-            ? (message.params && message.params.items || []).map(function() { return null; })
-            : null;
+        var result = null;
+        if (message.method == "workspace/configuration") {
+            // the settings ../lsp.js gives a server, by their section
+            var given = this.server.settings || {};
+            result = (message.params && message.params.items || []).map(function(item) {
+                return item && item.section != null && given[item.section] !== undefined ? given[item.section] : null;
+            });
+        }
+        else if (message.method == "workspace/applyEdit") {
+            // what a command of a code action changes: the IDE applies it
+            var edit = workspaceEdit(message.params && message.params.edit);
+            handler.getEmitter().emit("lsp_apply_edit", edit);
+            result = { applied: true };
+        }
         this.write({ jsonrpc: "2.0", id: message.id, result: result });
     }
     else if (message.method == "textDocument/publishDiagnostics") {
@@ -362,10 +630,20 @@ Client.prototype.onExit = function(err) {
     this.pending = Object.create(null);
     Object.keys(pending).forEach(function(id) { pending[id](err); });
     if (this.stopped) return;
-    if (++this.exits >= MAX_RESTARTS || /ENOENT|not found/.test(err && err.message)) {
+    var missing = err && (err.code == "ENOENT" || /ENOENT/.test(err.message));
+    if (missing && this.commandIndex + 1 < this.commands.length) {
+        // not installed: the next one that could be the server
+        this.commandIndex++;
+        missing = false;
+    }
+    else if (missing || ++this.exits >= MAX_RESTARTS) {
         this.failed = err;
-        console.error("[lsp] " + err.message);
-        workerUtil.showError(this.server.caption + " isn't available: " + (this.server.help || err.message));
+        status(this.server, missing ? "missing" : "failed", missing ? "" : err.message);
+        // a server that is there for whoever installs it says nothing
+        if (!(missing && this.server.optional)) {
+            console.error("[lsp] " + err.message);
+            workerUtil.showError(this.server.caption + " isn't available: " + (this.server.help || err.message));
+        }
     }
     // what waited for this process fails; the next request syncs again
     var waiting = this.waiting;
@@ -391,7 +669,7 @@ Client.prototype.sync = function(path, doc) {
     if (!open) {
         this.docs[uri] = { version: 1, text: text };
         this.notify("textDocument/didOpen", { textDocument: {
-            uri: uri, languageId: languageId(path), version: 1, text: text
+            uri: uri, languageId: languageId(path, this.server), version: 1, text: text
         }});
     }
     else if (open.text !== text) {
@@ -423,7 +701,13 @@ function initializeParams(server) {
         initializationOptions: server.initializationOptions,
         capabilities: {
             general: { positionEncodings: ["utf-16"] },
-            workspace: { configuration: true, workspaceFolders: true },
+            workspace: {
+                configuration: true,
+                workspaceFolders: true,
+                applyEdit: true,
+                workspaceEdit: { documentChanges: true },
+                didChangeWatchedFiles: { dynamicRegistration: false }
+            },
             textDocument: {
                 synchronization: { dynamicRegistration: false },
                 completion: { completionItem: { snippetSupport: false, labelDetailsSupport: true } },
@@ -433,6 +717,22 @@ function initializeParams(server) {
                     activeParameterSupport: true
                 }},
                 definition: { linkSupport: true },
+                typeDefinition: { linkSupport: true },
+                implementation: { linkSupport: true },
+                references: {},
+                documentHighlight: {},
+                hover: { contentFormat: ["markdown", "plaintext"] },
+                rename: { prepareSupport: true },
+                codeAction: {
+                    codeActionLiteralSupport: { codeActionKind: { valueSet: [
+                        "", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite",
+                        "source", "source.organizeImports", "source.fixAll"
+                    ]}},
+                    isPreferredSupport: true,
+                    disabledSupport: true,
+                    resolveSupport: { properties: ["edit"] }
+                },
+                formatting: {},
                 documentSymbol: { hierarchicalDocumentSymbolSupport: true },
                 publishDiagnostics: {},
                 diagnostic: {}
@@ -474,8 +774,10 @@ function fromUri(uri) {
     return null; // outside the workspace and the home folder: can't be opened
 }
 
-function languageId(path) {
+function languageId(path, server) {
     var ext = (/\.([^.\/]+)$/.exec(path) || [])[1];
+    if (server && server.languageIds && server.languageIds[ext])
+        return server.languageIds[ext];
     return {
         ts: "typescript", mts: "typescript", cts: "typescript", tsx: "typescriptreact",
         js: "javascript", mjs: "javascript", cjs: "javascript", jsx: "javascriptreact"

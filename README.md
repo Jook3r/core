@@ -189,7 +189,7 @@ in a browser, by `test/client.js`; those that have been failing since before
 this fork are listed there and left out) and a smoke test, `test/smoke.js`.
 The smoke test starts Cloud9 with a login in a temporary home folder and
 checks it in a browser: the login limit, files, search, a terminal,
-`c9 open`, the Welcome page, the previews' sandbox, a file changed on disk,
+`c9 open`, the Welcome page, the language server, the previews' sandbox, a file changed on disk,
 another folder as the
 workspace, the Claude Code IDE bridge, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).
@@ -201,6 +201,15 @@ once, Chromium for Playwright:
 `scripts/run-tests.sh server`, `client` or `smoke` runs one of the three. The packages
 the tests need go to `test/node_modules`. GitHub Actions runs them on every
 push (`.github/workflows/tests.yml`).
+
+#### Language servers ####
+
+JavaScript and TypeScript have a language server built in; Python, Go, Rust,
+C/C++, PHP, Ruby, shell scripts, Lua, YAML, JSON, CSS and HTML get theirs
+when it is installed on the server, and any other LSP server can be added.
+They give hover, Find References, Rename Symbol across files, Quick Fix and
+Format Document next to completion and markers. See
+`plugins/c9.ide.language.lsp/README.md`.
 
 #### The Claude and DeepSeek panels ####
 

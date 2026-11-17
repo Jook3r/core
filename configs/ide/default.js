@@ -384,6 +384,7 @@ module.exports = function(options) {
         "plugins/c9.ide.language.python/python",
         "plugins/c9.ide.language.go/go",
         "plugins/c9.ide.language.lsp/lsp",
+        "plugins/c9.ide.language.lsp/features",
         {
             packagePath: "plugins/c9.ide.language.jsonalyzer/jsonalyzer",
             workspaceDir: workspaceDir,

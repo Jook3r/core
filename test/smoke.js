@@ -435,6 +435,162 @@ async function main() {
         assert(/In typed\.ts, line 1:\n\n```ts\nconst count: number = "three";\n```/.test(text), text);
     });
 
+    await check("language server: hover, references, a fix, formatting, a rename in every file", async function() {
+        var dir = path.join(workspace, "lsp");
+        fs.mkdirSync(dir);
+        fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, module: "esnext" }, include: ["*.ts"] }));
+        fs.writeFileSync(path.join(dir, "shapes.ts"), "/** The area of a circle. */\nexport function circleArea(radius: number): number {\n"
+            + "    return Math.PI * radius * radius;\n}\n\nexport interface Shape {\n    name: string;\n}\n");
+        fs.writeFileSync(path.join(dir, "other.ts"), "import { circleArea } from \"./shapes\";\nexport const big = circleArea(100);\n");
+        fs.writeFileSync(path.join(dir, "main.ts"), "import { circleArea } from \"./shapes\";\n\nconst area = circleArea(2);\n"
+            + "console.log(area,   circleArea(3));\nconst s: Shape = { name: \"x\" };\n");
+        await page.evaluate(function() {
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/lsp/main.ts", true, resolve); });
+        });
+        var annotations = function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.findTab("/lsp/main.ts");
+                return tab.editor.ace.session.getAnnotations().map(function(a) { return a.text; });
+            });
+        };
+        await until("the server to check the file", async function() {
+            return (await annotations()).some(function(text) { return /Cannot find name 'Shape'/.test(text); });
+        }, 60000);
+        var cursor = function(row, column) {
+            return page.evaluate(function(pos) {
+                var ace = window.app.tabManager.focussedTab.editor.ace;
+                ace.focus();
+                ace.moveCursorTo(pos[0], pos[1]);
+            }, [row, column]);
+        };
+        var value = function() {
+            return page.evaluate(function() { return window.app.tabManager.focussedTab.editor.ace.getValue(); });
+        };
+        var rows = function() {
+            return page.evaluate(function() {
+                return Array.from(document.querySelectorAll(".lsp-list-row")).map(function(row) {
+                    return row.textContent.replace(/\s+/g, " ");
+                });
+            });
+        };
+
+        // the mouse rests on a name: its type and documentation
+        var at = await page.evaluate(function() {
+            var c = window.app.tabManager.focussedTab.editor.ace.renderer.textToScreenCoordinates(2, 16);
+            return { x: c.pageX, y: c.pageY + 6 };
+        });
+        await page.mouse.move(at.x - 60, at.y + 80);
+        await page.mouse.move(at.x, at.y, { steps: 5 });
+        var tip = await until("the hover", function() {
+            return page.evaluate(function() {
+                var el = document.querySelector(".lsp-hover");
+                return el && el.textContent;
+            });
+        });
+        assert(/circleArea\(radius: number\): number/.test(tip) && /The area of a circle/.test(tip), tip);
+        await page.mouse.move(at.x + 400, at.y + 250);
+
+        // Find References: in this file, where it is declared, and in a file that is not open
+        await cursor(2, 15);
+        await page.evaluate(function() { window.app.commands.exec("lspreferences"); });
+        var list = await until("the references", async function() {
+            var found = await rows();
+            return found.length && found;
+        });
+        assert.equal(list.length, 6, JSON.stringify(list));
+        assert(list.some(function(row) { return /^lsp\/other\.ts:2 ?export const big = circleArea\(100\);/.test(row); }), JSON.stringify(list));
+        // Enter goes to the place that is selected, Down selects the next one
+        await page.keyboard.press("ArrowDown");
+        await page.keyboard.press("ArrowDown");
+        await page.keyboard.press("ArrowDown");
+        await page.keyboard.press("Enter");
+        await until("the tab of the declaration", function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.focussedTab;
+                return tab.path == "/lsp/shapes.ts" && tab.editor.ace.getSelectedText() == "circleArea";
+            });
+        });
+        await page.evaluate(function() {
+            return new Promise(function(resolve) {
+                window.app.tabManager.focussedTab.close();
+                window.app.tabManager.openFile("/lsp/main.ts", true, resolve);
+            });
+        });
+
+        await until("the first file's tab", function() {
+            return page.evaluate(function() {
+                var tab = window.app.tabManager.focussedTab;
+                return tab && tab.path == "/lsp/main.ts" && !!tab.editor.ace;
+            });
+        });
+
+        // Quick Fix: the missing import
+        await cursor(4, 10);
+        await page.evaluate(function() { window.app.commands.exec("lspcodeaction"); });
+        list = await until("the fixes", async function() {
+            var found = await rows();
+            return found.length && found;
+        });
+        assert(/import/.test(list[0]), JSON.stringify(list));
+        await page.keyboard.press("Enter");
+        await until("the import", async function() {
+            return /^import \{ circleArea, Shape \} from "\.\/shapes";/.test(await value());
+        });
+
+        // Format Document
+        await page.evaluate(function() { window.app.commands.exec("lspformat"); });
+        await until("the formatted line", async function() {
+            return (await value()).split("\n")[3] == "console.log(area, circleArea(3));";
+        });
+
+        // Rename Symbol, from a use of the imported name: where it is
+        // declared and in the file that is not open, too
+        await cursor(2, 15);
+        await page.evaluate(function() { window.app.commands.exec("lsprename"); });
+        var input = page.locator(".lsp-rename-input");
+        await input.waitFor({ timeout: 30000 });
+        assert.equal(await input.inputValue(), "circleArea");
+        await input.fill("diskArea");
+        await input.press("Enter");
+        await until("the rename here", async function() {
+            return /^import \{ diskArea, Shape \} from "\.\/shapes";\n\nconst area = diskArea\(2\);\nconsole\.log\(area, diskArea\(3\)\);/.test(await value());
+        });
+        await until("the rename in the other files", function() {
+            return /export function diskArea\(radius/.test(fs.readFileSync(path.join(dir, "shapes.ts"), "utf8"))
+                && fs.readFileSync(path.join(dir, "other.ts"), "utf8") == "import { diskArea } from \"./shapes\";\nexport const big = diskArea(100);\n";
+        });
+        // one step to undo in the editor
+        await page.evaluate(function() { window.app.tabManager.focussedTab.editor.ace.undo(); });
+        assert(/const area = circleArea\(2\)/.test(await value()), await value());
+        await page.evaluate(function() { window.app.tabManager.focussedTab.editor.ace.redo(); });
+        await until("the server to agree with the files", async function() {
+            return (await annotations()).length === 0;
+        }, 60000);
+
+        // a language whose server is not installed: nothing runs, nothing is said
+        fs.writeFileSync(path.join(dir, "quiet.zzlang"), "x = 1\n");
+        var custom = await page.evaluate(function() {
+            window.app.settings.set("user/lsp/@servers", JSON.stringify([
+                { name: "zzlang", command: ["c9-no-such-language-server", "--stdio"], extensions: ["zzlang"], languages: ["text"] }
+            ]));
+            return new Promise(function(resolve) {
+                window.app.tabManager.openFile("/lsp/quiet.zzlang", true, function() {
+                    var tab = window.app.tabManager.focussedTab;
+                    window.app["language.lsp.features"].request("hover", tab, {}, function(err) {
+                        resolve({ err: err && err.message, states: window.app["language.lsp"].states,
+                            handles: window.app["language.lsp"].handles("/lsp/quiet.zzlang") });
+                    });
+                });
+            });
+        });
+        assert.equal(custom.states.zzlang && custom.states.zzlang.state, "missing", JSON.stringify(custom));
+        assert.equal(custom.handles, false);
+        await page.evaluate(function() {
+            window.app.settings.set("user/lsp/@servers", "");
+            window.app.tabManager.focussedTab.close();
+        });
+    });
+
     await check("Git: a changed line is marked, blame shows the author", async function() {
         var repo = path.join(workspace, "repo");
         fs.mkdirSync(repo);

@@ -1,0 +1,119 @@
+/* What features.js shows of a language server: the hover tooltip (on the
+   language tooltip's colours), and the list and the rename box at the cursor */
+.language_tooltip.lsp-hover {
+    pointer-events: auto;
+    max-width: 560px;
+    max-height: 320px;
+    overflow: auto;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: normal;
+    user-select: text;
+    -webkit-user-select: text;
+}
+.language_tooltip.lsp-flash {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+.lsp-hover-code {
+    margin: 0;
+    padding: 0;
+    font-family: Menlo, Monaco, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: none;
+    border: 0;
+    color: inherit;
+}
+.lsp-hover-text {
+    margin-top: 5px;
+    white-space: pre-wrap;
+    opacity: 0.9;
+}
+.lsp-hover-code + .lsp-hover-code {
+    margin-top: 5px;
+}
+.lsp-hover > :first-child {
+    margin-top: 0;
+}
+
+.lsp-list {
+    position: absolute;
+    z-index: 100001;
+    min-width: 260px;
+    max-width: 720px;
+    border: 1px solid @language-tooltip-border-color;
+    background-color: @language-tooltip-background;
+    color: @language-tooltip-color;
+    box-shadow: @language-tooltip-box-shadow;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    outline: none;
+}
+.lsp-list.dark {
+    background-color: @language-tooltip-dark-background;
+    color: @language-tooltip-dark-color;
+    border-color: @language-tooltip-dark-border-color;
+    box-shadow: @language-tooltip-dark-box-shadow;
+}
+.lsp-list-title {
+    padding: 5px 9px 4px;
+    font-weight: bold;
+    opacity: 0.75;
+}
+.lsp-list-hint {
+    padding: 0 9px 6px;
+    opacity: 0.6;
+    font-size: 11px;
+}
+.lsp-list-rows {
+    max-height: 264px;
+    overflow-y: auto;
+    padding-bottom: 3px;
+}
+.lsp-list-row {
+    display: flex;
+    gap: 12px;
+    padding: 3px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.lsp-list-row:hover {
+    background: rgba(128, 128, 128, 0.18);
+}
+.lsp-list-row.lsp-list-selected {
+    background: rgba(90, 140, 255, 0.32);
+}
+.lsp-list-label {
+    flex: none;
+}
+.lsp-list-detail {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.65;
+    font-family: Menlo, Monaco, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 11px;
+}
+.lsp-rename-input {
+    display: block;
+    box-sizing: border-box;
+    width: ~"calc(100% - 18px)";
+    min-width: 240px;
+    margin: 2px 9px 6px;
+    padding: 3px 5px;
+    border: 1px solid rgba(128, 128, 128, 0.6);
+    border-radius: 2px;
+    background: rgba(128, 128, 128, 0.12);
+    color: inherit;
+    font-family: Menlo, Monaco, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 12px;
+    outline: none;
+}
+.lsp-rename-input:focus {
+    border-color: rgba(90, 140, 255, 0.9);
+}
