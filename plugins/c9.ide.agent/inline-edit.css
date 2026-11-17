@@ -1,0 +1,280 @@
+/* Inline edit (inline-edit.js): the box under the lines, and the changes
+   under review. In the editor, so the colours go with a light and a dark
+   theme (.dark) alike. */
+
+.inline-edit-bar {
+    box-sizing: border-box;
+    margin: 3px 0 4px 0;
+    padding: 6px 8px;
+    max-width: 760px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #24292f;
+    background: #f6f8fa;
+    border: 1px solid #c8d1da;
+    border-left: 3px solid #7b61ff;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    pointer-events: auto;
+    cursor: default;
+}
+.inline-edit-bar.dark {
+    color: #d7dce2;
+    background: #24282e;
+    border-color: #3c424b;
+    border-left-color: #9a86ff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.inline-edit-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+.inline-edit-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 26px;
+    max-height: 160px;
+    padding: 4px 6px;
+    resize: none;
+    font: inherit;
+    color: inherit;
+    background: #fff;
+    border: 1px solid #c8d1da;
+    border-radius: 3px;
+    outline: none;
+}
+.inline-edit-input:focus {
+    border-color: #7b61ff;
+}
+.inline-edit-bar.dark .inline-edit-input {
+    background: #1a1d21;
+    border-color: #3c424b;
+}
+.inline-edit-bar.dark .inline-edit-input:focus {
+    border-color: #9a86ff;
+}
+.inline-edit-input[readonly] {
+    opacity: 0.6;
+}
+
+.inline-edit-button {
+    flex: 0 0 auto;
+    height: 26px;
+    padding: 0 9px;
+    font: inherit;
+    color: inherit;
+    background: #fff;
+    border: 1px solid #c8d1da;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.inline-edit-button:hover {
+    border-color: #7b61ff;
+}
+.inline-edit-bar.dark .inline-edit-button,
+.inline-edit-hunk.dark .inline-edit-button {
+    background: #2e333a;
+    border-color: #454c56;
+}
+.inline-edit-bar.dark .inline-edit-button:hover,
+.inline-edit-hunk.dark .inline-edit-button:hover {
+    border-color: #9a86ff;
+}
+.inline-edit-button kbd {
+    margin-left: 6px;
+    font: inherit;
+    font-size: 11px;
+    opacity: 0.55;
+}
+.inline-edit-send,
+.inline-edit-accept {
+    color: #fff;
+    background: #6a4ff0;
+    border-color: #6a4ff0;
+}
+.inline-edit-bar.dark .inline-edit-send,
+.inline-edit-bar.dark .inline-edit-accept {
+    color: #fff;
+    background: #6a4ff0;
+    border-color: #6a4ff0;
+}
+.inline-edit-send:hover,
+.inline-edit-accept:hover {
+    background: #5a3fe0;
+}
+
+/* what is shown in which phase */
+.inline-edit-stop,
+.inline-edit-preview,
+.inline-edit-accept,
+.inline-edit-reject,
+.inline-edit-summary {
+    display: none;
+}
+.inline-edit-bar[data-phase="generating"] .inline-edit-send {
+    display: none;
+}
+.inline-edit-bar[data-phase="generating"] .inline-edit-stop,
+.inline-edit-bar[data-phase="review"] .inline-edit-accept,
+.inline-edit-bar[data-phase="review"] .inline-edit-reject,
+.inline-edit-bar[data-phase="review"] .inline-edit-summary {
+    display: inline-block;
+}
+.inline-edit-bar[data-phase="generating"] .inline-edit-preview {
+    display: block;
+}
+.inline-edit-bar[data-phase="generating"] .inline-edit-provider,
+.inline-edit-bar[data-phase="review"] .inline-edit-provider {
+    display: none;
+}
+
+.inline-edit-preview {
+    margin: 6px 0 0 0;
+    padding: 4px 6px;
+    max-height: 190px;
+    overflow: hidden;
+    font-family: Menlo, Monaco, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: pre;
+    color: inherit;
+    opacity: 0.8;
+    background: rgba(125, 125, 125, 0.1);
+    border-radius: 3px;
+}
+
+.inline-edit-note {
+    display: none;
+    margin-top: 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.inline-edit-note.shown {
+    display: block;
+}
+.inline-edit-note.error {
+    color: #c62828;
+}
+.inline-edit-bar.dark .inline-edit-note.error {
+    color: #ff8a80;
+}
+
+.inline-edit-foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+.inline-edit-summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.7;
+}
+.inline-edit-provider {
+    height: 22px;
+    margin-left: auto;
+    font: inherit;
+    font-size: 11px;
+    color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    opacity: 0.75;
+    cursor: pointer;
+}
+.inline-edit-provider:hover {
+    border-color: #c8d1da;
+    opacity: 1;
+}
+.inline-edit-bar.dark .inline-edit-provider option {
+    color: #d7dce2;
+    background: #24282e;
+}
+.inline-edit-close {
+    height: 22px;
+    padding: 0 7px;
+    font-size: 14px;
+    line-height: 1;
+    background: transparent;
+    border-color: transparent;
+    opacity: 0.6;
+}
+.inline-edit-bar.dark .inline-edit-close {
+    background: transparent;
+    border-color: transparent;
+}
+.inline-edit-close:hover {
+    opacity: 1;
+}
+
+/* the lines an edit is about, and the new lines of a change */
+.ace_marker-layer .inline-edit-target {
+    position: absolute;
+    background: rgba(123, 97, 255, 0.10);
+}
+.ace_marker-layer .inline-edit-busy {
+    animation: inline-edit-pulse 1.4s ease-in-out infinite;
+}
+@keyframes inline-edit-pulse {
+    0%, 100% { background: rgba(123, 97, 255, 0.07); }
+    50% { background: rgba(123, 97, 255, 0.20); }
+}
+.ace_marker-layer .inline-edit-added {
+    position: absolute;
+    background: rgba(46, 160, 67, 0.20);
+}
+
+/* a change: the lines that were there, and Keep and Undo for it alone */
+.inline-edit-hunk {
+    position: relative;
+    box-sizing: border-box;
+    pointer-events: auto;
+    cursor: default;
+}
+.inline-edit-removed {
+    background: rgba(248, 81, 73, 0.16);
+}
+.inline-edit-removed-line {
+    padding-left: 4px;
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.7;
+}
+.inline-edit-hunk-tools {
+    position: absolute;
+    top: 0;
+    right: 14px;
+    z-index: 2;
+    display: flex;
+    gap: 4px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 11px;
+    opacity: 0.85;
+}
+.inline-edit-hunk-tools:hover {
+    opacity: 1;
+}
+.inline-edit-hunk-tools .inline-edit-button {
+    height: 18px;
+    padding: 0 7px;
+    color: #24292f;
+}
+.inline-edit-hunk.dark .inline-edit-hunk-tools .inline-edit-button {
+    color: #d7dce2;
+}
+/* a change that only adds lines has nothing to show but its buttons */
+.inline-edit-hunk-added {
+    height: 0;
+}
+.inline-edit-hunk-added .inline-edit-hunk-tools {
+    top: 1px;
+}

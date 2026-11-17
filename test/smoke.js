@@ -87,10 +87,14 @@ function get(port, urlPath, user, password, forwardedFor) {
     });
 }
 
-// The Anthropic Messages API (what Claude Code calls), answering "pong",
-// and DeepSeek's balance
+// The Anthropic Messages API (what Claude Code calls), answering "pong" (an
+// inline edit: with new code for the selection), and DeepSeek's balance
 // what the mock's fill-in-the-middle API was asked: { auth, body }
 var fimRequests = [];
+
+// what the mock answers an inline edit with: in a fence and without the
+// indentation, as models do at times
+var EDIT_ANSWER = "```js\nfunction add(a, b) {\n    // the sum\n    return a + b;\n}\n\nfunction sub(a, b) {\n    return a - b;\n}\n```\n";
 
 function startMock() {
     return new Promise(function(resolve) {
@@ -122,8 +126,10 @@ function startMock() {
                 }
                 var message = { id: "msg_smoke", type: "message", role: "assistant", model: json.model,
                     content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 0 } };
+                // an inline edit (see EDIT_SYSTEM in c9.ide.agent/service.js)
+                var text = /replaces the selection/.test(JSON.stringify(json.system || "")) ? EDIT_ANSWER : "pong";
                 if (!json.stream) {
-                    message.content = [{ type: "text", text: "pong" }];
+                    message.content = [{ type: "text", text: text }];
                     message.stop_reason = "end_turn";
                     message.usage.output_tokens = 1;
                     res.writeHead(200, { "content-type": "application/json" });
@@ -136,7 +142,7 @@ function startMock() {
                 };
                 event("message_start", { message: message });
                 event("content_block_start", { index: 0, content_block: { type: "text", text: "" } });
-                event("content_block_delta", { index: 0, delta: { type: "text_delta", text: "pong" } });
+                event("content_block_delta", { index: 0, delta: { type: "text_delta", text: text } });
                 event("content_block_stop", { index: 0 });
                 event("message_delta", { delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 1 } });
                 event("message_stop", {});
@@ -1156,6 +1162,86 @@ async function main() {
             return page.evaluate(function() {
                 return !!(window.app.smokeStartup && window.app.smokeStartup.loaded);
             });
+        });
+    });
+
+    await check("inline edit: an instruction changes the selection, each change is kept or undone", async function() {
+        var original = "var math = {\n    add(a, b) {\n        return a+b\n    },\n\n    mul(a, b) {\n        return a * b;\n    }\n};\n";
+        fs.mkdirSync(path.join(workspace, "ie"));
+        fs.writeFileSync(path.join(workspace, "ie", "math.js"), original);
+        await page.evaluate(function() {
+            return new Promise(function(resolve) { window.app.tabManager.openFile("/ie/math.js", true, resolve); });
+        });
+        function state() {
+            return page.evaluate(function() { return window.app["agent.inlineedit"].state(); });
+        }
+        function value() {
+            return page.evaluate(function() { return window.app.tabManager.focussedTab.editor.ace.getValue(); });
+        }
+        async function ask(instruction) {
+            await page.evaluate(function() {
+                window.app.settings.set("user/inlineedit/@provider", "deepseek");
+                var ace = window.app.tabManager.focussedTab.editor.ace;
+                ace.focus();
+                // the two methods, from inside the first line to inside the last
+                ace.selection.setSelectionRange({ start: { row: 1, column: 6 }, end: { row: 7, column: 2 } });
+                window.app.commands.exec("inlineedit");
+            });
+            var input = page.locator(".inline-edit-input");
+            await input.waitFor({ timeout: 10000 });
+            await input.fill(instruction);
+            await input.press("Enter");
+            return until("the answer", async function() {
+                var now = await state();
+                return now && now.phase != "generating" && now;
+            }, 60000);
+        }
+        var answered = await ask("document add, and subtract in place of multiply");
+        if (/claude was not found/.test(answered.note)) {
+            await page.locator(".inline-edit-close").click();
+            return "skipped: the claude CLI is not installed";
+        }
+        assert.deepEqual(answered, { phase: "review", changes: 2, note: "" });
+        // the answer, with the indentation of the lines it replaces
+        var changed = "var math = {\n    function add(a, b) {\n        // the sum\n        return a + b;\n    }\n\n"
+            + "    function sub(a, b) {\n        return a - b;\n    }\n};\n";
+        assert.equal(await value(), changed);
+        var shown = await page.evaluate(function() {
+            return {
+                removed: Array.from(document.querySelectorAll(".inline-edit-removed")).map(function(el) { return el.innerText; }),
+                added: document.querySelectorAll(".ace_marker-layer .inline-edit-added").length,
+                summary: document.querySelector(".inline-edit-summary").textContent
+            };
+        });
+        assert.deepEqual(shown.removed, ["    add(a, b) {\n        return a+b\n    },", "    mul(a, b) {\n        return a * b;"]);
+        assert.equal(shown.added, 2);
+        assert(/^\+6 \u22125 .*DeepSeek/.test(shown.summary), shown.summary);
+
+        // the second change is undone by itself, the first is accepted
+        await page.locator(".inline-edit-undo").nth(1).click();
+        await until("one change to be left", async function() { return (await state()).changes == 1; });
+        await page.evaluate(function() { window.app.commands.exec("inlineeditaccept"); });
+        await until("the review to end", async function() { return !(await state()); });
+        assert.equal(await value(), "var math = {\n    function add(a, b) {\n        // the sum\n        return a + b;\n    }\n\n"
+            + "    mul(a, b) {\n        return a * b;\n    }\n};\n");
+        await until("the box and the marks to go", function() {
+            return page.evaluate(function() {
+                return !document.querySelector(".inline-edit-bar, .inline-edit-hunk, .inline-edit-added, .inline-edit-target");
+            });
+        });
+
+        // Reject puts the lines back as they were
+        await page.evaluate(function(original) {
+            window.app.tabManager.focussedTab.editor.ace.setValue(original, -1);
+        }, original);
+        assert.equal((await ask("once more")).phase, "review");
+        await page.evaluate(function() { window.app.commands.exec("inlineeditreject"); });
+        await until("the review to end", async function() { return !(await state()); });
+        assert.equal(await value(), original);
+        await page.evaluate(function() {
+            var tab = window.app.tabManager.focussedTab;
+            tab.document.undoManager.bookmark();
+            tab.close();
         });
     });
 

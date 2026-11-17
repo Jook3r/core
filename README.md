@@ -196,7 +196,7 @@ checks it in a browser: the login limit, files, search, a terminal,
 `c9 open`, the Welcome page, the language server, the Python debugger (skipped without debugpy),
 the previews' sandbox, a file changed on disk,
 another folder as the
-workspace, the Claude Code IDE bridge, a DeepSeek inline completion, and a chat in the Claude and
+workspace, the Claude Code IDE bridge, an inline edit, a DeepSeek inline completion, and a chat in the Claude and
 DeepSeek panels against a mock API (skipped without Claude Code).
 The tests in a browser need Node.js 18+ and,
 once, Chromium for Playwright:
@@ -232,6 +232,13 @@ The two chat panels are one panel (`plugins/c9.ide.agent`) with a provider
 each: see `plugins/c9.ide.claude/README.md` and
 `plugins/c9.ide.deepseek/README.md` for what they do, and
 `plugins/c9.ide.agent/README.md` for how they are built.
+
+#### Inline edit ####
+
+Select code, press Ctrl-Alt-I and say what should change: Claude or DeepSeek
+writes the change into the editor, where it is shown against the old lines
+and each part can be kept or undone before the whole is accepted or
+rejected. See `plugins/c9.ide.agent/README.md`.
 
 #### Claude Code in a terminal ####
 

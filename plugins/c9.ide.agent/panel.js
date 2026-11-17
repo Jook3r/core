@@ -5554,6 +5554,84 @@ define(function(require, exports, module) {
                 });
             },
             /**
+             * An edit of a selection (the editor's inline edit): the
+             * provider's answer replaces it. With the account of the
+             * current chat (of the one picked last before the panel was
+             * opened).
+             * @param {Object} opts { instruction, selection, before, after,
+             *   path, language, draft (an earlier answer the instruction
+             *   is about), model, effort }
+             * @param {Function} onEvent ({ ev: "delta", text }), then one of
+             *   ({ ev: "done", text, model, usage, cost: { usd, priced } })
+             *   and ({ ev: "error", message, code })
+             * @return {Object} { cancel() }
+             */
+            edit: function(opts, onEvent) {
+                opts = opts || {};
+                var cancelled = false, ended = false, id = null;
+                function end(event) {
+                    if (ended) return;
+                    ended = true;
+                    onEvent(event);
+                }
+                whenConnected(function() {
+                    if (cancelled) return;
+                    if (!api.edit)
+                        return end({ ev: "error", message: "the " + NAME + " service is older than the IDE: reload the page" });
+                    var model = opts.model || P.editModel || undefined;
+                    api.edit({
+                        instruction: opts.instruction, selection: opts.selection, before: opts.before,
+                        after: opts.after, path: opts.path, language: opts.language, draft: opts.draft,
+                        model: model, effort: opts.effort,
+                        fastModel: PRICED ? settings.get("user/" + ID + "/@fastModel") || DEFAULT_FAST_MODEL : undefined,
+                        account: drawn ? chatAccount : defaultAccount(),
+                        cliPath: settings.get("user/" + ID + "/@path")
+                    }, function(err, meta) {
+                        if (err || !meta || !meta.stream)
+                            return end({ ev: "error", message: err && err.message || "no answer", code: err && err.code });
+                        id = meta.id;
+                        if (cancelled) return api.cancelEdit(id, function() {});
+                        meta.stream.on("data", function(chunk) {
+                            var events;
+                            try { events = JSON.parse(chunk); } catch (e) { return; }
+                            [].concat(events).forEach(function(event) {
+                                if (ended || !event) return;
+                                if (event.ev == "delta") return onEvent(event);
+                                if (event.ev == "done") {
+                                    if (PRICED && event.usage) {
+                                        var tokens = {};
+                                        tokens[event.model || model] = event.usage;
+                                        var cost = usageCost(tokens, peakNow().peak);
+                                        event.cost = { usd: cost.usd, priced: !cost.unpriced.length };
+                                    }
+                                    else {
+                                        event.cost = { usd: event.costUsd, priced: typeof event.costUsd == "number" };
+                                    }
+                                }
+                                end(event);
+                            });
+                        });
+                        meta.stream.on("end", function() {
+                            end({ ev: "error", message: "The connection to the server was interrupted" });
+                        });
+                    });
+                });
+                return {
+                    cancel: function() {
+                        if (ended) return;
+                        cancelled = true;
+                        if (id != null && api && api.cancelEdit) api.cancelEdit(id, function() {});
+                        end({ ev: "error", message: "Cancelled", code: "ECANCELED" });
+                    }
+                };
+            },
+            /**
+             * The provider's name in the IDE's texts ("Claude"), and the
+             * model it edits with when none is given.
+             */
+            get displayName() { return NAME; },
+            get editModel() { return P.editModel || ""; },
+            /**
              * Checks again where claude is installed.
              */
             refresh: refreshStatus

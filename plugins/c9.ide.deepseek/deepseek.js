@@ -49,6 +49,8 @@ define(function(require, exports, module) {
 
         models: MODELS,
         fastModel: FAST_MODEL,
+        // inline edits
+        editModel: FAST_MODEL,
         peak: PEAK,
         searchPrice: SEARCH_PRICE,
 

@@ -37,6 +37,8 @@ define(function(require, exports, module) {
         maxEffortDesc: "May use many tokens and respond slowly",
         // a tab starts with the effort last chosen, but not above High
         capEffort: true,
+        // inline edits: quick, and good at code
+        editModel: "sonnet",
 
         // what the CLI says when it is not logged in, or can't bill
         loginRe: /\/login\b|not logged in|invalid api key|authentication_error|oauth token|please run .{0,20}login/i,

@@ -22,6 +22,8 @@ changing the panels, or adding a third.
 - `markdown.js`, `images.js`, `diff.js`: rendering of answers, attached
   images, the diffs of the Edit cards.
 - `peak.js`: peak hours of a priced provider.
+- `inline-edit.js`, `inline-edit-util.js`, `inline-edit.css`: the editor's
+  inline edit (below).
 
 ## A provider
 
@@ -57,8 +59,53 @@ table of `service.js` (the API's address, the names of the key file and of
 the environment variables, the default models), its colour and icon at the
 end of `panel.less`, and the plugin in `configs/ide/default.js`.
 
+## Inline edit
+
+Change code by saying what should change, and review the change in the
+editor.
+
+- Select the lines (or put the cursor where code should be added) and press
+  **Ctrl-Alt-I**, or pick *Edit with AI…* in the editor's menu. A box opens
+  under the lines; type the instruction and press Enter. Esc closes it.
+- The answer is written into the box as it comes (Esc or *Stop* cancels
+  it), and then replaces the lines in the editor. The new lines are marked
+  green; the lines they replace are shown above them in red.
+- Each change has **Keep** and **Undo** of its own, at the right. **Accept**
+  (Ctrl-Enter, Cmd-Enter on a Mac) keeps what is left, **Reject**
+  (Ctrl-Shift-Backspace) puts the old lines back. Another instruction in the
+  box ("shorter", "use a loop") asks for a different answer to the same
+  lines.
+- Nothing is saved: the file is changed in the editor as by typing, one
+  step to undo. Undo in the editor during a review takes the answer out and
+  ends the review.
+- An answer that is not an edit (a question, an instruction that is not
+  clear) is shown as a note in the box, and nothing changes.
+
+The box has the choice between Claude and DeepSeek; Preferences > General >
+Inline Edit has it too, with the model (empty: a quick one, Sonnet or
+DeepSeek Flash) and the effort. The edit runs with the account of that
+panel's current chat and is billed like a short message there; the box
+shows what it cost when the price is known.
+
+What is sent: the instruction, the selected lines, and up to 400 lines
+before and 120 after them (12 000 and 4 000 characters at most) for the
+model to see where it is. Nothing else of the file or the workspace: the
+model gets no tools for an edit.
+
+How it works: `inline-edit.js` asks the panel's plugin (`edit()` in its
+public API), which asks `edit()` of `service.js`. That runs the CLI once
+(`claude -p` without tools, MCP servers, commands or a saved session, and a
+system prompt of its own in place of Claude Code's) and passes its text on
+as it is written. An API error that retrying cannot change (a key that is
+not accepted, no balance) ends the edit at once, others after the third
+attempt. `inline-edit-util.js` has what works on text only: taking the code
+out of an answer (a model may still put it in a Markdown fence), giving it
+the indentation of the lines it replaces, and finding the changes.
+
 ## Tests
 
 `test/smoke.js` has a chat in each panel against a mock of the API (with what
-each shows as the cost), Ask and Fix from the editor, and DeepSeek's inline
-completions.
+each shows as the cost), Ask and Fix from the editor, an inline edit, and
+DeepSeek's inline completions. `service_edit_test.js` runs the edit request
+of the service with the CLI against a mock API (skipped without the CLI);
+`inline-edit-util_test.js` tests the text functions.

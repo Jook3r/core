@@ -570,6 +570,7 @@ module.exports = function(options) {
             staticPrefix: staticPrefix + "/plugins/c9.ide.deepseek"
         },
         "plugins/c9.ide.deepseek/inline",
+        "plugins/c9.ide.agent/inline-edit",
         {
             packagePath: "plugins/c9.ide.panels/panels",
             defaultActiveLeft: "tree"

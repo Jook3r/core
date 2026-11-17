@@ -125,6 +125,29 @@ module.exports = function(vfs, options, register) {
     var FIM_INPUT_MAX = 100000;             // characters of code before and after the cursor
     var FIM_TEXT_MAX = 16000;               // characters of a suggestion
     var FIM_MAX_TOKENS = 4096;              // (DeepSeek's limit)
+    var EDIT_TIMEOUT = 5 * 60 * 1000;       // inline edits (edit()): an answer takes at most this long
+    var EDIT_SELECTION_MAX = 200000;        // characters of the selection
+    var EDIT_CONTEXT_MAX = 30000;           // of the code before it, and after it
+    var EDIT_INSTRUCTION_MAX = 8000;
+    var EDIT_OUTPUT_MAX = 1000000;          // characters of an answer
+    var EDIT_PARALLEL = 4;                  // edits running at a time
+    // (the mark "replaces the selection" is what the tests' mock API knows an edit by)
+    var EDIT_SYSTEM = [
+        "You are the code editing engine of an IDE. The user gives you a file with a selection in it,",
+        "marked by <selection> tags, and an instruction. Your whole answer replaces the selection in the file.",
+        "",
+        "- Answer with only the new text for the selection, exactly as it should be in the file:",
+        "  no explanation, no Markdown code fence, nothing before or after it.",
+        "- Keep the indentation and the style of the code around it. The first line of your answer",
+        "  starts with the same indentation as the first line of the selection.",
+        "- Do not repeat the code before or after the selection, and change nothing the instruction",
+        "  does not ask for.",
+        "- An empty selection: your answer is inserted at that place.",
+        "- <draft>, when there is one, is your earlier answer for this selection, which the user saw:",
+        "  the instruction is then about that draft, and your answer still replaces the selection.",
+        "- If the instruction cannot be carried out as an edit of the selection (a question, or not",
+        "  enough to go on), answer with one line that starts with NOTE: and says why, briefly."
+    ].join("\n");
 
     // model aliases and ids ("sonnet", "claude-opus-4-8", "deepseek-flash[1m]":
     // [1m] tells the CLI the model has a 1M-token context); a letter first,
@@ -727,6 +750,224 @@ module.exports = function(vfs, options, register) {
         }
     }
 
+    /***** Inline edits *****/
+
+    var edits = Object.create(null);    // id -> the running edit
+    var nextEditId = 1;
+
+    function editPrompt(opts) {
+        var text = function(value, max, fromEnd) {
+            value = typeof value == "string" ? value : "";
+            return fromEnd ? value.slice(-max) : value.slice(0, max);
+        };
+        var name = text(opts.path, 500).replace(/[\r\n<>"]/g, "");
+        var language = text(opts.language, 40).replace(/[^\w+#.-]/g, "");
+        var parts = [
+            "<file path=\"" + name + "\"" + (language ? " language=\"" + language + "\"" : "") + ">",
+            "<before>", text(opts.before, EDIT_CONTEXT_MAX, true), "</before>",
+            "<selection>", text(opts.selection, EDIT_SELECTION_MAX), "</selection>",
+            "<after>", text(opts.after, EDIT_CONTEXT_MAX), "</after>",
+            "</file>"
+        ];
+        if (typeof opts.draft == "string" && opts.draft)
+            parts.push("<draft>", text(opts.draft, EDIT_SELECTION_MAX), "</draft>");
+        parts.push("<instruction>", text(opts.instruction, EDIT_INSTRUCTION_MAX), "</instruction>");
+        return parts.join("\n");
+    }
+
+    /**
+     * One edit of a selection (the editor's inline edit): the CLI answers
+     * once, without tools, MCP servers or a saved session, and its text is
+     * the selection's replacement.
+     *
+     * @param {Object} opts { instruction, selection, before, after, path,
+     *   language, draft, account, model, fastModel, effort, cliPath }
+     * @param {Function} callback (err, { id, stream }); the stream's data
+     *   are JSON arrays of events: { ev: "delta", text }, then one of
+     *   { ev: "done", text, model, usage, costUsd } and { ev: "error",
+     *   message, code }
+     */
+    function edit(opts, callback) {
+        opts = opts || {};
+        if (typeof opts.instruction != "string" || !opts.instruction.trim())
+            return callback(refusal("There is no instruction", "EINVAL"));
+        if (typeof opts.selection == "string" && opts.selection.length > EDIT_SELECTION_MAX)
+            return callback(refusal("The selection is too long for an edit (" + EDIT_SELECTION_MAX + " characters at most)", "ETOOLARGE"));
+        if (Object.keys(edits).length >= EDIT_PARALLEL)
+            return callback(refusal("Too many edits are running", "EBUSY"));
+        var account;
+        try { account = accountKey(opts.account); } catch (e) { return callback(e); }
+
+        findClaude(opts.cliPath, function(err, bin, tried) {
+            if (err) return callback(err);
+            if (!bin) {
+                var e = refusal("claude was not found", "ENOTFOUND");
+                e.tried = tried;
+                return callback(e);
+            }
+            var access = cliAccess(bin, account, opts);
+            if (access.error) return callback(access.error);
+            var args = [
+                "-p",
+                "--output-format", "stream-json",
+                "--verbose",
+                "--include-partial-messages",
+                "--tools", "",
+                "--strict-mcp-config",
+                "--disable-slash-commands",
+                "--no-session-persistence",
+                "--system-prompt", EDIT_SYSTEM
+            ];
+            if (access.model)
+                args.push("--model", access.model);
+            if (has(EFFORTS, opts.effort))
+                args.push("--effort", opts.effort);
+
+            var child;
+            try {
+                child = childProcess.spawn(bin, args, {
+                    cwd: cwd,
+                    env: access.env,
+                    stdio: ["pipe", "pipe", "pipe"],
+                    detached: process.platform != "win32"
+                });
+            } catch (e) {
+                return callback(e);
+            }
+            if (!child.pid) {
+                child.on("error", function(err) {
+                    callback(new Error("Could not start " + bin + ": " + err.message));
+                });
+                return;
+            }
+
+            var id = nextEditId++;
+            var stream = new Stream();
+            stream.readable = true;
+            var state = edits[id] = { child: child, pid: child.pid };
+            var text = "", line = "", stderr = "", finished = false, cancelled = false, result = null;
+            var pending = [], flushTimer = null;
+
+            function emit(event) {
+                pending.push(event);
+                if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_DELAY);
+            }
+            function flush() {
+                clearTimeout(flushTimer);
+                flushTimer = null;
+                if (!pending.length) return;
+                try { stream.emit("data", JSON.stringify(pending.splice(0))); } catch (e) {}
+            }
+            function kill(signal) {
+                try {
+                    if (process.platform != "win32") process.kill(-child.pid, signal);
+                    else child.kill(signal);
+                } catch (e) {}
+            }
+            function finish(event) {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
+                delete edits[id];
+                emit(event);
+                flush();
+                try { stream.emit("end"); } catch (e) {}
+                kill("SIGTERM");
+                setTimeout(function() { kill("SIGKILL"); }, KILL_GRACE).unref();
+            }
+            state.cancel = function() {
+                cancelled = true;
+                finish({ ev: "error", message: "Cancelled", code: "ECANCELED" });
+            };
+            var timer = setTimeout(function() {
+                finish({ ev: "error", message: P.name + " did not answer in time", code: "ETIMEDOUT" });
+            }, EDIT_TIMEOUT);
+            // the client is gone (a page that was closed)
+            stream.on("close", function() { if (!finished) state.cancel(); });
+
+            function onLine(json) {
+                var msg;
+                try { msg = JSON.parse(json); } catch (e) { return; }
+                if (!msg || typeof msg != "object") return;
+                if (msg.type == "stream_event" && msg.event && msg.event.type == "content_block_delta"
+                  && msg.event.delta && msg.event.delta.type == "text_delta"
+                  && typeof msg.event.delta.text == "string") {
+                    text += msg.event.delta.text;
+                    if (text.length > EDIT_OUTPUT_MAX)
+                        return finish({ ev: "error", message: "The answer is too long", code: "ETOOLARGE" });
+                    emit({ ev: "delta", text: msg.event.delta.text });
+                }
+                else if (msg.type == "result") {
+                    result = msg;
+                }
+                // The CLI tries a failed request up to ten times, waiting
+                // longer each time: an edit says at once what retrying
+                // won't change, and after the third attempt for the rest
+                else if (msg.type == "system" && msg.subtype == "api_retry") {
+                    var status = +msg.error_status || 0;
+                    var what = typeof msg.error == "string" ? msg.error.replace(/_/g, " ").slice(0, 100) : "error";
+                    if (status == 401 || status == 403)
+                        finish({ ev: "error", code: "EAUTH", message: P.name + " did not accept the "
+                            + (KEYED ? "API key" : "login") + " (" + status + ")" });
+                    else if (status == 402)
+                        finish({ ev: "error", code: "EBALANCE", message: P.name + ": insufficient balance (402)" });
+                    else if ((status >= 400 && status < 500 && status != 429 && status != 408) || msg.attempt >= 3)
+                        finish({ ev: "error", message: P.name + ": " + what + (status ? " (" + status + ")" : "") });
+                }
+            }
+            child.stdout.setEncoding("utf8");
+            child.stdout.on("data", function(chunk) {
+                line += chunk;
+                if (line.length > MAX_LINE) line = "";
+                var lines = line.split("\n");
+                line = lines.pop();
+                lines.forEach(onLine);
+            });
+            child.stderr.setEncoding("utf8");
+            child.stderr.on("data", function(chunk) {
+                stderr = (stderr + chunk).slice(-STDERR_TAIL);
+            });
+            child.stdin.on("error", function() {});
+            child.on("error", function(err) {
+                finish({ ev: "error", message: "Could not run claude: " + err.message });
+            });
+            child.on("close", function(code) {
+                if (finished) return;
+                if (line) onLine(line);
+                if (result && !result.is_error && (result.subtype == null || result.subtype == "success")) {
+                    var usage = result.usage || {};
+                    return finish({
+                        ev: "done",
+                        // (without partial messages the result has the text)
+                        text: text || (typeof result.result == "string" ? result.result : ""),
+                        model: access.model || null,
+                        usage: {
+                            input: +usage.input_tokens || 0,
+                            output: +usage.output_tokens || 0,
+                            cacheRead: +usage.cache_read_input_tokens || 0,
+                            cacheWrite: +usage.cache_creation_input_tokens || 0
+                        },
+                        costUsd: typeof result.total_cost_usd == "number" ? result.total_cost_usd : null
+                    });
+                }
+                var message = result && typeof result.result == "string" && result.result
+                    || stderr.trim().split("\n").pop()
+                    || "claude exited with code " + code;
+                finish({ ev: "error", message: String(message).slice(0, 600),
+                    code: LOGIN_HINT_RE.test(message) ? "EAUTH" : undefined });
+            });
+
+            child.stdin.end(editPrompt(opts));
+            callback(null, { id: id, stream: stream });
+        });
+    }
+
+    function cancelEdit(id, callback) {
+        var state = has(edits, String(id)) ? edits[id] : null;
+        if (state) state.cancel();
+        callback && callback(null, !!state);
+    }
+
     function statSafe(p) {
         try { return fs.statSync(p); } catch (e) { return null; }
     }
@@ -944,6 +1185,57 @@ module.exports = function(vfs, options, register) {
     /***** The CLI process *****/
 
     // plan: { cwd } decided by the service for a resumed session
+    // The environment the CLI runs in for an account, and the models:
+    // { env, model, fastModel } or { error }
+    function cliAccess(bin, account, opts) {
+        var failed = null, result = null;
+        function fail(err) { failed = err; }
+        (function() {
+            var model, fastModel, key;
+            if (KEYED) {
+                var dirError = ensureAccountDir(account, false);
+                if (dirError) return fail(dirError);
+                key = readKey(account);
+                if (!key)
+                    return fail(refusal("No " + P.name + " API key for this account. Set it in Preferences > " + P.name + " > Accounts"
+                        + (account ? "." : " (or start Cloud9 with " + KEY_ENV + " set)."), "ENOKEY"));
+                model = validModel(opts.model) ? opts.model : DEFAULT_MODEL;
+                fastModel = validModel(opts.fastModel) ? opts.fastModel : DEFAULT_FAST_MODEL;
+            }
+            else {
+                model = validModel(opts.model) ? opts.model : null;
+            }
+            // (keyed) the Anthropic credentials are gone (cleanEnv): only this key is sent
+            var env = cleanEnv(bin);
+            if (KEYED) {
+                env.CLAUDE_CONFIG_DIR = configDir(account);
+                env.ANTHROPIC_BASE_URL = BASE_URL;
+                env.ANTHROPIC_AUTH_TOKEN = key.key;
+                // the CLI's aliases: its default and its bigger models are the chosen
+                // model; sub-agents and background tasks (titles, summaries) use the
+                // fast one
+                env.ANTHROPIC_MODEL = model;
+                env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
+                env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
+                env.ANTHROPIC_DEFAULT_HAIKU_MODEL = fastModel;
+                env.CLAUDE_CODE_SUBAGENT_MODEL = fastModel;
+                env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(COMPACT_WINDOW);
+            }
+            else {
+                if (account) {
+                    var st = statSafe(configDir(account));
+                    if (!st || !st.isDirectory())
+                        return fail(refusal("The account folder " + tilde(configDir(account))
+                            + " does not exist. Set the account up in Preferences > Claude.", "ENOACCOUNT"));
+                    env.CLAUDE_CONFIG_DIR = configDir(account);
+                    AUTH_ENV.forEach(function(name) { delete env[name]; });
+                }
+            }
+            result = { env: env, model: model, fastModel: fastModel };
+        })();
+        return failed ? { error: failed } : result;
+    }
+
     function spawnCli(bin, opts, callback, plan) {
         plan = plan || {};
         var account, folder;
@@ -953,46 +1245,9 @@ module.exports = function(vfs, options, register) {
         } catch (e) {
             return callback(e);
         }
-        var model, fastModel, key;
-        if (KEYED) {
-            var dirError = ensureAccountDir(account, false);
-            if (dirError) return callback(dirError);
-            key = readKey(account);
-            if (!key)
-                return callback(refusal("No " + P.name + " API key for this account. Set it in Preferences > " + P.name + " > Accounts"
-                    + (account ? "." : " (or start Cloud9 with " + KEY_ENV + " set)."), "ENOKEY"));
-            model = validModel(opts.model) ? opts.model : DEFAULT_MODEL;
-            fastModel = validModel(opts.fastModel) ? opts.fastModel : DEFAULT_FAST_MODEL;
-        }
-        else {
-            model = validModel(opts.model) ? opts.model : null;
-        }
-        // (keyed) the Anthropic credentials are gone (cleanEnv): only this key is sent
-        var env = cleanEnv(bin);
-        if (KEYED) {
-            env.CLAUDE_CONFIG_DIR = configDir(account);
-            env.ANTHROPIC_BASE_URL = BASE_URL;
-            env.ANTHROPIC_AUTH_TOKEN = key.key;
-            // the CLI's aliases: its default and its bigger models are the chosen
-            // model; sub-agents and background tasks (titles, summaries) use the
-            // fast one
-            env.ANTHROPIC_MODEL = model;
-            env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
-            env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
-            env.ANTHROPIC_DEFAULT_HAIKU_MODEL = fastModel;
-            env.CLAUDE_CODE_SUBAGENT_MODEL = fastModel;
-            env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(COMPACT_WINDOW);
-        }
-        else {
-            if (account) {
-                var st = statSafe(configDir(account));
-                if (!st || !st.isDirectory())
-                    return callback(refusal("The account folder " + tilde(configDir(account))
-                        + " does not exist. Set the account up in Preferences > Claude.", "ENOACCOUNT"));
-                env.CLAUDE_CONFIG_DIR = configDir(account);
-                AUTH_ENV.forEach(function(name) { delete env[name]; });
-            }
-        }
+        var access = cliAccess(bin, account, opts);
+        if (access.error) return callback(access.error);
+        var env = access.env, model = access.model, fastModel = access.fastModel;
         var runCwd = plan.cwd || folder || cwd;
         var args = [
             "-p",
@@ -2528,6 +2783,7 @@ module.exports = function(vfs, options, register) {
 
     function destroy() {
         if (fimRequest) fimRequest.cancel();
+        Object.keys(edits).forEach(function(id) { edits[id].cancel(); });
         var list = process[KEY];
         if (list && list.indexOf(killNow) != -1)
             list.splice(list.indexOf(killNow), 1);
@@ -2556,6 +2812,8 @@ module.exports = function(vfs, options, register) {
         stop: stop,
         history: history,
         sessions: sessions,
+        edit: edit,
+        cancelEdit: cancelEdit,
         destroy: destroy
     };
     // the provider's own API, with the account's key
